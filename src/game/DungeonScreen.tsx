@@ -62,11 +62,21 @@ export function DungeonScreen() {
   const abilities = player.classId ? CLASS_ABILITIES[player.classId] : [];
   const inv = player.inventory;
 
+  const eq = player.equippedCosmetics ?? {};
+  const weaponGlow = eq.weaponGlow ? COSMETICS.find((c) => c.id === eq.weaponGlow)?.tint : undefined;
+  const dmgSkin    = eq.damageSkin ? COSMETICS.find((c) => c.id === eq.damageSkin)?.tint : undefined;
+
   const [enc, setEnc] = useState<Encounter>(() => ({ kind: "path", depth: 1 }));
   const [hit, setHit] = useState(false);
   const [combatLog, setCombatLog] = useState<string[]>([]);
   const [hoveredAbility, setHoveredAbility] = useState<Ability | null>(null);
+  const [floaters, setFloaters] = useState<FloatingNum[]>([]);
   const logRef = useRef<HTMLDivElement>(null);
+
+  const addFloater = (kind: FloatingNum["kind"], value: number, color?: string) => {
+    setFloaters((f) => [...f, { id: nextFloatingId(), kind, value, color, x: 40 + Math.random() * 20 }]);
+  };
+  const removeFloater = (id: number) => setFloaters((f) => f.filter((x) => x.id !== id));
 
   const addLog = (msg: string) => {
     setCombatLog((l) => [...l.slice(-20), msg]);
