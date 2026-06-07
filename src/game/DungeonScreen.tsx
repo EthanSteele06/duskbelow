@@ -206,6 +206,7 @@ export function DungeonScreen() {
 
   const heroImg =
     enc.kind === "combat" ? enc.enemy.image :
+    enc.kind === "victory" ? enc.loot.enemy.image :
     enc.kind === "chest" ? chestImg :
     corridorImg;
 
@@ -213,10 +214,10 @@ export function DungeonScreen() {
     <div className="flex min-h-full flex-col">
       <div className={`relative h-64 overflow-hidden border-b-2 border-black ${hit ? "shake" : ""}`}>
         <img
-          key={(enc.kind === "combat" ? enc.enemy.id : enc.kind) + enc.depth}
+          key={(enc.kind === "combat" ? enc.enemy.id : enc.kind === "victory" ? "v_" + enc.loot.enemy.id : enc.kind) + enc.depth}
           src={heroImg}
           alt=""
-          className="h-full w-full object-cover fade-in-up"
+          className={`h-full w-full object-cover fade-in-up ${enc.kind === "victory" ? "grayscale opacity-60" : ""}`}
         />
         <div className="absolute inset-0 vignette" />
         <div className="absolute inset-0 scanlines" />
@@ -226,7 +227,13 @@ export function DungeonScreen() {
             {enc.enemy.name} {enc.enemyHp}/{enc.enemyMaxHp}
           </div>
         )}
+        {enc.kind === "victory" && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <p className="pixel text-2xl text-gold text-shadow-pixel">VICTORY</p>
+          </div>
+        )}
       </div>
+
 
       <div className="p-3 space-y-3">
         <StatBar />
