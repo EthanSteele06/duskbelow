@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useGame } from "@/game/store";
 import { StatBar } from "./StatBar";
-import { CLASS_ABILITIES, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES, RARITY_CLASS, RARITY_LABEL, gearSellPrice, type Ability, type EnemyDef, type ChestPreview, type GearItem } from "@/game/data";
+import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumber";
+import { CLASS_ABILITIES, COSMETICS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES, RARITY_CLASS, RARITY_LABEL, gearSellPrice, type Ability, type EnemyDef, type ChestPreview, type GearItem } from "@/game/data";
 import corridorImg from "@/assets/dungeon-corridor.jpg";
 import chestImg from "@/assets/dungeon-chest.jpg";
 
@@ -61,11 +62,21 @@ export function DungeonScreen() {
   const abilities = player.classId ? CLASS_ABILITIES[player.classId] : [];
   const inv = player.inventory;
 
+  const eq = player.equippedCosmetics ?? {};
+  const weaponGlow = eq.weaponGlow ? COSMETICS.find((c) => c.id === eq.weaponGlow)?.tint : undefined;
+  const dmgSkin    = eq.damageSkin ? COSMETICS.find((c) => c.id === eq.damageSkin)?.tint : undefined;
+
   const [enc, setEnc] = useState<Encounter>(() => ({ kind: "path", depth: 1 }));
   const [hit, setHit] = useState(false);
   const [combatLog, setCombatLog] = useState<string[]>([]);
   const [hoveredAbility, setHoveredAbility] = useState<Ability | null>(null);
+  const [floaters, setFloaters] = useState<FloatingNum[]>([]);
   const logRef = useRef<HTMLDivElement>(null);
+
+  const addFloater = (kind: FloatingNum["kind"], value: number, color?: string) => {
+    setFloaters((f) => [...f, { id: nextFloatingId(), kind, value, color, x: 40 + Math.random() * 20 }]);
+  };
+  const removeFloater = (id: number) => setFloaters((f) => f.filter((x) => x.id !== id));
 
   const addLog = (msg: string) => {
     setCombatLog((l) => [...l.slice(-20), msg]);
@@ -104,6 +115,7 @@ export function DungeonScreen() {
     let dmg = Math.max(1, e.enemy.atkBase + Math.floor(e.depth * 0.6) - Math.floor(Math.random() * 3));
     if (e.shieldReduce > 0) dmg = Math.max(1, Math.floor(dmg * (1 - e.shieldReduce)));
     damage(dmg);
+    addFloater("enemy", dmg);
     setHit(true); setTimeout(() => setHit(false), 350);
     const line = e.enemy.attackLines[Math.floor(Math.random() * e.enemy.attackLines.length)]
       .replace("{n}", e.enemy.name).replace("{d}", String(dmg));
@@ -121,6 +133,7 @@ export function DungeonScreen() {
       case "attack": {
         const base = ab.effect.useMag ? player.mag : player.atk;
         const dmg = Math.max(1, Math.floor(base * ab.effect.mult));
+        addFloater("player", dmg, dmgSkin);
         addLog(`${flavor} for ${dmg} damage!`);
         const newHp = e.enemyHp - dmg;
         if (newHp <= 0) return finishKill(e);
@@ -133,6 +146,7 @@ export function DungeonScreen() {
       case "heal": {
         const amt = Math.max(4, player.mag * 2);
         heal(amt);
+        addFloater("heal", amt);
         addLog(`${flavor} — restored ${amt} HP.`);
         const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
         setEnc(enemyTurn({ ...e, cooldowns: cds }));
@@ -241,6 +255,10 @@ export function DungeonScreen() {
             <p className="pixel text-2xl text-gold text-shadow-pixel">VICTORY</p>
           </div>
         )}
+        {/* Floating damage numbers overlay */}
+        <div className="absolute inset-0 pointer-events-none">
+          {floaters.map((f) => <FloatingNumber key={f.id} num={f} onDone={removeFloater} />)}
+        </div>
       </div>
 
 
@@ -348,7 +366,8 @@ export function DungeonScreen() {
                     onMouseEnter={() => setHoveredAbility(ab)}
                     onFocus={() => setHoveredAbility(ab)}
                     disabled={cd > 0}
-                    className={`pixel-btn !text-[8px] !p-2 disabled:opacity-40 ${ab.id === abilities[0].id ? "pixel-btn-primary" : ""}`}
+                    className={`pixel-btn !text-[8px] !p-2 disabled:opacity-40 ${weaponGlow ? "weapon-glow-btn" : ""} ${ab.id === abilities[0].id ? "pixel-btn-primary" : ""}`}
+                    style={weaponGlow ? ({ ["--weapon-glow" as string]: weaponGlow } as CSSProperties) : undefined}
                   >
                     {ab.name}
                     {cd > 0 && <span className="block pixel text-[7px] mt-1 text-muted-foreground">CD {cd}</span>}

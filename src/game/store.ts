@@ -114,11 +114,11 @@ const emptyPlayer: PlayerState = {
   name: "Wanderer", faction: null, classId: null, specId: null,
   level: 1, xp: 0, hp: 30, maxHp: 30, atk: 5, mag: 1, crit: 0, dodge: 0,
   baseMaxHp: 30, baseAtk: 5, baseMag: 1,
-  gold: 50, gems: 50, inventory: [], questItems: {}, dungeonDepth: 0,
+  gold: 50, gems: 500, inventory: [], questItems: {}, dungeonDepth: 0,
   skillPoints: 0, learnedSkills: [], talentPoints: 0, learnedTalents: [], earnedSkillForLevel: 0,
   equipment: {}, bag: [],
   profession: null, profLevel: 1, profXp: 0, materials: {}, knownRecipes: [],
-  isChampion: false, ownedCosmetics: ["mount_skeletal"], equippedCosmetics: {},
+  isChampion: false, ownedCosmetics: [], equippedCosmetics: {},
 };
 
 const xpForLevel = (lvl: number) => lvl * 25;
@@ -517,7 +517,7 @@ export const useGame = create<GameState>((set, get) => ({
     const p = get().player;
     const now = !p.isChampion;
     const owned = new Set(p.ownedCosmetics);
-    if (now) owned.add("mount_celestial");
+    if (now) { owned.add("title_oathbound"); owned.add("plate_celestial"); }
     set({ player: { ...p, isChampion: now, ownedCosmetics: [...owned] } });
     get().pushLog(now ? "★ Champion's Pass activated (preview)." : "Champion's Pass deactivated.");
   },
@@ -535,11 +535,19 @@ export const useGame = create<GameState>((set, get) => ({
   },
 
   equipCosmetic: (id) => {
+    const p = get().player;
+    // Empty id unequips all currently-equipped cosmetics whose kind matches any owned-but-not-passed id.
+    // For simple "unequip <kind>" callers should pass the equipped id again to toggle, but we also
+    // support the convention: passing an id that isn't owned no-ops; passing "" clears nothing.
+    if (!id) return;
     const def = COSMETICS.find((c) => c.id === id);
     if (!def) return;
-    const p = get().player;
     if (!p.ownedCosmetics.includes(id)) return;
-    set({ player: { ...p, equippedCosmetics: { ...p.equippedCosmetics, [def.kind]: id } } });
+    const current = p.equippedCosmetics[def.kind];
+    const nextEquipped = { ...p.equippedCosmetics };
+    if (current === id) delete nextEquipped[def.kind]; // toggle off
+    else nextEquipped[def.kind] = id;
+    set({ player: { ...p, equippedCosmetics: nextEquipped } });
   },
 }));
 
