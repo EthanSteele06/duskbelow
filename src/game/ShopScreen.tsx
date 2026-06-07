@@ -156,11 +156,6 @@ export function ShopScreen() {
                           </button>
                         );
                       })}
-                      {player.equippedCosmetics[kind] && (
-                        <button onClick={() => equip("")} className="border-2 border-dashed border-muted-foreground bg-card/40 p-2 text-center">
-                          <p className="pixel text-[8px] text-muted-foreground">Unequip {COSMETIC_KIND_LABEL[kind].replace(/s$/, "")}</p>
-                        </button>
-                      )}
                     </div>
                   )}
                 </div>
