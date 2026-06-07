@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useGame } from "@/game/store";
 import { StatBar } from "./StatBar";
-import { CLASS_ABILITIES, enemyForDepth, rollChest, MATERIALS, RECIPES, type Ability, type EnemyDef, type ChestPreview } from "@/game/data";
+import { CLASS_ABILITIES, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES, RARITY_CLASS, RARITY_LABEL, gearSellPrice, type Ability, type EnemyDef, type ChestPreview, type GearItem } from "@/game/data";
 import corridorImg from "@/assets/dungeon-corridor.jpg";
 import chestImg from "@/assets/dungeon-chest.jpg";
+
+const vibrate = (ms: number | number[]) => { try { (navigator as Navigator & { vibrate?: (p: number | number[]) => boolean }).vibrate?.(ms); } catch { /* noop */ } };
 
 interface Loot {
   enemy: EnemyDef;
@@ -12,7 +14,9 @@ interface Loot {
   questItem?: string;
   material?: string;
   recipe?: string;
+  gear?: GearItem;
 }
+
 
 type Encounter =
   | { kind: "path"; depth: number }
