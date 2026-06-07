@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useGame } from "@/game/store";
 import { TitleScreen } from "@/game/TitleScreen";
+import { IntroScreen } from "@/game/IntroScreen";
 import { CityScreen } from "@/game/CityScreen";
 import { VendorScreen, AuctionScreen } from "@/game/MarketScreens";
+import { QuestsScreen } from "@/game/QuestsScreen";
 import { DungeonScreen, VictoryScreen, DefeatScreen } from "@/game/DungeonScreen";
 
 export const Route = createFileRoute("/")({
@@ -22,9 +24,11 @@ function Game() {
   return (
     <main className="mx-auto h-dvh max-w-md overflow-y-auto bg-background text-foreground">
       {screen === "title" && <TitleScreen />}
+      {screen === "intro" && <IntroScreen />}
       {screen === "city" && <CityScreen />}
       {screen === "vendor" && <VendorScreen />}
       {screen === "auction" && <AuctionScreen />}
+      {screen === "quests" && <QuestsScreen />}
       {screen === "dungeon" && <DungeonScreen />}
       {screen === "victory" && <VictoryScreen />}
       {screen === "defeat" && <DefeatScreen />}
