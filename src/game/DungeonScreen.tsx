@@ -155,17 +155,31 @@ export function DungeonScreen() {
     }
   };
 
+  const addMaterial = useGame((s) => s.addMaterial);
+  const learnRecipe = useGame((s) => s.learnRecipe);
+
   const finishKill = (e: Extract<Encounter, { kind: "combat" }>) => {
     const goldDrop = 4 + e.depth * 3;
     const xpDrop = 6 + e.depth * 4;
     rewardGold(goldDrop); rewardXp(xpDrop);
-    addLog(`${e.enemy.name} crumbles. +${goldDrop}g +${xpDrop}xp`);
+    addLog(`${e.enemy.name} falls. +${goldDrop}g +${xpDrop}xp`);
+    let questItem: string | undefined;
+    let material: string | undefined;
     if (e.enemy.questItemId && Math.random() < 0.6) {
       addQuestItem(e.enemy.questItemId);
-      addLog(`Picked up a ${e.enemy.questItemId.replace("_", " ")}.`);
+      questItem = e.enemy.questItemId;
     }
-    if (e.enemy.id === "dragon") { setScreen("victory"); return; }
-    setEnc({ kind: "path", depth: e.depth });
+    if (e.enemy.materialDrop && Math.random() < e.enemy.materialDrop.chance) {
+      addMaterial(e.enemy.materialDrop.id);
+      material = e.enemy.materialDrop.id;
+    }
+    setEnc({ kind: "victory", depth: e.depth, loot: { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material } });
+  };
+
+  const closeVictory = () => {
+    if (enc.kind !== "victory") return;
+    if (enc.loot.enemy.id === "dragon") { setScreen("victory"); return; }
+    setEnc({ kind: "path", depth: enc.depth });
   };
 
   const openChest = () => {
@@ -177,6 +191,15 @@ export function DungeonScreen() {
     if (enc.preview.questItemId) {
       addQuestItem(enc.preview.questItemId);
       addLog(`Inside: a ${enc.preview.questItemId.replace("_", " ")}!`);
+    }
+    if (enc.preview.materialId) {
+      addMaterial(enc.preview.materialId);
+      addLog(`Inside: ${MATERIALS[enc.preview.materialId]?.name ?? enc.preview.materialId}.`);
+    }
+    if (enc.preview.recipeId) {
+      learnRecipe(enc.preview.recipeId);
+      const rec = RECIPES.find((r) => r.id === enc.preview!.recipeId);
+      if (rec) addLog(`Inside: recipe — ${rec.name}!`);
     }
     setEnc({ kind: "path", depth: enc.depth });
   };
