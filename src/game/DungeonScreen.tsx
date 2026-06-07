@@ -299,7 +299,21 @@ export function DungeonScreen() {
             {enc.loot.material && (
               <p className="font-body text-sm">› Material: <span className="text-allies">{MATERIALS[enc.loot.material]?.name ?? enc.loot.material}</span></p>
             )}
-            {!enc.loot.questItem && !enc.loot.material && (
+            {enc.loot.gear && (
+              <div className={`border-2 border-black p-2 rarity-frame-${enc.loot.gear.rarity}`}>
+                <p className={`pixel text-[9px] ${RARITY_CLASS[enc.loot.gear.rarity]}`}>★ {enc.loot.gear.name}</p>
+                <p className="font-body text-xs text-muted-foreground">{RARITY_LABEL[enc.loot.gear.rarity]} · iLvl {enc.loot.gear.ilvl}</p>
+                <p className="font-body text-sm mt-1">
+                  {enc.loot.gear.stats.atk ? `+${enc.loot.gear.stats.atk} ATK ` : ""}
+                  {enc.loot.gear.stats.mag ? `+${enc.loot.gear.stats.mag} MAG ` : ""}
+                  {enc.loot.gear.stats.maxHp ? `+${enc.loot.gear.stats.maxHp} HP ` : ""}
+                  {enc.loot.gear.stats.crit ? `+${enc.loot.gear.stats.crit}% crit ` : ""}
+                  {enc.loot.gear.stats.dodge ? `+${enc.loot.gear.stats.dodge}% dodge` : ""}
+                </p>
+                <p className="font-body text-xs text-muted-foreground">Auto-added to bag · sells for {gearSellPrice(enc.loot.gear)}g</p>
+              </div>
+            )}
+            {!enc.loot.questItem && !enc.loot.material && !enc.loot.gear && (
               <p className="font-body text-sm text-muted-foreground">No drops this time.</p>
             )}
             <button onClick={closeVictory} className="pixel-btn pixel-btn-gold !text-[8px] w-full text-center">
@@ -307,6 +321,7 @@ export function DungeonScreen() {
             </button>
           </div>
         )}
+
 
         {enc.kind === "path" && (
           <div className="border-2 border-black bg-card p-3 fade-in-up">
