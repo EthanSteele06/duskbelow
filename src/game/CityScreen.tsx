@@ -1,5 +1,5 @@
 import { useGame } from "@/game/store";
-import { FACTIONS, TRAINERS } from "@/game/data";
+import { FACTIONS, TRAINERS, SPECS } from "@/game/data";
 import { StatBar } from "./StatBar";
 import cityImg from "@/assets/city.jpg";
 
@@ -7,17 +7,16 @@ export function CityScreen() {
   const setScreen = useGame((s) => s.setScreen);
   const enter = useGame((s) => s.enterDungeon);
   const reset = useGame((s) => s.reset);
-  const faction = useGame((s) => s.player.faction);
-  const classId = useGame((s) => s.player.classId);
-  const level = useGame((s) => s.player.level);
-  const skillPoints = useGame((s) => s.player.skillPoints);
+  const player = useGame((s) => s.player);
   const log = useGame((s) => s.log);
-  const f = FACTIONS.find((x) => x.id === faction)!;
-  const trainer = classId ? TRAINERS[classId] : null;
+  const f = FACTIONS.find((x) => x.id === player.faction)!;
+  const trainer = player.classId ? TRAINERS[player.classId] : null;
+  const spec = player.specId ? SPECS.find((s) => s.id === player.specId) : null;
+  const newGear = player.bag.length > 0;
 
   return (
     <div className="relative flex min-h-full flex-col">
-      <div className="relative h-56 overflow-hidden border-b-2 border-black">
+      <div className="relative h-48 overflow-hidden border-b-2 border-black">
         <img src={cityImg} alt="City" className="h-full w-full object-cover" />
         <div className="absolute inset-0 vignette" />
         <div className="absolute inset-0 scanlines" />
@@ -25,6 +24,12 @@ export function CityScreen() {
           <img src={f.sigil} alt={f.name} className="h-8 w-8 object-contain torch-flicker" />
           <p className="pixel text-[8px] text-shadow-pixel text-gold">{f.name}</p>
         </div>
+        {player.isChampion && (
+          <div className="absolute right-2 top-2 pixel text-[8px] text-shadow-pixel text-gold border border-gold px-1 py-0.5">★ CHAMPION</div>
+        )}
+        {spec && (
+          <div className="absolute right-2 bottom-2 pixel text-[8px] text-shadow-pixel" style={{ color: spec.color }}>{spec.name}</div>
+        )}
       </div>
 
       <div className="p-3">
@@ -34,17 +39,20 @@ export function CityScreen() {
       <div className="px-3">
         <h2 className="pixel text-[10px] text-gold mb-2">▣ Hub</h2>
         <div className="grid grid-cols-1 gap-2">
-          <ActionTile title="Vendors" desc="Buy potions and gear." icon="⚒" onClick={() => setScreen("vendor")} />
-          <ActionTile title="Quest Board" desc="Take on jobs for gold." icon="✦" onClick={() => setScreen("quests")} />
+          <ActionTile title="Equipment" desc={newGear ? `New gear in bag (${player.bag.length})` : "Manage gear & inventory."} icon="▩" onClick={() => setScreen("equipment")} badge={newGear ? "NEW" : undefined} />
           <ActionTile
             title={trainer ? trainer.name : "Trainer"}
-            desc={level < 3 ? `Class trainer — unlocks at Lv 3 (Lv ${level})` : skillPoints > 0 ? `${skillPoints} skill point${skillPoints>1?"s":""} to spend!` : "Spend skill points & class quests."}
+            desc={player.level < 3 ? `Talents unlock at Lv 3 (Lv ${player.level})` : player.talentPoints > 0 ? `${player.talentPoints} talent point${player.talentPoints>1?"s":""} to spend!` : spec ? `${spec.name} tree & class quests.` : "Choose a spec."}
             icon="✦"
-            onClick={() => setScreen("trainer")}
-            badge={skillPoints > 0 && level >= 3 ? String(skillPoints) : undefined}
+            onClick={() => setScreen("talents")}
+            badge={player.talentPoints > 0 && player.level >= 3 ? String(player.talentPoints) : undefined}
           />
+          <ActionTile title="Vendors" desc="Buy potions and gear." icon="⚒" onClick={() => setScreen("vendor")} />
+          <ActionTile title="Quest Board" desc="Take on jobs for gold." icon="✦" onClick={() => setScreen("quests")} />
           <ActionTile title="Crafter's Row" desc="Professions & recipes." icon="⚒" onClick={() => setScreen("profession")} />
           <ActionTile title="Auction House" desc="Bid on rare relics." icon="⚖" onClick={() => setScreen("auction")} />
+          <ActionTile title="Cobalt Vault" desc="Cosmetic shop & gems." icon="◆" onClick={() => setScreen("shop")} />
+          <ActionTile title="Champion's Pass" desc={player.isChampion ? "Active — manage perks." : "Unlock +50% XP & more."} icon="★" onClick={() => setScreen("champion")} accent={!player.isChampion} />
           <ActionTile title="Descend Dungeon" desc="Brave the depths." icon="▼" onClick={enter} accent />
         </div>
       </div>
