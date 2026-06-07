@@ -1,12 +1,22 @@
 import { useState, useEffect, useRef } from "react";
 import { useGame } from "@/game/store";
 import { StatBar } from "./StatBar";
-import { CLASS_ABILITIES, enemyForDepth, rollChest, type Ability, type EnemyDef, type ChestPreview } from "@/game/data";
+import { CLASS_ABILITIES, enemyForDepth, rollChest, MATERIALS, RECIPES, type Ability, type EnemyDef, type ChestPreview } from "@/game/data";
 import corridorImg from "@/assets/dungeon-corridor.jpg";
 import chestImg from "@/assets/dungeon-chest.jpg";
 
+interface Loot {
+  enemy: EnemyDef;
+  gold: number;
+  xp: number;
+  questItem?: string;
+  material?: string;
+  recipe?: string;
+}
+
 type Encounter =
   | { kind: "path"; depth: number }
+  | { kind: "victory"; depth: number; loot: Loot }
   | { kind: "chest"; depth: number; preview: ChestPreview }
   | {
       kind: "combat"; depth: number;
@@ -145,17 +155,31 @@ export function DungeonScreen() {
     }
   };
 
+  const addMaterial = useGame((s) => s.addMaterial);
+  const learnRecipe = useGame((s) => s.learnRecipe);
+
   const finishKill = (e: Extract<Encounter, { kind: "combat" }>) => {
     const goldDrop = 4 + e.depth * 3;
     const xpDrop = 6 + e.depth * 4;
     rewardGold(goldDrop); rewardXp(xpDrop);
-    addLog(`${e.enemy.name} crumbles. +${goldDrop}g +${xpDrop}xp`);
+    addLog(`${e.enemy.name} falls. +${goldDrop}g +${xpDrop}xp`);
+    let questItem: string | undefined;
+    let material: string | undefined;
     if (e.enemy.questItemId && Math.random() < 0.6) {
       addQuestItem(e.enemy.questItemId);
-      addLog(`Picked up a ${e.enemy.questItemId.replace("_", " ")}.`);
+      questItem = e.enemy.questItemId;
     }
-    if (e.enemy.id === "dragon") { setScreen("victory"); return; }
-    setEnc({ kind: "path", depth: e.depth });
+    if (e.enemy.materialDrop && Math.random() < e.enemy.materialDrop.chance) {
+      addMaterial(e.enemy.materialDrop.id);
+      material = e.enemy.materialDrop.id;
+    }
+    setEnc({ kind: "victory", depth: e.depth, loot: { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material } });
+  };
+
+  const closeVictory = () => {
+    if (enc.kind !== "victory") return;
+    if (enc.loot.enemy.id === "dragon") { setScreen("victory"); return; }
+    setEnc({ kind: "path", depth: enc.depth });
   };
 
   const openChest = () => {
@@ -168,11 +192,21 @@ export function DungeonScreen() {
       addQuestItem(enc.preview.questItemId);
       addLog(`Inside: a ${enc.preview.questItemId.replace("_", " ")}!`);
     }
+    if (enc.preview.materialId) {
+      addMaterial(enc.preview.materialId);
+      addLog(`Inside: ${MATERIALS[enc.preview.materialId]?.name ?? enc.preview.materialId}.`);
+    }
+    if (enc.preview.recipeId) {
+      learnRecipe(enc.preview.recipeId);
+      const rec = RECIPES.find((r) => r.id === enc.preview!.recipeId);
+      if (rec) addLog(`Inside: recipe — ${rec.name}!`);
+    }
     setEnc({ kind: "path", depth: enc.depth });
   };
 
   const heroImg =
     enc.kind === "combat" ? enc.enemy.image :
+    enc.kind === "victory" ? enc.loot.enemy.image :
     enc.kind === "chest" ? chestImg :
     corridorImg;
 
@@ -180,10 +214,10 @@ export function DungeonScreen() {
     <div className="flex min-h-full flex-col">
       <div className={`relative h-64 overflow-hidden border-b-2 border-black ${hit ? "shake" : ""}`}>
         <img
-          key={(enc.kind === "combat" ? enc.enemy.id : enc.kind) + enc.depth}
+          key={(enc.kind === "combat" ? enc.enemy.id : enc.kind === "victory" ? "v_" + enc.loot.enemy.id : enc.kind) + enc.depth}
           src={heroImg}
           alt=""
-          className="h-full w-full object-cover fade-in-up"
+          className={`h-full w-full object-cover fade-in-up ${enc.kind === "victory" ? "grayscale opacity-60" : ""}`}
         />
         <div className="absolute inset-0 vignette" />
         <div className="absolute inset-0 scanlines" />
@@ -193,7 +227,13 @@ export function DungeonScreen() {
             {enc.enemy.name} {enc.enemyHp}/{enc.enemyMaxHp}
           </div>
         )}
+        {enc.kind === "victory" && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <p className="pixel text-2xl text-gold text-shadow-pixel">VICTORY</p>
+          </div>
+        )}
       </div>
+
 
       <div className="p-3 space-y-3">
         <StatBar />
@@ -237,6 +277,25 @@ export function DungeonScreen() {
               <button className="pixel-btn pixel-btn-gold !text-[8px]" onClick={openChest}>Open</button>
               <button className="pixel-btn !text-[8px]" onClick={() => setEnc({ kind: "path", depth: enc.depth })}>Leave</button>
             </div>
+          </div>
+        )}
+
+        {enc.kind === "victory" && (
+          <div className="border-2 border-black bg-card p-3 fade-in-up space-y-2">
+            <p className="pixel text-[10px] text-gold">☠ {enc.loot.enemy.name} slain</p>
+            <p className="font-body text-sm">+<span className="text-gold">{enc.loot.gold}g</span> · +<span className="text-divine">{enc.loot.xp}xp</span></p>
+            {enc.loot.questItem && (
+              <p className="font-body text-sm">› Quest item: <span className="text-divine">{enc.loot.questItem.replace("_", " ")}</span></p>
+            )}
+            {enc.loot.material && (
+              <p className="font-body text-sm">› Material: <span className="text-allies">{MATERIALS[enc.loot.material]?.name ?? enc.loot.material}</span></p>
+            )}
+            {!enc.loot.questItem && !enc.loot.material && (
+              <p className="font-body text-sm text-muted-foreground">No drops this time.</p>
+            )}
+            <button onClick={closeVictory} className="pixel-btn pixel-btn-gold !text-[8px] w-full text-center">
+              {enc.loot.enemy.id === "dragon" ? "Claim the Heart →" : "Continue ▸"}
+            </button>
           </div>
         )}
 
