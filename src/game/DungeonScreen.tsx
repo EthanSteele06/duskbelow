@@ -161,24 +161,29 @@ export function DungeonScreen() {
 
   const addMaterial = useGame((s) => s.addMaterial);
   const learnRecipe = useGame((s) => s.learnRecipe);
+  const addToBag = useGame((s) => s.addToBag);
 
   const finishKill = (e: Extract<Encounter, { kind: "combat" }>) => {
     const goldDrop = 4 + e.depth * 3;
     const xpDrop = 6 + e.depth * 4;
     rewardGold(goldDrop); rewardXp(xpDrop);
     addLog(`${e.enemy.name} falls. +${goldDrop}g +${xpDrop}xp`);
+    vibrate([20, 40, 60]);
     let questItem: string | undefined;
     let material: string | undefined;
-    if (e.enemy.questItemId && Math.random() < 0.6) {
-      addQuestItem(e.enemy.questItemId);
-      questItem = e.enemy.questItemId;
+    let gear: GearItem | undefined;
+    if (e.enemy.questItemId && Math.random() < 0.6) { addQuestItem(e.enemy.questItemId); questItem = e.enemy.questItemId; }
+    if (e.enemy.materialDrop && Math.random() < e.enemy.materialDrop.chance) { addMaterial(e.enemy.materialDrop.id); material = e.enemy.materialDrop.id; }
+    // Gear drop chance scales with depth; boss guarantees rare+
+    const gearChance = e.enemy.id === "dragon" ? 1 : 0.35 + e.depth * 0.04;
+    if (Math.random() < gearChance) {
+      const rolled = e.enemy.id === "dragon" ? rollGear(e.depth, { minRarity: "rare" }) : rollGear(e.depth);
+      if (addToBag(rolled)) gear = rolled;
+      else addLog("Bag full — gear left behind.");
     }
-    if (e.enemy.materialDrop && Math.random() < e.enemy.materialDrop.chance) {
-      addMaterial(e.enemy.materialDrop.id);
-      material = e.enemy.materialDrop.id;
-    }
-    setEnc({ kind: "victory", depth: e.depth, loot: { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material } });
+    setEnc({ kind: "victory", depth: e.depth, loot: { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material, gear } });
   };
+
 
   const closeVictory = () => {
     if (enc.kind !== "victory") return;
