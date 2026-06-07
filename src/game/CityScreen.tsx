@@ -1,5 +1,5 @@
 import { useGame } from "@/game/store";
-import { FACTIONS } from "@/game/data";
+import { FACTIONS, TRAINERS } from "@/game/data";
 import { StatBar } from "./StatBar";
 import cityImg from "@/assets/city.jpg";
 
@@ -8,8 +8,12 @@ export function CityScreen() {
   const enter = useGame((s) => s.enterDungeon);
   const reset = useGame((s) => s.reset);
   const faction = useGame((s) => s.player.faction);
+  const classId = useGame((s) => s.player.classId);
+  const level = useGame((s) => s.player.level);
+  const skillPoints = useGame((s) => s.player.skillPoints);
   const log = useGame((s) => s.log);
   const f = FACTIONS.find((x) => x.id === faction)!;
+  const trainer = classId ? TRAINERS[classId] : null;
 
   return (
     <div className="relative flex min-h-full flex-col">
@@ -32,6 +36,14 @@ export function CityScreen() {
         <div className="grid grid-cols-1 gap-2">
           <ActionTile title="Vendors" desc="Buy potions and gear." icon="⚒" onClick={() => setScreen("vendor")} />
           <ActionTile title="Quest Board" desc="Take on jobs for gold." icon="✦" onClick={() => setScreen("quests")} />
+          <ActionTile
+            title={trainer ? trainer.name : "Trainer"}
+            desc={level < 3 ? `Class trainer — unlocks at Lv 3 (Lv ${level})` : skillPoints > 0 ? `${skillPoints} skill point${skillPoints>1?"s":""} to spend!` : "Spend skill points & class quests."}
+            icon="✦"
+            onClick={() => setScreen("trainer")}
+            badge={skillPoints > 0 && level >= 3 ? String(skillPoints) : undefined}
+          />
+          <ActionTile title="Crafter's Row" desc="Professions & recipes." icon="⚒" onClick={() => setScreen("profession")} />
           <ActionTile title="Auction House" desc="Bid on rare relics." icon="⚖" onClick={() => setScreen("auction")} />
           <ActionTile title="Descend Dungeon" desc="Brave the depths." icon="▼" onClick={enter} accent />
         </div>
@@ -49,7 +61,7 @@ export function CityScreen() {
   );
 }
 
-function ActionTile({ title, desc, icon, onClick, accent }: { title: string; desc: string; icon: string; onClick: () => void; accent?: boolean }) {
+function ActionTile({ title, desc, icon, onClick, accent, badge }: { title: string; desc: string; icon: string; onClick: () => void; accent?: boolean; badge?: string }) {
   return (
     <button onClick={onClick} className={`pixel-btn flex items-center gap-3 ${accent ? "pixel-btn-primary" : ""}`}>
       <span className="text-2xl">{icon}</span>
@@ -57,6 +69,7 @@ function ActionTile({ title, desc, icon, onClick, accent }: { title: string; des
         <span className="block pixel text-[9px]">{title}</span>
         <span className="block font-body text-sm opacity-80 mt-1">{desc}</span>
       </span>
+      {badge && <span className="pixel text-[8px] bg-gold text-black px-1.5 py-1 border border-black">{badge}</span>}
       <span className="pixel text-[10px]">›</span>
     </button>
   );

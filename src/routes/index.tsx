@@ -5,6 +5,8 @@ import { IntroScreen } from "@/game/IntroScreen";
 import { CityScreen } from "@/game/CityScreen";
 import { VendorScreen, AuctionScreen } from "@/game/MarketScreens";
 import { QuestsScreen } from "@/game/QuestsScreen";
+import { TrainerScreen } from "@/game/TrainerScreen";
+import { ProfessionScreen } from "@/game/ProfessionScreen";
 import { DungeonScreen, VictoryScreen, DefeatScreen } from "@/game/DungeonScreen";
 
 export const Route = createFileRoute("/")({
@@ -29,6 +31,8 @@ function Game() {
       {screen === "vendor" && <VendorScreen />}
       {screen === "auction" && <AuctionScreen />}
       {screen === "quests" && <QuestsScreen />}
+      {screen === "trainer" && <TrainerScreen />}
+      {screen === "profession" && <ProfessionScreen />}
       {screen === "dungeon" && <DungeonScreen />}
       {screen === "victory" && <VictoryScreen />}
       {screen === "defeat" && <DefeatScreen />}
