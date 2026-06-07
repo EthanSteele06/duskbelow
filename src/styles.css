@@ -128,7 +128,8 @@
     font-family: var(--font-pixel);
     font-size: 10px;
     line-height: 1;
-    padding: 12px 14px;
+    padding: 14px 14px;
+    min-height: 44px;
     background: var(--color-secondary);
     color: var(--color-foreground);
     border: 2px solid #000;
@@ -140,6 +141,14 @@
   .pixel-btn:active { transform: translate(1px,1px); }
   .pixel-btn-primary { background: var(--color-blood); color: var(--color-divine); }
   .pixel-btn-gold { background: var(--color-gold); color: #1a0f08; }
+  .pixel-btn-combat { min-height: 60px; font-size: 11px; padding: 10px 8px; text-align: center; }
+  .rarity-frame-uncommon { box-shadow: 0 0 0 2px var(--color-rarity-uncommon), 0 0 12px -2px var(--color-rarity-uncommon); }
+  .rarity-frame-rare      { box-shadow: 0 0 0 2px var(--color-rarity-rare),     0 0 14px -2px var(--color-rarity-rare); }
+  .rarity-frame-epic      { box-shadow: 0 0 0 2px var(--color-rarity-epic),     0 0 18px -2px var(--color-rarity-epic); }
+  .rarity-frame-legendary { box-shadow: 0 0 0 2px var(--color-rarity-legendary),0 0 22px -2px var(--color-rarity-legendary); animation: legendShimmer 2s infinite alternate; }
+  @keyframes legendShimmer {
+    from { filter: brightness(1); } to { filter: brightness(1.25); }
+  }
   .torch-flicker { animation: flicker 1.6s infinite alternate; }
   @keyframes flicker {
     0%, 100% { opacity: 1; filter: drop-shadow(0 0 6px var(--color-ember)); }
