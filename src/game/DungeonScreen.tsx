@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useGame } from "@/game/store";
 import { StatBar } from "./StatBar";
-import { CLASS_ABILITIES, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES, RARITY_CLASS, RARITY_LABEL, gearSellPrice, type Ability, type EnemyDef, type ChestPreview, type GearItem } from "@/game/data";
+import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumber";
+import { CLASS_ABILITIES, COSMETICS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES, RARITY_CLASS, RARITY_LABEL, gearSellPrice, type Ability, type EnemyDef, type ChestPreview, type GearItem } from "@/game/data";
 import corridorImg from "@/assets/dungeon-corridor.jpg";
 import chestImg from "@/assets/dungeon-chest.jpg";
 
