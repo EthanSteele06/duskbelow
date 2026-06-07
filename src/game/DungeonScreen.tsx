@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useGame } from "@/game/store";
 import { StatBar } from "./StatBar";
 import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumber";
@@ -367,7 +367,7 @@ export function DungeonScreen() {
                     onFocus={() => setHoveredAbility(ab)}
                     disabled={cd > 0}
                     className={`pixel-btn !text-[8px] !p-2 disabled:opacity-40 ${weaponGlow ? "weapon-glow-btn" : ""} ${ab.id === abilities[0].id ? "pixel-btn-primary" : ""}`}
-                    style={weaponGlow ? ({ ["--weapon-glow" as string]: weaponGlow } as React.CSSProperties) : undefined}
+                    style={weaponGlow ? ({ ["--weapon-glow" as string]: weaponGlow } as CSSProperties) : undefined}
                   >
                     {ab.name}
                     {cd > 0 && <span className="block pixel text-[7px] mt-1 text-muted-foreground">CD {cd}</span>}
