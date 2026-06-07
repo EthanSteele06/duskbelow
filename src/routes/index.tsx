@@ -11,6 +11,7 @@ import { EquipmentScreen } from "@/game/EquipmentScreen";
 import { ShopScreen } from "@/game/ShopScreen";
 import { ChampionPassScreen } from "@/game/ChampionPassScreen";
 import { DungeonScreen, VictoryScreen, DefeatScreen } from "@/game/DungeonScreen";
+import { CharacterHeader } from "@/game/CharacterHeader";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -25,10 +26,13 @@ export const Route = createFileRoute("/")({
   component: Game,
 });
 
+const HEADERLESS = new Set(["title", "intro"]);
+
 function Game() {
   const screen = useGame((s) => s.screen);
   return (
     <main className="mx-auto h-dvh max-w-md overflow-y-auto bg-background text-foreground">
+      {!HEADERLESS.has(screen) && <CharacterHeader />}
       {screen === "title" && <TitleScreen />}
       {screen === "intro" && <IntroScreen />}
       {screen === "city" && <CityScreen />}

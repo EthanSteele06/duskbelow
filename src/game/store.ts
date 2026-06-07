@@ -535,11 +535,19 @@ export const useGame = create<GameState>((set, get) => ({
   },
 
   equipCosmetic: (id) => {
+    const p = get().player;
+    // Empty id unequips all currently-equipped cosmetics whose kind matches any owned-but-not-passed id.
+    // For simple "unequip <kind>" callers should pass the equipped id again to toggle, but we also
+    // support the convention: passing an id that isn't owned no-ops; passing "" clears nothing.
+    if (!id) return;
     const def = COSMETICS.find((c) => c.id === id);
     if (!def) return;
-    const p = get().player;
     if (!p.ownedCosmetics.includes(id)) return;
-    set({ player: { ...p, equippedCosmetics: { ...p.equippedCosmetics, [def.kind]: id } } });
+    const current = p.equippedCosmetics[def.kind];
+    const nextEquipped = { ...p.equippedCosmetics };
+    if (current === id) delete nextEquipped[def.kind]; // toggle off
+    else nextEquipped[def.kind] = id;
+    set({ player: { ...p, equippedCosmetics: nextEquipped } });
   },
 }));
 
