@@ -1,29 +1,33 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useGame } from "@/game/store";
+import { TitleScreen } from "@/game/TitleScreen";
+import { CityScreen } from "@/game/CityScreen";
+import { VendorScreen, AuctionScreen } from "@/game/MarketScreens";
+import { DungeonScreen, VictoryScreen, DefeatScreen } from "@/game/DungeonScreen";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Your App" },
-      { name: "description", content: "Replace this with a one-sentence description of your app." },
-      { property: "og:title", content: "Your App" },
-      { property: "og:description", content: "Replace this with a one-sentence description of your app." },
+      { title: "Dusk Below — Mobile Dungeon Crawler" },
+      { name: "description", content: "A dark gothic pixel dungeon crawler. Choose a faction, pick a class, descend." },
+      { property: "og:title", content: "Dusk Below" },
+      { property: "og:description", content: "Dark gothic pixel dungeon crawler for mobile." },
     ],
   }),
-  component: Index,
+  component: Game,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
-function Index() {
+function Game() {
+  const screen = useGame((s) => s.screen);
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <main className="mx-auto h-dvh max-w-md overflow-y-auto bg-background text-foreground">
+      {screen === "title" && <TitleScreen />}
+      {screen === "city" && <CityScreen />}
+      {screen === "vendor" && <VendorScreen />}
+      {screen === "auction" && <AuctionScreen />}
+      {screen === "dungeon" && <DungeonScreen />}
+      {screen === "victory" && <VictoryScreen />}
+      {screen === "defeat" && <DefeatScreen />}
+    </main>
   );
 }
