@@ -1,31 +1,73 @@
 import { useState } from "react";
 import { useGame } from "@/game/store";
-import { COSMETICS, GEM_PACKS, type CosmeticKind } from "@/game/data";
-import { StatBar } from "./StatBar";
+import { COSMETICS, GEM_PACKS, COSMETIC_KIND_LABEL, type CosmeticKind, type CosmeticDef } from "@/game/data";
 import shopBg from "@/assets/shop-bg.jpg";
 
-const TABS: { id: "cosmetics" | "gems" | "collection"; label: string }[] = [
-  { id: "cosmetics",  label: "Shop" },
+const TABS: { id: "shop" | "collection" | "gems"; label: string }[] = [
+  { id: "shop",       label: "Shop" },
   { id: "collection", label: "Collection" },
   { id: "gems",       label: "Gems" },
 ];
 
-const KIND_LABEL: Record<CosmeticKind, string> = {
-  mount: "Mounts", weaponGlow: "Weapon Glows", namePlate: "Name Plates", portraitFrame: "Portrait Frames",
-};
+const KIND_ORDER: CosmeticKind[] = ["title", "portraitFrame", "namePlate", "weaponGlow", "damageSkin", "pet"];
+
+function CosmeticPreview({ c, size = 64 }: { c: CosmeticDef; size?: number }) {
+  // Render a small preview matching how the cosmetic appears in the header / combat
+  if (c.kind === "title") {
+    return (
+      <div className="flex items-center justify-center w-full h-full" style={{ background: "oklch(0.18 0.01 30)" }}>
+        <span className="pixel text-[9px] truncate px-1" style={{ color: c.tint }}>{c.titleText}</span>
+      </div>
+    );
+  }
+  if (c.kind === "portraitFrame") {
+    return (
+      <div className="flex items-center justify-center w-full h-full" style={{ background: "oklch(0.15 0.01 30)" }}>
+        <div className="border-2 border-black" style={{ width: size * 0.5, height: size * 0.5, boxShadow: `0 0 0 2px ${c.tint}, 0 0 10px -1px ${c.tint}`, background: "oklch(0.3 0.02 30)" }} />
+      </div>
+    );
+  }
+  if (c.kind === "namePlate") {
+    return (
+      <div className="flex items-center justify-center w-full h-full" style={{ background: "oklch(0.15 0.01 30)" }}>
+        <div className="border-2 px-1.5 py-0.5 pixel text-[8px]" style={{ borderColor: c.tint, color: c.tint, background: c.swatch }}>NAME</div>
+      </div>
+    );
+  }
+  if (c.kind === "weaponGlow") {
+    return (
+      <div className="flex items-center justify-center w-full h-full" style={{ background: "oklch(0.15 0.01 30)" }}>
+        <div className="pixel text-[8px] px-2 py-1 border-2 border-black" style={{ background: "var(--color-secondary)", boxShadow: `0 0 12px ${c.tint}, inset 0 0 6px ${c.tint}` }}>ABL</div>
+      </div>
+    );
+  }
+  if (c.kind === "damageSkin") {
+    return (
+      <div className="flex items-center justify-center w-full h-full" style={{ background: "oklch(0.15 0.01 30)" }}>
+        <span className="pixel text-shadow-pixel" style={{ fontSize: 22, color: c.tint }}>247</span>
+      </div>
+    );
+  }
+  // pet
+  return (
+    <div className="flex items-center justify-center w-full h-full" style={{ background: c.swatch }}>
+      <span className="text-3xl pet-idle" style={{ filter: `drop-shadow(0 0 4px ${c.tint})` }}>{c.glyph}</span>
+    </div>
+  );
+}
 
 export function ShopScreen() {
   const setScreen = useGame((s) => s.setScreen);
   const player = useGame((s) => s.player);
   const buy = useGame((s) => s.buyCosmetic);
   const equip = useGame((s) => s.equipCosmetic);
-  const [tab, setTab] = useState<"cosmetics" | "gems" | "collection">("cosmetics");
+  const [tab, setTab] = useState<"shop" | "collection" | "gems">("shop");
 
   const owned = new Set(player.ownedCosmetics);
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className="relative h-32 overflow-hidden border-b-2 border-black">
+      <div className="relative h-28 overflow-hidden border-b-2 border-black">
         <img src={shopBg} alt="" className="h-full w-full object-cover" loading="lazy" />
         <div className="absolute inset-0 vignette" />
         <div className="absolute inset-0 scanlines" />
@@ -36,7 +78,6 @@ export function ShopScreen() {
       </div>
 
       <div className="p-3 space-y-3">
-        <StatBar />
         <button onClick={() => setScreen("city")} className="pixel-btn !text-[8px] w-fit">← Back to City</button>
 
         <div className="grid grid-cols-3 gap-1">
@@ -45,25 +86,29 @@ export function ShopScreen() {
           ))}
         </div>
 
-        {tab === "cosmetics" && (
-          <div className="space-y-3">
-            {(Object.keys(KIND_LABEL) as CosmeticKind[]).map((kind) => {
+        <div className="border-2 border-black bg-card/60 p-2">
+          <p className="pixel text-[8px] text-muted-foreground leading-relaxed">
+            Cosmetics appear in the <span className="text-gold">character header</span> at the top of the screen and in combat. Mounts unlock when the world map ships.
+          </p>
+        </div>
+
+        {tab === "shop" && (
+          <div className="space-y-4">
+            {KIND_ORDER.map((kind) => {
               const items = COSMETICS.filter((c) => c.kind === kind);
               return (
                 <div key={kind}>
-                  <h3 className="pixel text-[10px] text-gold mb-1">{KIND_LABEL[kind]}</h3>
+                  <h3 className="pixel text-[10px] text-gold mb-1.5">{COSMETIC_KIND_LABEL[kind]}</h3>
                   <div className="grid grid-cols-2 gap-2">
                     {items.map((c) => {
                       const isOwned = owned.has(c.id);
                       const locked = c.championExclusive && !player.isChampion && !isOwned;
                       const canBuy = !isOwned && !locked && player.gems >= c.priceGems;
                       return (
-                        <div key={c.id} className="border-2 border-black bg-card p-2">
-                          <div className="h-16 border-2 border-black flex items-center justify-center text-3xl" style={{ background: c.swatch }}>
-                            <span style={{ filter: "drop-shadow(2px 2px 0 #000)" }}>{c.glyph}</span>
-                          </div>
+                        <div key={c.id} className="border-2 border-black bg-card p-2 flex flex-col">
+                          <div className="h-16 border-2 border-black overflow-hidden"><CosmeticPreview c={c} /></div>
                           <p className="pixel text-[8px] mt-2">{c.name}</p>
-                          <p className="font-body text-xs text-muted-foreground leading-tight">{c.desc}</p>
+                          <p className="font-body text-xs text-muted-foreground leading-tight flex-1">{c.desc}</p>
                           <div className="mt-2">
                             {isOwned ? (
                               <span className="pixel text-[7px] text-divine">✓ Owned</span>
@@ -82,36 +127,42 @@ export function ShopScreen() {
                 </div>
               );
             })}
+
+            <div className="border-2 border-dashed border-muted-foreground bg-card/40 p-3 text-center">
+              <p className="pixel text-[9px] text-muted-foreground">Mounts — Coming Soon</p>
+              <p className="font-body text-sm text-muted-foreground mt-1 leading-tight">Mount visuals unlock with the world-map travel system.</p>
+            </div>
           </div>
         )}
 
         {tab === "collection" && (
-          <div className="space-y-3">
-            {(Object.keys(KIND_LABEL) as CosmeticKind[]).map((kind) => {
+          <div className="space-y-4">
+            {KIND_ORDER.map((kind) => {
               const items = COSMETICS.filter((c) => c.kind === kind && owned.has(c.id));
-              if (items.length === 0) return (
-                <div key={kind}>
-                  <h3 className="pixel text-[10px] text-gold mb-1">{KIND_LABEL[kind]}</h3>
-                  <p className="font-body text-sm text-muted-foreground">Nothing yet.</p>
-                </div>
-              );
               return (
                 <div key={kind}>
-                  <h3 className="pixel text-[10px] text-gold mb-1">{KIND_LABEL[kind]}</h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    {items.map((c) => {
-                      const isEquipped = player.equippedCosmetics[c.kind] === c.id;
-                      return (
-                        <button key={c.id} onClick={() => equip(c.id)} className={`border-2 border-black bg-card p-2 text-left ${isEquipped ? "rarity-frame-legendary" : ""}`}>
-                          <div className="h-12 border-2 border-black flex items-center justify-center text-2xl" style={{ background: c.swatch }}>
-                            <span style={{ filter: "drop-shadow(2px 2px 0 #000)" }}>{c.glyph}</span>
-                          </div>
-                          <p className="pixel text-[7px] mt-1">{c.name}</p>
-                          <p className="pixel text-[7px] text-gold mt-1">{isEquipped ? "✓ EQUIPPED" : "Tap to equip"}</p>
+                  <h3 className="pixel text-[10px] text-gold mb-1.5">{COSMETIC_KIND_LABEL[kind]}</h3>
+                  {items.length === 0 ? (
+                    <p className="font-body text-sm text-muted-foreground">Nothing yet.</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {items.map((c) => {
+                        const isEquipped = player.equippedCosmetics[c.kind] === c.id;
+                        return (
+                          <button key={c.id} onClick={() => equip(c.id)} className={`border-2 border-black bg-card p-2 text-left ${isEquipped ? "rarity-frame-legendary" : ""}`}>
+                            <div className="h-12 border-2 border-black overflow-hidden"><CosmeticPreview c={c} /></div>
+                            <p className="pixel text-[7px] mt-1">{c.name}</p>
+                            <p className="pixel text-[7px] text-gold mt-1">{isEquipped ? "✓ EQUIPPED" : "Tap to equip"}</p>
+                          </button>
+                        );
+                      })}
+                      {player.equippedCosmetics[kind] && (
+                        <button onClick={() => equip("")} className="border-2 border-dashed border-muted-foreground bg-card/40 p-2 text-center">
+                          <p className="pixel text-[8px] text-muted-foreground">Unequip {COSMETIC_KIND_LABEL[kind].replace(/s$/, "")}</p>
                         </button>
-                      );
-                    })}
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
