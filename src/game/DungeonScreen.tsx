@@ -1,23 +1,34 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useGame } from "@/game/store";
 import { StatBar } from "./StatBar";
+import { CLASS_ABILITIES, enemyForDepth, rollChest, type Ability, type EnemyDef, type ChestPreview } from "@/game/data";
 import corridorImg from "@/assets/dungeon-corridor.jpg";
 import chestImg from "@/assets/dungeon-chest.jpg";
-import skeletonImg from "@/assets/enemy-skeleton.jpg";
 
 type Encounter =
   | { kind: "path"; depth: number }
-  | { kind: "chest"; depth: number; gold: number; xp: number }
-  | { kind: "combat"; depth: number; enemyHp: number; enemyMaxHp: number; enemyAtk: number; name: string };
+  | { kind: "chest"; depth: number; preview: ChestPreview }
+  | {
+      kind: "combat"; depth: number;
+      enemy: EnemyDef;
+      enemyHp: number; enemyMaxHp: number;
+      stunnedTurns: number; shieldReduce: number;
+      cooldowns: Record<string, number>;
+    };
 
 function rollEncounter(depth: number): Encounter {
-  const r = Math.random();
-  if (depth === 1) return { kind: "path", depth };
-  if (r < 0.55) {
-    const hp = 10 + depth * 6;
-    return { kind: "combat", depth, enemyHp: hp, enemyMaxHp: hp, enemyAtk: 3 + Math.floor(depth * 1.2), name: depth > 4 ? "Wraith Knight" : "Risen Skeleton" };
+  if (depth >= 10) {
+    const e = enemyForDepth(10);
+    const hp = e.hpBase;
+    return { kind: "combat", depth, enemy: e, enemyHp: hp, enemyMaxHp: hp, stunnedTurns: 0, shieldReduce: 0, cooldowns: {} };
   }
-  if (r < 0.85) return { kind: "chest", depth, gold: 8 + depth * 6, xp: 5 + depth * 3 };
+  const r = Math.random();
+  if (r < 0.55) {
+    const e = enemyForDepth(depth);
+    const hp = e.hpBase + Math.floor(depth * 1.4);
+    return { kind: "combat", depth, enemy: e, enemyHp: hp, enemyMaxHp: hp, stunnedTurns: 0, shieldReduce: 0, cooldowns: {} };
+  }
+  if (r < 0.85) return { kind: "chest", depth, preview: rollChest(depth) };
   return { kind: "path", depth };
 }
 
@@ -26,105 +37,204 @@ export function DungeonScreen() {
   const damage = useGame((s) => s.damage);
   const rewardGold = useGame((s) => s.rewardGold);
   const rewardXp = useGame((s) => s.rewardXp);
+  const addQuestItem = useGame((s) => s.addQuestItem);
   const pushLog = useGame((s) => s.pushLog);
   const exitDungeon = useGame((s) => s.exitDungeon);
   const setScreen = useGame((s) => s.setScreen);
+  const heal = useGame((s) => s.heal);
   const use = useGame((s) => s.use);
+
+  const abilities = player.classId ? CLASS_ABILITIES[player.classId] : [];
   const inv = player.inventory;
 
   const [enc, setEnc] = useState<Encounter>(() => ({ kind: "path", depth: 1 }));
   const [hit, setHit] = useState(false);
+  const [combatLog, setCombatLog] = useState<string[]>([]);
+  const [hoveredAbility, setHoveredAbility] = useState<Ability | null>(null);
+  const logRef = useRef<HTMLDivElement>(null);
+
+  const addLog = (msg: string) => {
+    setCombatLog((l) => [...l.slice(-20), msg]);
+    pushLog(msg);
+  };
 
   useEffect(() => {
     if (player.hp <= 0) setScreen("defeat");
   }, [player.hp, setScreen]);
 
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [combatLog]);
+
   const advance = () => {
     const newDepth = enc.depth + 1;
-    if (newDepth > 10) {
-      setScreen("victory");
-      return;
-    }
-    setEnc(rollEncounter(newDepth));
+    if (newDepth > 10) { setScreen("victory"); return; }
+    const next = rollEncounter(newDepth);
+    setEnc(next);
+    if (next.kind === "combat") addLog(`A ${next.enemy.name} blocks your path!`);
+    else if (next.kind === "chest") addLog(`You spot ${next.preview.label}.`);
+    else addLog("The corridor opens further.");
   };
 
-  const attack = (skill: "strike" | "heavy") => {
-    if (enc.kind !== "combat") return;
-    const dmg = skill === "heavy" ? Math.floor(player.atk * 1.6) : player.atk + Math.floor(player.mag / 2);
-    const newHp = enc.enemyHp - dmg;
-    pushLog(`You hit ${enc.name} for ${dmg}.`);
-    if (newHp <= 0) {
-      const goldDrop = 4 + enc.depth * 3;
-      const xpDrop = 6 + enc.depth * 4;
-      rewardGold(goldDrop);
-      rewardXp(xpDrop);
-      pushLog(`${enc.name} crumbles. +${goldDrop}g +${xpDrop}xp`);
-      setEnc({ kind: "path", depth: enc.depth });
-      return;
-    }
-    const incoming = Math.max(1, enc.enemyAtk - Math.floor(Math.random() * 3));
-    damage(incoming);
-    setHit(true);
-    setTimeout(() => setHit(false), 350);
-    pushLog(`${enc.name} strikes back for ${incoming}.`);
-    setEnc({ ...enc, enemyHp: newHp });
+  const tickCooldowns = (e: Extract<Encounter, { kind: "combat" }>) => {
+    const cds: Record<string, number> = {};
+    for (const [k, v] of Object.entries(e.cooldowns)) if (v > 1) cds[k] = v - 1;
+    return cds;
   };
 
-  const flee = () => {
+  const enemyTurn = (e: Extract<Encounter, { kind: "combat" }>) => {
+    if (e.stunnedTurns > 0) {
+      addLog(`${e.enemy.name} is frozen and cannot act.`);
+      return { ...e, stunnedTurns: e.stunnedTurns - 1, shieldReduce: 0 };
+    }
+    let dmg = Math.max(1, e.enemy.atkBase + Math.floor(e.depth * 0.6) - Math.floor(Math.random() * 3));
+    if (e.shieldReduce > 0) dmg = Math.max(1, Math.floor(dmg * (1 - e.shieldReduce)));
+    damage(dmg);
+    setHit(true); setTimeout(() => setHit(false), 350);
+    const line = e.enemy.attackLines[Math.floor(Math.random() * e.enemy.attackLines.length)]
+      .replace("{n}", e.enemy.name).replace("{d}", String(dmg));
+    addLog(line + (e.shieldReduce > 0 ? " (shielded!)" : ""));
+    return { ...e, shieldReduce: 0 };
+  };
+
+  const useAbility = (ab: Ability) => {
     if (enc.kind !== "combat") return;
-    const fled = Math.random() < 0.55;
-    if (fled) {
-      pushLog("You slip into the shadows.");
-      setEnc({ kind: "path", depth: enc.depth });
-    } else {
-      const incoming = enc.enemyAtk;
-      damage(incoming);
-      pushLog(`Flee failed! ${incoming} dmg.`);
+    if ((enc.cooldowns[ab.id] ?? 0) > 0) return;
+    const e = enc;
+    const flavor = ab.effect.flavor.replace("{p}", player.name);
+
+    switch (ab.effect.kind) {
+      case "attack": {
+        const base = ab.effect.useMag ? player.mag : player.atk;
+        const dmg = Math.max(1, Math.floor(base * ab.effect.mult));
+        addLog(`${flavor} for ${dmg} damage!`);
+        const newHp = e.enemyHp - dmg;
+        if (newHp <= 0) return finishKill(e);
+        const cds = tickCooldowns(e);
+        cds[ab.id] = ab.cooldown;
+        const stepped = { ...e, enemyHp: newHp, cooldowns: cds };
+        setEnc(enemyTurn(stepped));
+        return;
+      }
+      case "heal": {
+        const amt = Math.max(4, player.mag * 2);
+        heal(amt);
+        addLog(`${flavor} — restored ${amt} HP.`);
+        const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
+        setEnc(enemyTurn({ ...e, cooldowns: cds }));
+        return;
+      }
+      case "stun": {
+        addLog(`${flavor}. ${e.enemy.name} is frozen!`);
+        const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
+        setEnc({ ...e, cooldowns: cds, stunnedTurns: 1 });
+        return;
+      }
+      case "shield": {
+        addLog(`${flavor}.`);
+        const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
+        setEnc(enemyTurn({ ...e, shieldReduce: ab.effect.reduce, cooldowns: cds }));
+        return;
+      }
+      case "flee": {
+        addLog(`${flavor}. You escape!`);
+        setCombatLog([]);
+        setEnc({ kind: "path", depth: e.depth });
+        return;
+      }
     }
   };
+
+  const finishKill = (e: Extract<Encounter, { kind: "combat" }>) => {
+    const goldDrop = 4 + e.depth * 3;
+    const xpDrop = 6 + e.depth * 4;
+    rewardGold(goldDrop); rewardXp(xpDrop);
+    addLog(`${e.enemy.name} crumbles. +${goldDrop}g +${xpDrop}xp`);
+    if (e.enemy.questItemId && Math.random() < 0.6) {
+      addQuestItem(e.enemy.questItemId);
+      addLog(`Picked up a ${e.enemy.questItemId.replace("_", " ")}.`);
+    }
+    if (e.enemy.id === "dragon") { setScreen("victory"); return; }
+    setEnc({ kind: "path", depth: e.depth });
+  };
+
+  const openChest = () => {
+    if (enc.kind !== "chest") return;
+    const g = enc.preview.goldRange[0] + Math.floor(Math.random() * (enc.preview.goldRange[1] - enc.preview.goldRange[0] + 1));
+    const x = enc.preview.xpRange[0] + Math.floor(Math.random() * (enc.preview.xpRange[1] - enc.preview.xpRange[0] + 1));
+    rewardGold(g); rewardXp(x);
+    addLog(`The chest yields ${g}g and ${x}xp.`);
+    if (enc.preview.questItemId) {
+      addQuestItem(enc.preview.questItemId);
+      addLog(`Inside: a ${enc.preview.questItemId.replace("_", " ")}!`);
+    }
+    setEnc({ kind: "path", depth: enc.depth });
+  };
+
+  const heroImg =
+    enc.kind === "combat" ? enc.enemy.image :
+    enc.kind === "chest" ? chestImg :
+    corridorImg;
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className={`relative h-72 overflow-hidden border-b-2 border-black ${hit ? "shake" : ""}`}>
+      <div className={`relative h-64 overflow-hidden border-b-2 border-black ${hit ? "shake" : ""}`}>
         <img
-          key={enc.kind + enc.depth}
-          src={enc.kind === "combat" ? skeletonImg : enc.kind === "chest" ? chestImg : corridorImg}
-          alt={enc.kind}
+          key={(enc.kind === "combat" ? enc.enemy.id : enc.kind) + enc.depth}
+          src={heroImg}
+          alt=""
           className="h-full w-full object-cover fade-in-up"
         />
         <div className="absolute inset-0 vignette" />
         <div className="absolute inset-0 scanlines" />
-        <div className="absolute left-2 top-2 pixel text-[8px] text-gold text-shadow-pixel">
-          Depth {enc.depth}/10
-        </div>
+        <div className="absolute left-2 top-2 pixel text-[8px] text-gold text-shadow-pixel">Depth {enc.depth}/10</div>
+        {enc.kind === "combat" && (
+          <div className="absolute right-2 top-2 pixel text-[8px] text-blood text-shadow-pixel">
+            {enc.enemy.name} {enc.enemyHp}/{enc.enemyMaxHp}
+          </div>
+        )}
       </div>
 
       <div className="p-3 space-y-3">
         <StatBar />
 
+        {/* Combat / event log */}
+        <div ref={logRef} className="border-2 border-black bg-card/80 p-2 h-24 overflow-y-auto font-body text-sm leading-tight">
+          {combatLog.length === 0 && <p className="text-muted-foreground italic">The dungeon is silent.</p>}
+          {combatLog.map((l, i) => (
+            <p key={i} className={
+              l.includes("damage!") && l.includes(player.name) ? "text-divine" :
+              l.startsWith("✓") || l.startsWith("★") ? "text-gold" :
+              l.includes("for") && l.includes("!") ? "text-blood" :
+              "text-foreground"
+            }>› {l}</p>
+          ))}
+        </div>
+
         {enc.kind === "combat" && (
-          <div className="border-2 border-black bg-card p-2 fade-in-up">
+          <div className="border-2 border-black bg-card p-2">
             <div className="flex items-baseline justify-between">
-              <span className="pixel text-[9px] text-blood">{enc.name}</span>
+              <span className="pixel text-[9px] text-blood">{enc.enemy.name}</span>
               <span className="font-body text-sm">{enc.enemyHp}/{enc.enemyMaxHp}</span>
             </div>
             <div className="mt-1 h-2 w-full bg-stone border border-black">
-              <div className="h-full bg-blood" style={{ width: `${(enc.enemyHp/enc.enemyMaxHp)*100}%` }} />
+              <div className="h-full bg-blood transition-all" style={{ width: `${(enc.enemyHp / enc.enemyMaxHp) * 100}%` }} />
             </div>
+            {enc.stunnedTurns > 0 && <p className="pixel text-[8px] text-arcane mt-1">❄ FROZEN</p>}
+            {enc.shieldReduce > 0 && <p className="pixel text-[8px] text-gold mt-1">⛨ BRACED</p>}
           </div>
         )}
 
         {enc.kind === "chest" && (
-          <div className="border-2 border-black bg-card p-3 fade-in-up text-center">
-            <p className="pixel text-[10px] text-gold">A Sealed Chest</p>
-            <p className="font-body text-sm text-muted-foreground mt-1">It hums faintly. Open it?</p>
+          <div className="border-2 border-black bg-card p-3 fade-in-up">
+            <p className="pixel text-[10px] text-gold">{enc.preview.label}</p>
+            <p className="font-body text-sm text-muted-foreground mt-1">
+              Likely contains: <span className="text-gold">{enc.preview.goldRange[0]}–{enc.preview.goldRange[1]}g</span>,{" "}
+              <span className="text-gold">{enc.preview.xpRange[0]}–{enc.preview.xpRange[1]}xp</span>
+              {enc.preview.questItemId && <>, and possibly <span className="text-divine">a {enc.preview.questItemId.replace("_"," ")}</span></>}.
+            </p>
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <button className="pixel-btn pixel-btn-gold !text-[8px]"
-                onClick={() => {
-                  rewardGold(enc.gold); rewardXp(enc.xp);
-                  pushLog(`The chest yields ${enc.gold}g and ${enc.xp}xp.`);
-                  setEnc({ kind: "path", depth: enc.depth });
-                }}>Open</button>
+              <button className="pixel-btn pixel-btn-gold !text-[8px]" onClick={openChest}>Open</button>
               <button className="pixel-btn !text-[8px]" onClick={() => setEnc({ kind: "path", depth: enc.depth })}>Leave</button>
             </div>
           </div>
@@ -133,26 +243,48 @@ export function DungeonScreen() {
         {enc.kind === "path" && (
           <div className="border-2 border-black bg-card p-3 fade-in-up">
             <p className="pixel text-[9px] text-foreground">The corridor forks.</p>
-            <p className="font-body text-sm text-muted-foreground mt-1">Choose your path. Each step risks worse.</p>
+            <p className="font-body text-sm text-muted-foreground mt-1">Each step risks worse — and richer.</p>
             <div className="mt-3 grid grid-cols-3 gap-2">
               <button className="pixel-btn !text-[8px]" onClick={advance}>← Left</button>
-              <button className="pixel-btn !text-[8px]" onClick={advance}>↑ Straight</button>
+              <button className="pixel-btn !text-[8px]" onClick={advance}>↑ Onward</button>
               <button className="pixel-btn !text-[8px]" onClick={advance}>Right →</button>
             </div>
           </div>
         )}
 
-        {enc.kind === "combat" ? (
-          <div className="grid grid-cols-3 gap-2">
-            <button onClick={() => attack("strike")} className="pixel-btn pixel-btn-primary !text-[8px]">Strike</button>
-            <button onClick={() => attack("heavy")} className="pixel-btn !text-[8px]">Heavy</button>
-            <button onClick={flee} className="pixel-btn !text-[8px]">Flee</button>
+        {/* Class abilities */}
+        {enc.kind === "combat" && (
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-2">
+              {abilities.map((ab) => {
+                const cd = enc.cooldowns[ab.id] ?? 0;
+                return (
+                  <button
+                    key={ab.id}
+                    onClick={() => useAbility(ab)}
+                    onMouseEnter={() => setHoveredAbility(ab)}
+                    onFocus={() => setHoveredAbility(ab)}
+                    disabled={cd > 0}
+                    className={`pixel-btn !text-[8px] !p-2 disabled:opacity-40 ${ab.id === abilities[0].id ? "pixel-btn-primary" : ""}`}
+                  >
+                    {ab.name}
+                    {cd > 0 && <span className="block pixel text-[7px] mt-1 text-muted-foreground">CD {cd}</span>}
+                  </button>
+                );
+              })}
+            </div>
+            {(hoveredAbility ?? abilities[0]) && (
+              <div className="border-2 border-black bg-popover px-2 py-1.5">
+                <p className="pixel text-[8px] text-gold">{(hoveredAbility ?? abilities[0]).name}</p>
+                <p className="font-body text-sm text-muted-foreground leading-tight">{(hoveredAbility ?? abilities[0]).desc}</p>
+              </div>
+            )}
           </div>
-        ) : null}
+        )}
 
         <div className="grid grid-cols-2 gap-2">
-          {inv.includes("p1") && <button onClick={() => use("p1")} className="pixel-btn !text-[8px]">Lesser Potion</button>}
-          {inv.includes("p2") && <button onClick={() => use("p2")} className="pixel-btn !text-[8px]">Greater Potion</button>}
+          {inv.includes("p1") && <button onClick={() => use("p1")} className="pixel-btn !text-[8px]">Lesser Potion ({inv.filter(x=>x==="p1").length})</button>}
+          {inv.includes("p2") && <button onClick={() => use("p2")} className="pixel-btn !text-[8px]">Greater Potion ({inv.filter(x=>x==="p2").length})</button>}
         </div>
 
         <button onClick={exitDungeon} className="pixel-btn !text-[8px] w-full text-center">⌂ Retreat to City</button>

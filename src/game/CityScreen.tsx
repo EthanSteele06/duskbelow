@@ -31,6 +31,7 @@ export function CityScreen() {
         <h2 className="pixel text-[10px] text-gold mb-2">▣ Hub</h2>
         <div className="grid grid-cols-1 gap-2">
           <ActionTile title="Vendors" desc="Buy potions and gear." icon="⚒" onClick={() => setScreen("vendor")} />
+          <ActionTile title="Quest Board" desc="Take on jobs for gold." icon="✦" onClick={() => setScreen("quests")} />
           <ActionTile title="Auction House" desc="Bid on rare relics." icon="⚖" onClick={() => setScreen("auction")} />
           <ActionTile title="Descend Dungeon" desc="Brave the depths." icon="▼" onClick={enter} accent />
         </div>
