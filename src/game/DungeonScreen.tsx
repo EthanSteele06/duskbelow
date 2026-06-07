@@ -1,12 +1,22 @@
 import { useState, useEffect, useRef } from "react";
 import { useGame } from "@/game/store";
 import { StatBar } from "./StatBar";
-import { CLASS_ABILITIES, enemyForDepth, rollChest, type Ability, type EnemyDef, type ChestPreview } from "@/game/data";
+import { CLASS_ABILITIES, enemyForDepth, rollChest, MATERIALS, RECIPES, type Ability, type EnemyDef, type ChestPreview } from "@/game/data";
 import corridorImg from "@/assets/dungeon-corridor.jpg";
 import chestImg from "@/assets/dungeon-chest.jpg";
 
+interface Loot {
+  enemy: EnemyDef;
+  gold: number;
+  xp: number;
+  questItem?: string;
+  material?: string;
+  recipe?: string;
+}
+
 type Encounter =
   | { kind: "path"; depth: number }
+  | { kind: "victory"; depth: number; loot: Loot }
   | { kind: "chest"; depth: number; preview: ChestPreview }
   | {
       kind: "combat"; depth: number;
