@@ -393,3 +393,220 @@ export const RECIPES: RecipeDef[] = [
 export function profXpForLevel(level: number) {
   return 50 + level * 50;
 }
+
+// ── Specs & Talent Trees ─────────────────────────────────────────────────────
+
+export interface SpecDef {
+  id: string;
+  classId: ClassId;
+  name: string;
+  tagline: string;
+  color: string;
+}
+
+export const SPECS: SpecDef[] = [
+  { id: "arms",          classId: "warrior", name: "Arms",          tagline: "Two-handed precision.",  color: "var(--color-ember)" },
+  { id: "fury",          classId: "warrior", name: "Fury",          tagline: "Berserk dual strikes.",  color: "var(--color-blood)" },
+  { id: "protection",    classId: "warrior", name: "Protection",    tagline: "Shield and survive.",    color: "var(--color-gold)" },
+  { id: "assassination", classId: "rogue",   name: "Assassination", tagline: "Poisons and bleeds.",    color: "oklch(0.6 0.18 145)" },
+  { id: "outlaw",        classId: "rogue",   name: "Outlaw",        tagline: "Reckless gambits.",      color: "var(--color-gold)" },
+  { id: "subtlety",      classId: "rogue",   name: "Subtlety",      tagline: "Shadows and ambush.",    color: "var(--color-arcane)" },
+  { id: "frost",         classId: "mage",    name: "Frost",         tagline: "Freeze and shatter.",    color: "var(--color-allies)" },
+  { id: "fire",          classId: "mage",    name: "Fire",          tagline: "Burn everything.",       color: "var(--color-ember)" },
+  { id: "arcane",        classId: "mage",    name: "Arcane",        tagline: "Pure raw mana.",         color: "var(--color-arcane)" },
+  { id: "discipline",    classId: "priest",  name: "Discipline",    tagline: "Shield with light.",     color: "var(--color-divine)" },
+  { id: "holy",          classId: "priest",  name: "Holy",          tagline: "Restoration mastery.",   color: "var(--color-gold)" },
+  { id: "shadow",        classId: "priest",  name: "Shadow",        tagline: "Drain the living.",      color: "var(--color-arcane)" },
+];
+
+export interface TalentNode {
+  id: string;
+  name: string;
+  desc: string;
+  tier: 1 | 2 | 3 | 4;
+  requires?: string;
+  effect: { atk?: number; mag?: number; maxHp?: number; crit?: number; dodge?: number };
+}
+
+function tree(prefix: string, t: { atk?: number; mag?: number; maxHp?: number }): TalentNode[] {
+  const a = t.atk ?? 0;
+  const m = t.mag ?? 0;
+  const h = t.maxHp ?? 0;
+  return [
+    { id: `${prefix}_1`,  name: "Foundation",  desc: `+${4+h} Max HP, +${1+Math.floor(a/2)} ATK.`, tier: 1, effect: { maxHp: 4+h, atk: 1+Math.floor(a/2) } },
+    { id: `${prefix}_2a`, name: "Edge",        desc: `+${2+a} ATK.`,                                tier: 2, requires: `${prefix}_1`,  effect: { atk: 2+a } },
+    { id: `${prefix}_2b`, name: "Mind",        desc: `+${2+m} MAG.`,                                tier: 2, requires: `${prefix}_1`,  effect: { mag: 2+m } },
+    { id: `${prefix}_3a`, name: "Resilience",  desc: `+${8+h} Max HP, +3% dodge.`,                  tier: 3, requires: `${prefix}_2a`, effect: { maxHp: 8+h, dodge: 3 } },
+    { id: `${prefix}_3b`, name: "Precision",   desc: "+8% crit chance.",                            tier: 3, requires: `${prefix}_2b`, effect: { crit: 8 } },
+    { id: `${prefix}_4a`, name: "Capstone I",  desc: `+${5+a} ATK, +${5+h} Max HP.`,                tier: 4, requires: `${prefix}_3a`, effect: { atk: 5+a, maxHp: 5+h } },
+    { id: `${prefix}_4b`, name: "Capstone II", desc: `+${4+m} MAG, +10% crit.`,                     tier: 4, requires: `${prefix}_3b`, effect: { mag: 4+m, crit: 10 } },
+  ];
+}
+
+export const TALENT_TREES: Record<string, TalentNode[]> = {
+  arms:          tree("arms",       { atk: 3 }),
+  fury:          tree("fury",       { atk: 2, maxHp: 2 }),
+  protection:    tree("protection", { maxHp: 6 }),
+  assassination: tree("assassin",   { atk: 2, mag: 1 }),
+  outlaw:        tree("outlaw",     { atk: 3 }),
+  subtlety:      tree("subtle",     { atk: 2, mag: 2 }),
+  frost:         tree("frost",      { mag: 3 }),
+  fire:          tree("fire",       { mag: 4 }),
+  arcane:        tree("arcane",     { mag: 3, maxHp: 2 }),
+  discipline:    tree("disc",       { mag: 2, maxHp: 4 }),
+  holy:          tree("holy",       { mag: 3, maxHp: 2 }),
+  shadow:        tree("shadow",     { mag: 3, atk: 1 }),
+};
+
+// ── Gear / Equipment ─────────────────────────────────────────────────────────
+
+export type GearSlot = "head" | "chest" | "legs" | "weapon" | "offhand" | "trinket";
+export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+
+export const SLOT_LABEL: Record<GearSlot, string> = {
+  head: "Head", chest: "Chest", legs: "Legs",
+  weapon: "Weapon", offhand: "Off-hand", trinket: "Trinket",
+};
+
+export const SLOT_ICON: Record<GearSlot, string> = {
+  head: "◉", chest: "▩", legs: "║", weapon: "⚔", offhand: "⛨", trinket: "✦",
+};
+
+export const RARITY_RANK: Record<Rarity, number> = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 };
+export const RARITY_LABEL: Record<Rarity, string> = {
+  common: "Common", uncommon: "Uncommon", rare: "Rare", epic: "Epic", legendary: "Legendary",
+};
+export const RARITY_CLASS: Record<Rarity, string> = {
+  common: "text-rarity-common",
+  uncommon: "text-rarity-uncommon",
+  rare: "text-rarity-rare",
+  epic: "text-rarity-epic",
+  legendary: "text-rarity-legendary",
+};
+
+export interface GearItem {
+  id: string;
+  baseId: string;
+  name: string;
+  slot: GearSlot;
+  rarity: Rarity;
+  ilvl: number;
+  stats: { atk?: number; mag?: number; maxHp?: number; crit?: number; dodge?: number };
+}
+
+interface GearTemplate {
+  baseId: string;
+  slot: GearSlot;
+  names: Partial<Record<Rarity, string>>;
+  focus: "atk" | "mag" | "hp" | "mixed";
+}
+
+export const GEAR_TEMPLATES: GearTemplate[] = [
+  { baseId: "helm",    slot: "head",    focus: "hp",    names: { common: "Iron Cap",      uncommon: "Hardened Helm",  rare: "Wraithguard Helm",  epic: "Skullcrown of Dusk",       legendary: "Crown of the Dragon" } },
+  { baseId: "circlet", slot: "head",    focus: "mag",   names: { common: "Patched Hood",  uncommon: "Runed Hood",     rare: "Arcane Circlet",    epic: "Diadem of Stars",          legendary: "Halo of the Voidcaller" } },
+  { baseId: "plate",   slot: "chest",   focus: "hp",    names: { common: "Tattered Mail", uncommon: "Iron Cuirass",   rare: "Plate of the Wall", epic: "Bonecage Hauberk",         legendary: "Aegis of the Endless" } },
+  { baseId: "robe",    slot: "chest",   focus: "mag",   names: { common: "Coarse Robe",   uncommon: "Embroidered Robe", rare: "Robe of Whispers", epic: "Vestment of the Glass Tower", legendary: "Mantle of the First Mage" } },
+  { baseId: "greaves", slot: "legs",    focus: "mixed", names: { common: "Leather Pants", uncommon: "Iron Greaves",   rare: "Stoneward Greaves", epic: "Legguards of Dread",       legendary: "Striders of the Inferno" } },
+  { baseId: "sword",   slot: "weapon",  focus: "atk",   names: { common: "Notched Sword", uncommon: "Iron Sword",     rare: "Bloodbite",         epic: "Dawnreaver",               legendary: "Doomsong" } },
+  { baseId: "dagger",  slot: "weapon",  focus: "atk",   names: { common: "Rusty Dagger",  uncommon: "Twin Fang",      rare: "Nightveil",         epic: "Sliver of the Wraith",     legendary: "Heartrender" } },
+  { baseId: "staff",   slot: "weapon",  focus: "mag",   names: { common: "Cracked Staff", uncommon: "Runed Staff",    rare: "Frostspire",        epic: "Staff of the Quiet Light", legendary: "World-Splitter" } },
+  { baseId: "shield",  slot: "offhand", focus: "hp",    names: { common: "Wooden Buckler",uncommon: "Iron Bulwark",   rare: "Wardstone Shield",  epic: "Bastion of Ash",           legendary: "Aegis Eternal" } },
+  { baseId: "tome",    slot: "offhand", focus: "mag",   names: { common: "Torn Tome",     uncommon: "Bound Codex",    rare: "Tome of Echoes",    epic: "Liber Umbrae",             legendary: "Book of the Black Sun" } },
+  { baseId: "charm",   slot: "trinket", focus: "mixed", names: { common: "Bone Trinket",  uncommon: "Ember Charm",    rare: "Spectral Locket",   epic: "Phylactery Shard",         legendary: "Heart of the Dragon" } },
+];
+
+const RARITY_MULT: Record<Rarity, number> = { common: 1, uncommon: 1.5, rare: 2.2, epic: 3.0, legendary: 4.2 };
+
+let _itemSeq = 0;
+const newItemId = () => `g_${Date.now().toString(36)}_${(_itemSeq++).toString(36)}`;
+
+export function rollGear(depth: number, opts?: { minRarity?: Rarity }): GearItem {
+  const r = Math.random();
+  const depthBoost = depth / 10;
+  let rarity: Rarity;
+  if (r < 0.45 - depthBoost * 0.25) rarity = "common";
+  else if (r < 0.75 - depthBoost * 0.15) rarity = "uncommon";
+  else if (r < 0.92) rarity = "rare";
+  else if (r < 0.985) rarity = "epic";
+  else rarity = "legendary";
+  if (opts?.minRarity && RARITY_RANK[rarity] < RARITY_RANK[opts.minRarity]) rarity = opts.minRarity;
+
+  const template = GEAR_TEMPLATES[Math.floor(Math.random() * GEAR_TEMPLATES.length)];
+  const ilvl = Math.max(1, Math.min(15, depth + Math.floor(Math.random() * 3)));
+  const mult = RARITY_MULT[rarity];
+  const base = Math.max(1, Math.floor(ilvl * 0.7 * mult));
+  const stats: GearItem["stats"] = {};
+  switch (template.focus) {
+    case "atk":   stats.atk = base; if (rarity !== "common") stats.crit = Math.floor(mult * 2); break;
+    case "mag":   stats.mag = base; if (rarity !== "common") stats.crit = Math.floor(mult * 2); break;
+    case "hp":    stats.maxHp = Math.floor(base * 2.5); if (rarity !== "common") stats.dodge = Math.floor(mult); break;
+    case "mixed": stats.atk = Math.floor(base * 0.6); stats.maxHp = Math.floor(base * 1.5); if (rarity === "epic" || rarity === "legendary") stats.mag = Math.floor(base * 0.4); break;
+  }
+  return {
+    id: newItemId(),
+    baseId: template.baseId,
+    name: template.names[rarity] ?? template.names.common ?? "Curio",
+    slot: template.slot,
+    rarity, ilvl, stats,
+  };
+}
+
+export function gearScore(item: GearItem): number {
+  return (item.stats.atk ?? 0) * 2 + (item.stats.mag ?? 0) * 2 + (item.stats.maxHp ?? 0) + (item.stats.crit ?? 0) + (item.stats.dodge ?? 0);
+}
+
+export function gearSellPrice(item: GearItem): number {
+  return Math.max(2, Math.floor(gearScore(item) * (1 + RARITY_RANK[item.rarity])));
+}
+
+// ── Cosmetics & Champion's Pass ──────────────────────────────────────────────
+
+export type CosmeticKind = "mount" | "weaponGlow" | "namePlate" | "portraitFrame";
+
+export interface CosmeticDef {
+  id: string;
+  name: string;
+  kind: CosmeticKind;
+  desc: string;
+  priceGems: number;
+  swatch: string;
+  glyph: string;
+  championExclusive?: boolean;
+}
+
+export const COSMETICS: CosmeticDef[] = [
+  { id: "mount_skeletal",  name: "Skeletal Steed", kind: "mount",         desc: "A bone horse from the deep.",   priceGems: 80,  swatch: "linear-gradient(135deg, oklch(0.85 0.02 80), oklch(0.4 0.02 80))",  glyph: "🐴" },
+  { id: "mount_dread",     name: "Dread Wolf",     kind: "mount",         desc: "Smoke trails its paws.",        priceGems: 120, swatch: "linear-gradient(135deg, oklch(0.35 0.02 280), oklch(0.18 0.02 280))", glyph: "🐺" },
+  { id: "mount_drake",     name: "Ember Drake",    kind: "mount",         desc: "Wingbeats like thunder.",       priceGems: 240, swatch: "linear-gradient(135deg, var(--color-ember), var(--color-blood))",     glyph: "🐲" },
+  { id: "mount_celestial", name: "Celestial Stag", kind: "mount",         desc: "A Champion's gift.",            priceGems: 0,   swatch: "linear-gradient(135deg, var(--color-divine), var(--color-arcane))",   glyph: "🦌", championExclusive: true },
+  { id: "glow_blood",      name: "Bloodthirst Glow",kind: "weaponGlow",   desc: "Weapon drips crimson light.",   priceGems: 60,  swatch: "var(--color-blood)",  glyph: "✦" },
+  { id: "glow_arcane",     name: "Arcane Glow",    kind: "weaponGlow",    desc: "A violet sheen.",               priceGems: 60,  swatch: "var(--color-arcane)", glyph: "✦" },
+  { id: "glow_gold",       name: "Goldfire Glow",  kind: "weaponGlow",    desc: "Burns like a lantern.",         priceGems: 90,  swatch: "var(--color-gold)",   glyph: "✦" },
+  { id: "plate_obsidian",  name: "Obsidian Plate", kind: "namePlate",     desc: "Black-stone nameplate.",        priceGems: 40,  swatch: "oklch(0.15 0.005 280)", glyph: "▣" },
+  { id: "plate_ivory",     name: "Ivory Plate",    kind: "namePlate",     desc: "Bone-carved nameplate.",        priceGems: 40,  swatch: "oklch(0.92 0.02 80)",   glyph: "▣" },
+  { id: "frame_iron",      name: "Iron Frame",     kind: "portraitFrame", desc: "Hammered iron border.",         priceGems: 50,  swatch: "oklch(0.35 0.01 60)",  glyph: "▢" },
+  { id: "frame_gilded",    name: "Gilded Frame",   kind: "portraitFrame", desc: "Inlaid gold filigree.",         priceGems: 110, swatch: "var(--color-gold)",    glyph: "▢" },
+];
+
+export interface GemPack { id: string; gems: number; priceUsd: number; bonus?: number }
+export const GEM_PACKS: GemPack[] = [
+  { id: "gp_small", gems: 100,  priceUsd: 1.99 },
+  { id: "gp_med",   gems: 550,  priceUsd: 9.99,  bonus: 50 },
+  { id: "gp_large", gems: 1200, priceUsd: 19.99, bonus: 200 },
+  { id: "gp_huge",  gems: 3500, priceUsd: 49.99, bonus: 1000 },
+];
+
+export const CHAMPION_PERKS: { icon: string; title: string; desc: string }[] = [
+  { icon: "★", title: "+50% XP & Gold",           desc: "Every kill, every chest." },
+  { icon: "✦", title: "Double Daily Quest Slots", desc: "Two extra quests on the board." },
+  { icon: "⚖", title: "+10 Auction House Slots",  desc: "List more crafted goods at once." },
+  { icon: "▩", title: "Larger Bag (40 → 80)",     desc: "Carry more gear out of dungeons." },
+  { icon: "🦌", title: "Exclusive Monthly Mount", desc: "Starting with the Celestial Stag." },
+  { icon: "♻", title: "Free Weekly Respec",       desc: "Try every spec, no gold cost." },
+];
+
+export const CHAMPION_PRICE_USD = 4.99;
+export const RESPEC_GOLD_COST = 100;
+export const BAG_SIZE_BASE = 40;
+export const BAG_SIZE_CHAMPION = 80;
+

@@ -5,8 +5,11 @@ import { IntroScreen } from "@/game/IntroScreen";
 import { CityScreen } from "@/game/CityScreen";
 import { VendorScreen, AuctionScreen } from "@/game/MarketScreens";
 import { QuestsScreen } from "@/game/QuestsScreen";
-import { TrainerScreen } from "@/game/TrainerScreen";
+import { TalentTreeScreen } from "@/game/TalentTreeScreen";
 import { ProfessionScreen } from "@/game/ProfessionScreen";
+import { EquipmentScreen } from "@/game/EquipmentScreen";
+import { ShopScreen } from "@/game/ShopScreen";
+import { ChampionPassScreen } from "@/game/ChampionPassScreen";
 import { DungeonScreen, VictoryScreen, DefeatScreen } from "@/game/DungeonScreen";
 
 export const Route = createFileRoute("/")({
@@ -14,6 +17,7 @@ export const Route = createFileRoute("/")({
     meta: [
       { title: "Dusk Below — Mobile Dungeon Crawler" },
       { name: "description", content: "A dark gothic pixel dungeon crawler. Choose a faction, pick a class, descend." },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" },
       { property: "og:title", content: "Dusk Below" },
       { property: "og:description", content: "Dark gothic pixel dungeon crawler for mobile." },
     ],
@@ -31,8 +35,11 @@ function Game() {
       {screen === "vendor" && <VendorScreen />}
       {screen === "auction" && <AuctionScreen />}
       {screen === "quests" && <QuestsScreen />}
-      {screen === "trainer" && <TrainerScreen />}
+      {(screen === "trainer" || screen === "talents") && <TalentTreeScreen />}
       {screen === "profession" && <ProfessionScreen />}
+      {screen === "equipment" && <EquipmentScreen />}
+      {screen === "shop" && <ShopScreen />}
+      {screen === "champion" && <ChampionPassScreen />}
       {screen === "dungeon" && <DungeonScreen />}
       {screen === "victory" && <VictoryScreen />}
       {screen === "defeat" && <DefeatScreen />}

@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { useGame } from "@/game/store";
 import { StatBar } from "./StatBar";
-import { CLASS_ABILITIES, enemyForDepth, rollChest, MATERIALS, RECIPES, type Ability, type EnemyDef, type ChestPreview } from "@/game/data";
+import { CLASS_ABILITIES, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES, RARITY_CLASS, RARITY_LABEL, gearSellPrice, type Ability, type EnemyDef, type ChestPreview, type GearItem } from "@/game/data";
 import corridorImg from "@/assets/dungeon-corridor.jpg";
 import chestImg from "@/assets/dungeon-chest.jpg";
+
+const vibrate = (ms: number | number[]) => { try { (navigator as Navigator & { vibrate?: (p: number | number[]) => boolean }).vibrate?.(ms); } catch { /* noop */ } };
 
 interface Loot {
   enemy: EnemyDef;
@@ -12,7 +14,9 @@ interface Loot {
   questItem?: string;
   material?: string;
   recipe?: string;
+  gear?: GearItem;
 }
+
 
 type Encounter =
   | { kind: "path"; depth: number }
@@ -157,24 +161,29 @@ export function DungeonScreen() {
 
   const addMaterial = useGame((s) => s.addMaterial);
   const learnRecipe = useGame((s) => s.learnRecipe);
+  const addToBag = useGame((s) => s.addToBag);
 
   const finishKill = (e: Extract<Encounter, { kind: "combat" }>) => {
     const goldDrop = 4 + e.depth * 3;
     const xpDrop = 6 + e.depth * 4;
     rewardGold(goldDrop); rewardXp(xpDrop);
     addLog(`${e.enemy.name} falls. +${goldDrop}g +${xpDrop}xp`);
+    vibrate([20, 40, 60]);
     let questItem: string | undefined;
     let material: string | undefined;
-    if (e.enemy.questItemId && Math.random() < 0.6) {
-      addQuestItem(e.enemy.questItemId);
-      questItem = e.enemy.questItemId;
+    let gear: GearItem | undefined;
+    if (e.enemy.questItemId && Math.random() < 0.6) { addQuestItem(e.enemy.questItemId); questItem = e.enemy.questItemId; }
+    if (e.enemy.materialDrop && Math.random() < e.enemy.materialDrop.chance) { addMaterial(e.enemy.materialDrop.id); material = e.enemy.materialDrop.id; }
+    // Gear drop chance scales with depth; boss guarantees rare+
+    const gearChance = e.enemy.id === "dragon" ? 1 : 0.35 + e.depth * 0.04;
+    if (Math.random() < gearChance) {
+      const rolled = e.enemy.id === "dragon" ? rollGear(e.depth, { minRarity: "rare" }) : rollGear(e.depth);
+      if (addToBag(rolled)) gear = rolled;
+      else addLog("Bag full — gear left behind.");
     }
-    if (e.enemy.materialDrop && Math.random() < e.enemy.materialDrop.chance) {
-      addMaterial(e.enemy.materialDrop.id);
-      material = e.enemy.materialDrop.id;
-    }
-    setEnc({ kind: "victory", depth: e.depth, loot: { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material } });
+    setEnc({ kind: "victory", depth: e.depth, loot: { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material, gear } });
   };
+
 
   const closeVictory = () => {
     if (enc.kind !== "victory") return;
@@ -290,7 +299,21 @@ export function DungeonScreen() {
             {enc.loot.material && (
               <p className="font-body text-sm">› Material: <span className="text-allies">{MATERIALS[enc.loot.material]?.name ?? enc.loot.material}</span></p>
             )}
-            {!enc.loot.questItem && !enc.loot.material && (
+            {enc.loot.gear && (
+              <div className={`border-2 border-black p-2 rarity-frame-${enc.loot.gear.rarity}`}>
+                <p className={`pixel text-[9px] ${RARITY_CLASS[enc.loot.gear.rarity]}`}>★ {enc.loot.gear.name}</p>
+                <p className="font-body text-xs text-muted-foreground">{RARITY_LABEL[enc.loot.gear.rarity]} · iLvl {enc.loot.gear.ilvl}</p>
+                <p className="font-body text-sm mt-1">
+                  {enc.loot.gear.stats.atk ? `+${enc.loot.gear.stats.atk} ATK ` : ""}
+                  {enc.loot.gear.stats.mag ? `+${enc.loot.gear.stats.mag} MAG ` : ""}
+                  {enc.loot.gear.stats.maxHp ? `+${enc.loot.gear.stats.maxHp} HP ` : ""}
+                  {enc.loot.gear.stats.crit ? `+${enc.loot.gear.stats.crit}% crit ` : ""}
+                  {enc.loot.gear.stats.dodge ? `+${enc.loot.gear.stats.dodge}% dodge` : ""}
+                </p>
+                <p className="font-body text-xs text-muted-foreground">Auto-added to bag · sells for {gearSellPrice(enc.loot.gear)}g</p>
+              </div>
+            )}
+            {!enc.loot.questItem && !enc.loot.material && !enc.loot.gear && (
               <p className="font-body text-sm text-muted-foreground">No drops this time.</p>
             )}
             <button onClick={closeVictory} className="pixel-btn pixel-btn-gold !text-[8px] w-full text-center">
@@ -298,6 +321,7 @@ export function DungeonScreen() {
             </button>
           </div>
         )}
+
 
         {enc.kind === "path" && (
           <div className="border-2 border-black bg-card p-3 fade-in-up">
