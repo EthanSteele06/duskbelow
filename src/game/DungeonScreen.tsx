@@ -366,7 +366,8 @@ export function DungeonScreen() {
                     onMouseEnter={() => setHoveredAbility(ab)}
                     onFocus={() => setHoveredAbility(ab)}
                     disabled={cd > 0}
-                    className={`pixel-btn !text-[8px] !p-2 disabled:opacity-40 ${ab.id === abilities[0].id ? "pixel-btn-primary" : ""}`}
+                    className={`pixel-btn !text-[8px] !p-2 disabled:opacity-40 ${weaponGlow ? "weapon-glow-btn" : ""} ${ab.id === abilities[0].id ? "pixel-btn-primary" : ""}`}
+                    style={weaponGlow ? ({ ["--weapon-glow" as string]: weaponGlow } as React.CSSProperties) : undefined}
                   >
                     {ab.name}
                     {cd > 0 && <span className="block pixel text-[7px] mt-1 text-muted-foreground">CD {cd}</span>}
