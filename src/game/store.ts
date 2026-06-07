@@ -118,7 +118,7 @@ const emptyPlayer: PlayerState = {
   skillPoints: 0, learnedSkills: [], talentPoints: 0, learnedTalents: [], earnedSkillForLevel: 0,
   equipment: {}, bag: [],
   profession: null, profLevel: 1, profXp: 0, materials: {}, knownRecipes: [],
-  isChampion: false, ownedCosmetics: ["mount_skeletal"], equippedCosmetics: {},
+  isChampion: false, ownedCosmetics: [], equippedCosmetics: {},
 };
 
 const xpForLevel = (lvl: number) => lvl * 25;
@@ -517,7 +517,7 @@ export const useGame = create<GameState>((set, get) => ({
     const p = get().player;
     const now = !p.isChampion;
     const owned = new Set(p.ownedCosmetics);
-    if (now) owned.add("mount_celestial");
+    if (now) { owned.add("title_oathbound"); owned.add("plate_celestial"); }
     set({ player: { ...p, isChampion: now, ownedCosmetics: [...owned] } });
     get().pushLog(now ? "★ Champion's Pass activated (preview)." : "Champion's Pass deactivated.");
   },
