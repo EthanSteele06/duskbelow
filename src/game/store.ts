@@ -114,7 +114,7 @@ const emptyPlayer: PlayerState = {
   name: "Wanderer", faction: null, classId: null, specId: null,
   level: 1, xp: 0, hp: 30, maxHp: 30, atk: 5, mag: 1, crit: 0, dodge: 0,
   baseMaxHp: 30, baseAtk: 5, baseMag: 1,
-  gold: 50, gems: 50, inventory: [], questItems: {}, dungeonDepth: 0,
+  gold: 50, gems: 500, inventory: [], questItems: {}, dungeonDepth: 0,
   skillPoints: 0, learnedSkills: [], talentPoints: 0, learnedTalents: [], earnedSkillForLevel: 0,
   equipment: {}, bag: [],
   profession: null, profLevel: 1, profXp: 0, materials: {}, knownRecipes: [],
