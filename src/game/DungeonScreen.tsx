@@ -280,6 +280,25 @@ export function DungeonScreen() {
           </div>
         )}
 
+        {enc.kind === "victory" && (
+          <div className="border-2 border-black bg-card p-3 fade-in-up space-y-2">
+            <p className="pixel text-[10px] text-gold">☠ {enc.loot.enemy.name} slain</p>
+            <p className="font-body text-sm">+<span className="text-gold">{enc.loot.gold}g</span> · +<span className="text-divine">{enc.loot.xp}xp</span></p>
+            {enc.loot.questItem && (
+              <p className="font-body text-sm">› Quest item: <span className="text-divine">{enc.loot.questItem.replace("_", " ")}</span></p>
+            )}
+            {enc.loot.material && (
+              <p className="font-body text-sm">› Material: <span className="text-allies">{MATERIALS[enc.loot.material]?.name ?? enc.loot.material}</span></p>
+            )}
+            {!enc.loot.questItem && !enc.loot.material && (
+              <p className="font-body text-sm text-muted-foreground">No drops this time.</p>
+            )}
+            <button onClick={closeVictory} className="pixel-btn pixel-btn-gold !text-[8px] w-full text-center">
+              {enc.loot.enemy.id === "dragon" ? "Claim the Heart →" : "Continue ▸"}
+            </button>
+          </div>
+        )}
+
         {enc.kind === "path" && (
           <div className="border-2 border-black bg-card p-3 fade-in-up">
             <p className="pixel text-[9px] text-foreground">The corridor forks.</p>
