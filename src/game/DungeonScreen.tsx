@@ -146,6 +146,7 @@ export function DungeonScreen() {
       case "heal": {
         const amt = Math.max(4, player.mag * 2);
         heal(amt);
+        addFloater("heal", amt);
         addLog(`${flavor} — restored ${amt} HP.`);
         const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
         setEnc(enemyTurn({ ...e, cooldowns: cds }));
