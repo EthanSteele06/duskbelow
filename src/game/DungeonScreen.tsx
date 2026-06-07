@@ -115,6 +115,7 @@ export function DungeonScreen() {
     let dmg = Math.max(1, e.enemy.atkBase + Math.floor(e.depth * 0.6) - Math.floor(Math.random() * 3));
     if (e.shieldReduce > 0) dmg = Math.max(1, Math.floor(dmg * (1 - e.shieldReduce)));
     damage(dmg);
+    addFloater("enemy", dmg);
     setHit(true); setTimeout(() => setHit(false), 350);
     const line = e.enemy.attackLines[Math.floor(Math.random() * e.enemy.attackLines.length)]
       .replace("{n}", e.enemy.name).replace("{d}", String(dmg));
@@ -132,6 +133,7 @@ export function DungeonScreen() {
       case "attack": {
         const base = ab.effect.useMag ? player.mag : player.atk;
         const dmg = Math.max(1, Math.floor(base * ab.effect.mult));
+        addFloater("player", dmg, dmgSkin);
         addLog(`${flavor} for ${dmg} damage!`);
         const newHp = e.enemyHp - dmg;
         if (newHp <= 0) return finishKill(e);
