@@ -561,7 +561,7 @@ export function gearSellPrice(item: GearItem): number {
 
 // ── Cosmetics & Champion's Pass ──────────────────────────────────────────────
 
-export type CosmeticKind = "mount" | "weaponGlow" | "namePlate" | "portraitFrame";
+export type CosmeticKind = "title" | "portraitFrame" | "namePlate" | "weaponGlow" | "damageSkin" | "pet";
 
 export interface CosmeticDef {
   id: string;
@@ -569,24 +569,63 @@ export interface CosmeticDef {
   kind: CosmeticKind;
   desc: string;
   priceGems: number;
+  /** CSS color or gradient used for previews and borders */
   swatch: string;
+  /** Solid CSS color used when this cosmetic tints UI (glows, damage numbers) */
+  tint?: string;
+  /** Title suffix text (for kind="title") */
+  titleText?: string;
+  /** Display glyph (used for pets and shop previews) */
   glyph: string;
   championExclusive?: boolean;
 }
 
 export const COSMETICS: CosmeticDef[] = [
-  { id: "mount_skeletal",  name: "Skeletal Steed", kind: "mount",         desc: "A bone horse from the deep.",   priceGems: 80,  swatch: "linear-gradient(135deg, oklch(0.85 0.02 80), oklch(0.4 0.02 80))",  glyph: "🐴" },
-  { id: "mount_dread",     name: "Dread Wolf",     kind: "mount",         desc: "Smoke trails its paws.",        priceGems: 120, swatch: "linear-gradient(135deg, oklch(0.35 0.02 280), oklch(0.18 0.02 280))", glyph: "🐺" },
-  { id: "mount_drake",     name: "Ember Drake",    kind: "mount",         desc: "Wingbeats like thunder.",       priceGems: 240, swatch: "linear-gradient(135deg, var(--color-ember), var(--color-blood))",     glyph: "🐲" },
-  { id: "mount_celestial", name: "Celestial Stag", kind: "mount",         desc: "A Champion's gift.",            priceGems: 0,   swatch: "linear-gradient(135deg, var(--color-divine), var(--color-arcane))",   glyph: "🦌", championExclusive: true },
-  { id: "glow_blood",      name: "Bloodthirst Glow",kind: "weaponGlow",   desc: "Weapon drips crimson light.",   priceGems: 60,  swatch: "var(--color-blood)",  glyph: "✦" },
-  { id: "glow_arcane",     name: "Arcane Glow",    kind: "weaponGlow",    desc: "A violet sheen.",               priceGems: 60,  swatch: "var(--color-arcane)", glyph: "✦" },
-  { id: "glow_gold",       name: "Goldfire Glow",  kind: "weaponGlow",    desc: "Burns like a lantern.",         priceGems: 90,  swatch: "var(--color-gold)",   glyph: "✦" },
-  { id: "plate_obsidian",  name: "Obsidian Plate", kind: "namePlate",     desc: "Black-stone nameplate.",        priceGems: 40,  swatch: "oklch(0.15 0.005 280)", glyph: "▣" },
-  { id: "plate_ivory",     name: "Ivory Plate",    kind: "namePlate",     desc: "Bone-carved nameplate.",        priceGems: 40,  swatch: "oklch(0.92 0.02 80)",   glyph: "▣" },
-  { id: "frame_iron",      name: "Iron Frame",     kind: "portraitFrame", desc: "Hammered iron border.",         priceGems: 50,  swatch: "oklch(0.35 0.01 60)",  glyph: "▢" },
-  { id: "frame_gilded",    name: "Gilded Frame",   kind: "portraitFrame", desc: "Inlaid gold filigree.",         priceGems: 110, swatch: "var(--color-gold)",    glyph: "▢" },
+  // Titles — appear after your name in the header
+  { id: "title_ashbringer",  name: "the Ashbringer",   kind: "title", desc: "Earned in fire.",         titleText: "the Ashbringer",   priceGems: 120, swatch: "var(--color-ember)",  glyph: "“" },
+  { id: "title_delver",      name: "the Delver",       kind: "title", desc: "You always go deeper.",   titleText: "the Delver",       priceGems: 80,  swatch: "var(--color-gold)",   glyph: "“" },
+  { id: "title_voidtouched", name: "Voidtouched",      kind: "title", desc: "Something looked back.",  titleText: "Voidtouched",      priceGems: 150, swatch: "var(--color-arcane)", glyph: "“" },
+  { id: "title_oathbound",   name: "the Oathbound",    kind: "title", desc: "A Champion's mark.",      titleText: "the Oathbound",    priceGems: 0,   swatch: "var(--color-divine)", glyph: "“", championExclusive: true },
+
+  // Portrait frames — glowing ring around your portrait
+  { id: "frame_iron",       name: "Iron Trim",       kind: "portraitFrame", desc: "Hammered iron border.",     priceGems: 50,  swatch: "oklch(0.5 0.02 60)",  tint: "oklch(0.5 0.02 60)",  glyph: "▢" },
+  { id: "frame_gilded",     name: "Gilded Trim",     kind: "portraitFrame", desc: "Inlaid gold filigree.",     priceGems: 110, swatch: "var(--color-gold)",   tint: "var(--color-gold)",   glyph: "▢" },
+  { id: "frame_demonic",    name: "Demonic Trim",    kind: "portraitFrame", desc: "Pulses with infernal red.", priceGems: 140, swatch: "var(--color-blood)",  tint: "var(--color-blood)",  glyph: "▢" },
+  { id: "frame_frostbound", name: "Frostbound Trim", kind: "portraitFrame", desc: "Rimed in blue ice.",        priceGems: 140, swatch: "var(--color-allies)", tint: "var(--color-allies)", glyph: "▢" },
+
+  // Nameplate frames — outer border style of the header card
+  { id: "plate_obsidian",  name: "Obsidian Plate", kind: "namePlate", desc: "Black-stone nameplate.", priceGems: 40,  swatch: "oklch(0.25 0.005 280)", tint: "oklch(0.4 0.005 280)",  glyph: "▣" },
+  { id: "plate_runed",     name: "Runed Plate",    kind: "namePlate", desc: "Etched arcane glyphs.",  priceGems: 90,  swatch: "var(--color-arcane)",   tint: "var(--color-arcane)",   glyph: "▣" },
+  { id: "plate_bone",      name: "Bone Plate",     kind: "namePlate", desc: "Carved from a wraith.",  priceGems: 90,  swatch: "oklch(0.92 0.02 80)",   tint: "oklch(0.92 0.02 80)",   glyph: "▣" },
+  { id: "plate_celestial", name: "Celestial Plate",kind: "namePlate", desc: "Champion's pact-mark.",  priceGems: 0,   swatch: "var(--color-divine)",   tint: "var(--color-divine)",   glyph: "▣", championExclusive: true },
+
+  // Weapon glows — tint your ability buttons in combat
+  { id: "glow_blood",  name: "Bloodthirst Glow", kind: "weaponGlow", desc: "Ability buttons drip red.", priceGems: 60,  swatch: "var(--color-blood)",  tint: "var(--color-blood)",  glyph: "✦" },
+  { id: "glow_arcane", name: "Arcane Glow",      kind: "weaponGlow", desc: "Buttons sheen violet.",     priceGems: 60,  swatch: "var(--color-arcane)", tint: "var(--color-arcane)", glyph: "✦" },
+  { id: "glow_gold",   name: "Goldfire Glow",    kind: "weaponGlow", desc: "Burns lantern-yellow.",     priceGems: 90,  swatch: "var(--color-gold)",   tint: "var(--color-gold)",   glyph: "✦" },
+  { id: "glow_frost",  name: "Frostbite Glow",   kind: "weaponGlow", desc: "Cold blue aura.",           priceGems: 90,  swatch: "var(--color-allies)", tint: "var(--color-allies)", glyph: "✦" },
+
+  // Damage number skins — color of YOUR floating damage numbers
+  { id: "dmg_golden",   name: "Golden Crit",  kind: "damageSkin", desc: "Numbers bloom gold.",     priceGems: 80,  swatch: "var(--color-gold)",   tint: "var(--color-gold)",   glyph: "9" },
+  { id: "dmg_hellfire", name: "Hellfire",     kind: "damageSkin", desc: "Red flame digits.",       priceGems: 80,  swatch: "var(--color-blood)",  tint: "var(--color-blood)",  glyph: "9" },
+  { id: "dmg_arcane",   name: "Arcane Spark", kind: "damageSkin", desc: "Violet sparks per hit.",  priceGems: 100, swatch: "var(--color-arcane)", tint: "var(--color-arcane)", glyph: "9" },
+  { id: "dmg_frost",    name: "Frostbite",    kind: "damageSkin", desc: "Icy blue numerals.",      priceGems: 100, swatch: "var(--color-allies)", tint: "var(--color-allies)", glyph: "9" },
+
+  // Pets — idle beside your portrait
+  { id: "pet_imp",   name: "Shadow Imp",   kind: "pet", desc: "Cackles at your kills.",  priceGems: 150, swatch: "oklch(0.3 0.05 25)",  tint: "var(--color-blood)",  glyph: "👹" },
+  { id: "pet_whelp", name: "Frost Whelp",  kind: "pet", desc: "Small. Cold. Loyal.",     priceGems: 180, swatch: "oklch(0.4 0.1 250)",  tint: "var(--color-allies)", glyph: "🐉" },
+  { id: "pet_owl",   name: "Spectral Owl", kind: "pet", desc: "Phases through the dark.",priceGems: 200, swatch: "oklch(0.5 0.02 280)", tint: "var(--color-arcane)", glyph: "🦉" },
 ];
+
+export const COSMETIC_KIND_LABEL: Record<CosmeticKind, string> = {
+  title: "Titles",
+  portraitFrame: "Portrait Frames",
+  namePlate: "Name Plates",
+  weaponGlow: "Weapon Glows",
+  damageSkin: "Damage Numbers",
+  pet: "Pets",
+};
+
 
 export interface GemPack { id: string; gems: number; priceUsd: number; bonus?: number }
 export const GEM_PACKS: GemPack[] = [
