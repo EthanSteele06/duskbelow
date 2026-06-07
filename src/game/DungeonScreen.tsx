@@ -255,6 +255,10 @@ export function DungeonScreen() {
             <p className="pixel text-2xl text-gold text-shadow-pixel">VICTORY</p>
           </div>
         )}
+        {/* Floating damage numbers overlay */}
+        <div className="absolute inset-0 pointer-events-none">
+          {floaters.map((f) => <FloatingNumber key={f.id} num={f} onDone={removeFloater} />)}
+        </div>
       </div>
 
 
