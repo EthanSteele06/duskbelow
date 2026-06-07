@@ -93,10 +93,11 @@ export function ProfessionScreen() {
             const known = p.knownRecipes.includes(r.id);
             const levelOk = p.profLevel >= r.levelReq;
             const matsOk = Object.entries(r.inputs).every(([m, c]) => (p.materials[m] ?? 0) >= c);
+            const ro = r.output;
             const out =
-              r.output.kind === "vendor"
-                ? VENDOR_ITEMS.find((v) => v.id === r.output.itemId)?.name ?? "Item"
-                : `${r.output.gold}g`;
+              ro.kind === "vendor"
+                ? VENDOR_ITEMS.find((v) => v.id === ro.itemId)?.name ?? "Item"
+                : `${ro.gold}g`;
             return (
               <div key={r.id} className="border-2 border-black bg-card p-2">
                 <div className="flex items-baseline justify-between gap-2">

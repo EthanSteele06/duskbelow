@@ -299,13 +299,14 @@ export const useGame = create<GameState>((set, get) => ({
 
     let inv = p.inventory;
     let gold = p.gold;
-    if (r.output.kind === "vendor") {
-      inv = [...inv, r.output.itemId];
-      const it = VENDOR_ITEMS.find((v) => v.id === r.output.itemId);
+    const out = r.output;
+    if (out.kind === "vendor") {
+      inv = [...inv, out.itemId];
+      const it = VENDOR_ITEMS.find((v) => v.id === out.itemId);
       get().pushLog(`Crafted ${it?.name ?? r.name}.`);
     } else {
-      gold += r.output.gold;
-      get().pushLog(`Crafted and sold ${r.name}. +${r.output.gold}g`);
+      gold += out.gold;
+      get().pushLog(`Crafted and sold ${r.name}. +${out.gold}g`);
     }
 
     let profXp = p.profXp + r.xp;
