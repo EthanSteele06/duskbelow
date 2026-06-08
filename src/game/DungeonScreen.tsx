@@ -2,15 +2,19 @@ import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useGame } from "@/game/store";
 import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumber";
 import {
-  CLASS_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
+  CLASS_ABILITIES, SPEC_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
   RARITY_CLASS, RARITY_LABEL, gearScore, rollDamage, damageRange,
+  MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth,
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
   type StatusEffect, type EnemyIntent, type FactionId,
 } from "@/game/data";
 import { playMusic, playSfx } from "@/game/audio";
 import { TutorialTip } from "@/game/Tutorial";
-import corridorImg from "@/assets/dungeon-corridor.jpg";
+import { SettingsButton } from "@/game/Settings";
 import chestImg from "@/assets/dungeon-chest.jpg";
+import shrineImg from "@/assets/dungeon-shrine.png";
+import trapSpikesImg from "@/assets/trap-spikes.png";
+import trapGasImg from "@/assets/trap-gas.png";
 
 const vibrate = (ms: number | number[]) => { try { (navigator as Navigator & { vibrate?: (p: number | number[]) => boolean }).vibrate?.(ms); } catch { /* noop */ } };
 
