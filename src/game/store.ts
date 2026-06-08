@@ -567,6 +567,39 @@ export const useGame = create<GameState>((set, get) => ({
     else nextEquipped[def.kind] = id;
     set({ player: { ...p, equippedCosmetics: nextEquipped } });
   },
+
+  // ── Combat / run helpers ───────────────────────────────────────────────
+  restoreBetweenRooms: () => {
+    const p = get().player;
+    const amt = Math.max(2, Math.floor(p.maxHp * 0.10));
+    const hp = Math.min(p.maxHp, p.hp + amt);
+    if (hp > p.hp) {
+      set({ player: { ...p, hp } });
+      get().pushLog(`You catch your breath. +${hp - p.hp} HP.`);
+    }
+  },
+
+  useRacial: () => {
+    const p = get().player;
+    if (p.racialUsed || !p.faction) return false;
+    const f = FACTIONS.find((x) => x.id === p.faction)!;
+    const r = f.racial;
+    if (r.kind === "heal_pct") {
+      const amt = Math.floor(p.maxHp * r.amount);
+      const hp = Math.min(p.maxHp, p.hp + amt);
+      set({ player: { ...p, hp, racialUsed: true } });
+      get().pushLog(`${r.flavor.replace("{p}", p.name)} — +${hp - p.hp} HP.`);
+    } else if (r.kind === "buff_dmg") {
+      set({ player: { ...p, racialUsed: true, nextAttackMult: r.amount } });
+      get().pushLog(`${r.flavor.replace("{p}", p.name)} — next attack hits harder.`);
+    }
+    return true;
+  },
+
+  consumeNextAttackMult: () => {
+    const p = get().player;
+    if (p.nextAttackMult !== 1) set({ player: { ...p, nextAttackMult: 1 } });
+  },
 }));
 
 export { xpForLevel, bagCap };
