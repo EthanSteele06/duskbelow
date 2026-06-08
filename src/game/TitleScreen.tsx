@@ -4,6 +4,7 @@ import { CLASSES, FACTIONS, type ClassId, type FactionId } from "@/game/data";
 import { nextUnlock, unlockedClassesFor } from "@/game/meta";
 import { playMusic } from "@/game/audio";
 import { SettingsButton } from "@/game/Settings";
+import { TutorialTip } from "@/game/Tutorial";
 import titleBg from "@/assets/title-bg.jpg";
 
 export function TitleScreen() {
@@ -134,6 +135,12 @@ export function TitleScreen() {
           ▶ DESCEND
         </button>
       </div>
+
+      <TutorialTip
+        id="title-pick"
+        title="Welcome, Wanderer"
+        body="Pick a faction and class. Locked heroes unlock as your Wanderer level climbs (or via the Cobalt Vault)."
+      />
     </div>
   );
 }

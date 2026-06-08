@@ -30,6 +30,8 @@ export interface MetaState {
   stash: GearItem[];
   /** Did we already show the first-wipe explainer? */
   seenWipeIntro: boolean;
+  /** Per-step tutorial dismissal map. */
+  tutorialSeen: Record<string, boolean>;
 }
 
 export const META_VERSION = 1;
@@ -49,6 +51,7 @@ export const emptyMeta = (): MetaState => ({
   },
   stash: [],
   seenWipeIntro: false,
+  tutorialSeen: {},
 });
 
 // ── Account leveling ─────────────────────────────────────────────────────────
