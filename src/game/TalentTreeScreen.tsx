@@ -1,5 +1,5 @@
 import { useGame } from "@/game/store";
-import { SPECS, TALENT_TREES, TRAINERS, QUESTS, RESPEC_GOLD_COST } from "@/game/data";
+import { SPECS, SPEC_ABILITIES, TALENT_TREES, TRAINERS, QUESTS, RESPEC_GOLD_COST } from "@/game/data";
 import { StatBar } from "./StatBar";
 
 export function TalentTreeScreen() {
@@ -48,12 +48,21 @@ export function TalentTreeScreen() {
               <p className="pixel text-[9px] text-gold mt-2">Choose a specialization — it shapes your tree.</p>
             </div>
             <div className="space-y-2">
-              {classSpecs.map((s) => (
-                <button key={s.id} onClick={() => pickSpec(s.id)} className="pixel-btn w-full">
-                  <span className="block pixel text-[10px]" style={{ color: s.color }}>{s.name}</span>
-                  <span className="block font-body text-sm opacity-80 mt-1">{s.tagline}</span>
-                </button>
-              ))}
+              {classSpecs.map((s) => {
+                const sa = SPEC_ABILITIES[s.id];
+                return (
+                  <button key={s.id} onClick={() => pickSpec(s.id)} className="pixel-btn w-full text-left">
+                    <span className="block pixel text-[10px]" style={{ color: s.color }}>{s.name}</span>
+                    <span className="block font-body text-sm opacity-80 mt-1">{s.tagline}</span>
+                    {sa && (
+                      <span className="block border-t border-black/40 mt-2 pt-1">
+                        <span className="block pixel text-[8px] text-gold">✦ Signature: {sa.name} <span className="opacity-60">(CD {sa.cooldown})</span></span>
+                        <span className="block font-body text-xs opacity-80 mt-0.5">{sa.desc}</span>
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </>
         ) : (
