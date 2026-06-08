@@ -396,8 +396,13 @@ export function DungeonScreen() {
           key={(enc.kind === "combat" ? enc.enemy.id : enc.kind === "victory" ? "v_" + enc.loot.enemy.id : enc.kind) + enc.depth}
           src={heroImg}
           alt=""
-          className={`h-full w-full object-cover fade-in-up ${enc.kind === "victory" ? "grayscale opacity-60" : ""}`}
+          className={`h-full w-full object-cover fade-in-up ${enc.kind === "victory" ? "grayscale opacity-60" : ""} ${hit && enc.kind === "combat" ? "fx-recoil" : ""}`}
         />
+        {attackFx && enc.kind === "combat" && (
+          attackFx.kind === "melee"
+            ? <div key={attackFx.key} className="fx-slash" />
+            : <div key={attackFx.key} className="fx-cast" style={{ ["--fx-tint" as string]: attackFx.tint ?? "rgba(160,140,255,0.7)" } as CSSProperties} />
+        )}
         <div className="absolute inset-0 vignette" />
         <div className="absolute inset-0 scanlines" />
         <div className="absolute left-2 top-2 pixel text-[8px] text-gold text-shadow-pixel">Depth {enc.depth}/10</div>
@@ -424,8 +429,6 @@ export function DungeonScreen() {
       </div>
 
       <div className="p-3 space-y-3">
-        <StatBar />
-
         <div ref={logRef} className="border-2 border-black bg-card/80 p-2 h-24 overflow-y-auto font-body text-sm leading-tight">
           {combatLog.length === 0 && <p className="text-muted-foreground italic">The dungeon is silent.</p>}
           {combatLog.map((l, i) => (
