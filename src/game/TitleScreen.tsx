@@ -71,23 +71,34 @@ export function TitleScreen() {
 
         <section className="mt-5 fade-in-up">
           <h2 className="pixel text-[10px] text-foreground mb-2">▣ Class</h2>
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-3 gap-1.5">
             {CLASSES.map((c) => {
               const sel = classId === c.id;
-              const isLocked = !unlocked.has(c.id);
+              const available = isAvailable(c.id);
+              const isPremium = !!c.premium;
+              const lockedPremium = isPremium && !available;
+              const lockedLevel = !isPremium && !available;
+              const handleClick = () => {
+                if (available) { setClassId(c.id); return; }
+                if (lockedPremium) { setScreen("shop"); return; }
+              };
               return (
                 <button
                   key={c.id}
-                  onClick={() => !isLocked && setClassId(c.id)}
-                  disabled={isLocked}
-                  className={`pixel-btn !p-1 flex flex-col items-center ${isLocked ? "opacity-40" : ""}`}
+                  onClick={handleClick}
+                  className={`pixel-btn !p-1 flex flex-col items-center ${!available ? "opacity-60" : ""}`}
                   style={sel ? { boxShadow: `inset 0 0 0 2px ${c.color}, inset -3px -3px 0 0 rgba(0,0,0,0.5)` } : undefined}
                 >
-                  <img src={c.portrait} alt={c.name} className="h-14 w-full object-cover border border-black" />
-                  <span className="pixel text-[7px] mt-1">{isLocked ? "🔒" : c.name}</span>
+                  <div className="relative w-full">
+                    <img src={c.portrait} alt={c.name} className="h-14 w-full object-cover border border-black" />
+                    {lockedPremium && <span className="absolute top-0 right-0 pixel text-[7px] bg-card text-shadow-pixel px-0.5" style={{ color: "var(--color-arcane)" }}>◆</span>}
+                    {lockedLevel && <span className="absolute top-0 right-0 pixel text-[7px] bg-card text-shadow-pixel px-0.5 text-muted-foreground">🔒</span>}
+                  </div>
+                  <span className="pixel text-[7px] mt-1">{c.name}</span>
                 </button>
               );
             })}
+          </div>
 
           </div>
           {classId && (

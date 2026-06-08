@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useGame } from "@/game/store";
-import { COSMETICS, GEM_PACKS, COSMETIC_KIND_LABEL, VENDOR_ITEMS, type CosmeticKind, type CosmeticDef } from "@/game/data";
+import { COSMETICS, GEM_PACKS, COSMETIC_KIND_LABEL, VENDOR_ITEMS, CLASSES, type CosmeticKind, type CosmeticDef } from "@/game/data";
 import shopBg from "@/assets/shop-bg.jpg";
 
 const TABS: { id: "shop" | "collection" | "gems"; label: string }[] = [
@@ -59,11 +59,14 @@ function CosmeticPreview({ c, size = 64 }: { c: CosmeticDef; size?: number }) {
 export function ShopScreen() {
   const setScreen = useGame((s) => s.setScreen);
   const player = useGame((s) => s.player);
+  const meta = useGame((s) => s.meta);
   const buy = useGame((s) => s.buyCosmetic);
   const buyGem = useGame((s) => s.buyGem);
   const equip = useGame((s) => s.equipCosmetic);
+  const unlockClass = useGame((s) => s.unlockClass);
   const [tab, setTab] = useState<"shop" | "collection" | "gems">("shop");
   const revives = VENDOR_ITEMS.filter((v) => v.gemPrice);
+  const heroes = CLASSES.filter((c) => c.premium);
 
   const owned = new Set(player.ownedCosmetics);
 
@@ -96,6 +99,31 @@ export function ShopScreen() {
 
         {tab === "shop" && (
           <div className="space-y-4">
+            <div>
+              <h3 className="pixel text-[10px] text-gold mb-1.5">Heroes</h3>
+              <div className="grid grid-cols-1 gap-2">
+                {heroes.map((h) => {
+                  const isOwned = meta.ownedClasses.includes(h.id);
+                  const canBuy = !isOwned && player.gems >= (h.gemPrice ?? 0);
+                  return (
+                    <div key={h.id} className="border-2 border-black bg-card p-2 flex items-center gap-2">
+                      <img src={h.portrait} alt={h.name} className="h-14 w-14 object-cover border-2 border-black" />
+                      <div className="flex-1 min-w-0">
+                        <p className="pixel text-[9px] text-gold">{h.name} {isOwned && <span className="text-divine">✓ Owned</span>}</p>
+                        <p className="font-body text-xs text-muted-foreground leading-tight">{h.tagline}</p>
+                        <p className="font-body text-xs">HP {h.hp} · ATK {h.atk} · MAG {h.mag}</p>
+                      </div>
+                      {!isOwned && (
+                        <div className="flex flex-col gap-1">
+                          <button onClick={() => unlockClass(h.id)} disabled={!canBuy} className="pixel-btn pixel-btn-gold !text-[7px] !p-2 disabled:opacity-40">◆ {h.gemPrice}</button>
+                          <button onClick={() => unlockClass(h.id, { devFree: true })} className="pixel-btn !text-[7px] !p-1">Test unlock</button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
             <div>
               <h3 className="pixel text-[10px] text-gold mb-1.5">Run Insurance</h3>
               <div className="grid grid-cols-1 gap-2">
