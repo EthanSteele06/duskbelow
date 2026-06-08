@@ -839,7 +839,7 @@ export const useGame = create<GameState>((set, get) => ({
         runShards: s.player.runShards + shards,
       },
     }));
-    if (shards > 0) get().pushLog(`✦ +${shards} Soul Shard${shards>1?"s":""}.`);
+    if (shards > 0) { get().pushLog(`✦ +${shards} Soul Shard${shards>1?"s":""}.`); import("@/game/audio").then((a) => a.playSfx("shard")); }
     if (opts?.loreId && loreFound !== j.loreFound) get().pushLog("✦ A lore fragment is etched into your Journal.");
   },
 
