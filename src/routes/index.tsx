@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useGame } from "@/game/store";
 import { TitleScreen } from "@/game/TitleScreen";
