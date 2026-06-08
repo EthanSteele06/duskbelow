@@ -75,6 +75,12 @@ interface PlayerState {
   runXp: number;
   /** soul shards earned during the current run */
   runShards: number;
+  /** blessings queued in town, baked in on enterDungeon, cleared on exit/finish */
+  activeBuffs: BuffEffect[];
+  /** transient bonus to gold multiplier from buffs (1.0 = none) */
+  buffGoldMult: number;
+  /** first hit each combat is an auto-crit (Echo of Light) — armed at fight start */
+  firstHitCritArmed: boolean;
 }
 
 export interface RunSummary {
@@ -164,6 +170,7 @@ const emptyPlayer = (): PlayerState => ({
   isChampion: false, ownedCosmetics: [], equippedCosmetics: {},
   racialUsed: 0, racialMax: 1, nextAttackMult: 1,
   runKills: 0, runGold: 0, runXp: 0, runShards: 0,
+  activeBuffs: [], buffGoldMult: 1, firstHitCritArmed: false,
 });
 
 const xpForLevel = (lvl: number) => lvl * 25;
