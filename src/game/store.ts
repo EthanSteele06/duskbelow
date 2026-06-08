@@ -947,11 +947,23 @@ export const useGame = create<GameState>((set, get) => ({
   },
 
   wipeCharacter: () => {
-    const p = get().player;
-    if (!p.faction || !p.classId) { get().reset(); return; }
-    const meta = get().meta;
-    const fresh = buildFreshPlayer(p.faction, p.classId, p.name, meta, p);
-    set({ player: fresh, screen: "city", log: [`${p.name} wakes in the city — bones intact, memory shorter.`] , quests: [], lastRun: null });
+    // Called from RunSummaryScreen's Continue button.
+    //   Victory → keep the character, return to the city. Bag/equipment persist.
+    //   Defeat  → character is lost; clear and bounce back to character select (title).
+    const last = get().lastRun;
+    if (last?.outcome === "victory") {
+      set({ screen: "city", lastRun: null });
+      get().pushLog("You return to the city, victorious.");
+      return;
+    }
+    // Defeat path (or unknown): full reset.
+    set({
+      player: emptyPlayer(),
+      screen: "title",
+      log: ["A new wanderer steps forward — the last did not return."],
+      quests: [],
+      lastRun: null,
+    });
   },
 
   finishRun: (outcome) => {
