@@ -294,9 +294,13 @@ export const useGame = create<GameState>((set, get) => ({
     const unlocked = meta.unlockedClasses.includes(classId)
       ? meta.unlockedClasses
       : [...meta.unlockedClasses, classId];
-    const nextMeta = { ...meta, unlockedClasses: unlocked };
+    // Consume heirloom stash: items are moved into the new character below,
+    // so clear it from meta so the next wipe doesn't duplicate them.
+    const nextMeta = { ...meta, unlockedClasses: unlocked, stash: [] };
     persistMeta(nextMeta);
-    const player = buildFreshPlayer(faction, classId, name, nextMeta);
+    // buildFreshPlayer needs the items it's about to consume; pass the
+    // pre-clear meta so it sees the stash, but persist the cleared meta.
+    const player = buildFreshPlayer(faction, classId, name, meta);
     const f = FACTIONS.find((x) => x.id === faction)!;
     set({
       meta: nextMeta,
@@ -316,21 +320,22 @@ export const useGame = create<GameState>((set, get) => ({
       get().pushLog("✦ You dodge the blow!");
       return 0;
     }
-    let hp = Math.max(0, p.hp - n);
+    const hpAfter = Math.max(0, p.hp - n);
     // Phoenix Feather intercept: if owned and damage would reach 0, consume one and revive at 50% maxHp.
-    if (hp <= 0) {
+    if (hpAfter <= 0) {
       const featherIdx = p.inventory.indexOf("phoenix");
       if (featherIdx !== -1) {
         const inv = [...p.inventory];
         inv.splice(featherIdx, 1);
-        hp = Math.max(1, Math.floor(p.maxHp * 0.5));
-        set({ player: { ...p, hp, inventory: inv } });
+        const revived = Math.max(1, Math.floor(p.maxHp * 0.5));
+        set({ player: { ...p, hp: revived, inventory: inv } });
         get().pushLog("✦ Phoenix Feather ignites — you are pulled back from the dark.");
-        return n;
+        // Report only the HP actually shed (the killing blow before the revive).
+        return p.hp;
       }
     }
-    set({ player: { ...p, hp } });
-    return n;
+    set({ player: { ...p, hp: hpAfter } });
+    return p.hp - hpAfter;
   },
   heal: (n) => set((s) => ({ player: { ...s.player, hp: Math.min(s.player.maxHp, s.player.hp + n) } })),
 
@@ -766,6 +771,13 @@ export const useGame = create<GameState>((set, get) => ({
     inv.splice(idx, 1);
     set({ player: { ...p, inventory: inv } });
     get().pushLog("✦ Hearthstone Charm shatters — you are pulled to the city.");
+    // Bailing out still counts as having descended — unlock shop / champion gate.
+    const meta = get().meta;
+    if (!meta.hasCompletedFirstRun) {
+      const nextMeta: MetaState = { ...meta, hasCompletedFirstRun: true };
+      persistMeta(nextMeta);
+      set({ meta: nextMeta });
+    }
     // Treat as a successful retreat — banks rewards, no character wipe, no run summary.
     get().exitDungeon();
     return true;
@@ -790,7 +802,8 @@ export const useGame = create<GameState>((set, get) => ({
     }
     const nextMeta: MetaState = { ...meta, stash: [...meta.stash, item] };
     persistMeta(nextMeta);
-    set({ meta: nextMeta, player: { ...p, equipment: nextEquipment, bag: nextBag } });
+    // recompute so stats drop the stashed equipment immediately.
+    set({ meta: nextMeta, player: recompute({ ...p, equipment: nextEquipment, bag: nextBag }) });
     return true;
   },
 
