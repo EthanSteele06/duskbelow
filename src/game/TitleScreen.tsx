@@ -100,7 +100,6 @@ export function TitleScreen() {
             })}
           </div>
 
-          </div>
           {classId && (
             <div className="mt-2 border-2 border-black bg-card/80 p-2">
               <p className="pixel text-[9px] text-gold">{CLASSES.find(c=>c.id===classId)!.name}</p>
