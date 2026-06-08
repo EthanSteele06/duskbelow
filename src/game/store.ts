@@ -843,6 +843,16 @@ export const useGame = create<GameState>((set, get) => ({
     set({ player: { ...p, nextAttackMult: mult } });
   },
 
+  applyWeakness: (turns) => {
+    const p = get().player;
+    set({ player: { ...p, weaknessTurns: Math.max(p.weaknessTurns, turns) } });
+  },
+
+  tickWeakness: () => {
+    const p = get().player;
+    if (p.weaknessTurns > 0) set({ player: { ...p, weaknessTurns: p.weaknessTurns - 1 } });
+  },
+
   // ── Pass 7: meta progression ───────────────────────────────────────────
   recordKill: (enemyId, opts) => {
     const meta = get().meta;
