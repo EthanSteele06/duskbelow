@@ -150,6 +150,7 @@ interface GameState {
   restoreBetweenRooms: () => void;
   useRacial: () => boolean;
   consumeNextAttackMult: () => void;
+  armNextAttack: (mult: number) => void;
   // Pass 7
   recordKill: (enemyId: string, opts?: { boss?: boolean; shardValue?: number; loreId?: string; itemDropId?: string }) => void;
   useHearthstone: () => boolean;
