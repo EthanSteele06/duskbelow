@@ -160,6 +160,7 @@ interface GameState {
   wipeCharacter: () => void;
   finishRun: (outcome: "victory" | "defeat") => void;
   markSeenWipeIntro: () => void;
+  markTutorialSeen: (id: string, all?: boolean) => void;
   hydrateMeta: () => void;
   unlockClass: (classId: ClassId, opts?: { devFree?: boolean }) => boolean;
 }
@@ -1002,6 +1003,17 @@ export const useGame = create<GameState>((set, get) => ({
     const meta = get().meta;
     if (meta.seenWipeIntro) return;
     const nextMeta = { ...meta, seenWipeIntro: true };
+    persistMeta(nextMeta);
+    set({ meta: nextMeta });
+  },
+
+  markTutorialSeen: (id, all) => {
+    const meta = get().meta;
+    const cur = meta.tutorialSeen ?? {};
+    const next = all
+      ? { ...cur, __all: true }
+      : { ...cur, [id]: true };
+    const nextMeta = { ...meta, tutorialSeen: next };
     persistMeta(nextMeta);
     set({ meta: nextMeta });
   },
