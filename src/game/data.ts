@@ -21,6 +21,12 @@ import reaverImg from "@/assets/enemy-reaver.jpg";
 import lichImg from "@/assets/enemy-lich.jpg";
 import voidspawnImg from "@/assets/enemy-voidspawn.jpg";
 import sealedImg from "@/assets/enemy-sealed.jpg";
+import spiderSwarmImg from "@/assets/enemy-spider-swarm.jpg";
+import goblinSapperImg from "@/assets/enemy-goblin-sapper.jpg";
+import mireShamblerImg from "@/assets/enemy-mire-shambler.jpg";
+import cinderDrakeImg from "@/assets/enemy-cinder-drake.jpg";
+import soulbinderImg from "@/assets/enemy-soulbinder.jpg";
+import stoneGolemImg from "@/assets/enemy-stone-golem.jpg";
 import trainerWarriorImg from "@/assets/trainer-warrior.jpg";
 import trainerRogueImg from "@/assets/trainer-rogue.jpg";
 import trainerMageImg from "@/assets/trainer-mage.jpg";
@@ -107,7 +113,7 @@ export const FACTIONS: FactionDef[] = [
 
 // ── Abilities ────────────────────────────────────────────────────────────────
 
-export type StatusEffectKind = "burn" | "bleed" | "chill" | "renew";
+export type StatusEffectKind = "burn" | "bleed" | "chill" | "renew" | "weakness" | "regen_enemy";
 
 export interface StatusEffect {
   kind: StatusEffectKind;
