@@ -329,19 +329,103 @@ export const ENEMIES: Record<string, EnemyDef> = {
       { id: "execute",label: "💀 Execute", mult: 1.9, line: "{n} winds up an execution swing — {d} damage!", telegraphable: true },
     ],
   },
+  // ── Bosses ────────────────────────────────────────────────────────────────
+  bone_warden: {
+    id: "bone_warden", name: "Bone Warden", image: boneWardenImg,
+    hpBase: 90, atkBase: 10,
+    materialDrop: { id: "bone_dust", chance: 1.0 },
+    attackLines: ["The {n} swings its great glaive for {d}!"],
+    intents: [
+      { id: "glaive",   label: "⚔ Glaive Swing", mult: 1.0, line: "The {n} swings its great glaive for {d}!" },
+      { id: "marrow",   label: "🦴 Marrow Rend", mult: 1.7, line: "{n} rends marrow itself — {d} damage!", telegraphable: true },
+    ],
+  },
+  crimson_reaver: {
+    id: "crimson_reaver", name: "Crimson Reaver", image: reaverImg,
+    hpBase: 180, atkBase: 14,
+    materialDrop: { id: "iron_scrap", chance: 1.0 },
+    attackLines: ["The {n} cleaves with twin axes for {d}!"],
+    intents: [
+      { id: "cleave",   label: "🪓 Twin Cleave", mult: 1.1, line: "Twin axes bite for {d}!" },
+      { id: "frenzy",   label: "🩸 Bloodfrenzy", mult: 2.0, line: "{n} enters a bloodfrenzy — {d} damage!", telegraphable: true },
+    ],
+  },
+  frostbound_lich: {
+    id: "frostbound_lich", name: "Frostbound Lich", image: lichImg,
+    hpBase: 280, atkBase: 18,
+    materialDrop: { id: "ghost_essence", chance: 1.0 },
+    attackLines: ["The {n} hurls a shard of ice for {d}!"],
+    intents: [
+      { id: "shard",    label: "❄ Ice Shard",   mult: 1.0, line: "An ice shard pierces you for {d}!" },
+      { id: "blizzard", label: "🌨 Blizzard",   mult: 2.1, line: "{n} unleashes a blizzard — {d} damage!", telegraphable: true },
+    ],
+  },
+  voidspawn: {
+    id: "voidspawn", name: "Voidspawn Hierarch", image: voidspawnImg,
+    hpBase: 420, atkBase: 22,
+    materialDrop: { id: "ghost_essence", chance: 1.0 },
+    attackLines: ["The {n} lashes with void tendrils for {d}!"],
+    intents: [
+      { id: "tendril",  label: "🐙 Void Tendril", mult: 1.1, line: "Void tendrils lash for {d}!" },
+      { id: "eye",      label: "👁 Eye of Madness", mult: 1.6, line: "An eye opens — your mind buckles for {d}!" },
+      { id: "consume",  label: "🌑 Consume",      mult: 2.4, line: "{n} consumes light itself — {d} damage!", telegraphable: true },
+    ],
+  },
+  sealed_one: {
+    id: "sealed_one", name: "The Sealed One", image: sealedImg,
+    hpBase: 700, atkBase: 28,
+    materialDrop: { id: "dragon_scale", chance: 1.0 },
+    attackLines: ["The {n} reaches a chained hand for {d}!"],
+    intents: [
+      { id: "grasp",    label: "🖐 Chained Grasp", mult: 1.2, line: "Chained fingers close — {d} damage!" },
+      { id: "judgment", label: "⚖ Final Judgment", mult: 1.8, line: "Judgment falls upon you for {d}!" },
+      { id: "ruin",     label: "💀 Worldending Ruin", mult: 2.8, line: "{n} speaks a word of ruin — {d} damage!", telegraphable: true },
+    ],
+  },
 };
 
+/** Final dungeon depth. Mini-bosses on 5/15/25, major bosses on 10/20/30. */
+export const MAX_DEPTH = 30;
+
+/** Boss floors: maps depth → enemy id. Forced combat. */
+export const BOSS_FLOORS: Record<number, string> = {
+  5: "bone_warden",
+  10: "dragon",
+  15: "crimson_reaver",
+  20: "voidspawn",
+  25: "frostbound_lich",
+  30: "sealed_one",
+};
+
+export const MAJOR_BOSS_FLOORS = new Set([10, 20, 30]);
+export const MINI_BOSS_FLOORS = new Set([5, 15, 25]);
+
+/** Dungeon background image per 5-floor tier (depths 1-5, 6-10, ..., 26-30). */
+export const DUNGEON_BGS: string[] = [corridorImg, cryptImg, barracksImg, sanctumImg, vaultImg, throneImg];
+
+export function dungeonBgForDepth(depth: number): string {
+  const idx = Math.min(DUNGEON_BGS.length - 1, Math.floor(Math.max(1, depth) - 1) / 5 | 0);
+  return DUNGEON_BGS[idx];
+}
+
 export function enemyForDepth(depth: number, faction?: FactionId | null): EnemyDef {
-  if (depth >= 10) return ENEMIES.dragon;
+  // Boss floors are deterministic.
+  const boss = BOSS_FLOORS[depth];
+  if (boss) return ENEMIES[boss];
   // Faction-specific enemies — appear when player belongs to the OPPOSING side.
   const factionFoe = faction === "allies" ? "brigade_marauder" : faction === "brigade" ? "kingdom_knight" : null;
   const pool: string[] =
-    depth <= 3 ? ["rat", "skeleton", "imp"] :
-    depth <= 6 ? ["skeleton", "cultist", "wraith", "imp", "ghoul"] :
-                 ["wraith", "ogre", "cultist", "ghoul"];
+    depth <= 3  ? ["rat", "skeleton", "imp"] :
+    depth <= 9  ? ["skeleton", "cultist", "wraith", "imp", "ghoul"] :
+    depth <= 14 ? ["wraith", "ogre", "cultist", "ghoul"] :
+    depth <= 19 ? ["ogre", "ghoul", "cultist", "wraith"] :
+    depth <= 24 ? ["wraith", "ogre", "cultist", "ghoul"] :
+                  ["ogre", "ghoul", "wraith", "cultist"];
   if (factionFoe && depth >= 2) pool.push(factionFoe);
   return ENEMIES[pool[Math.floor(Math.random() * pool.length)]];
 }
+
+
 
 // ── Vendor / Auction ─────────────────────────────────────────────────────────
 
