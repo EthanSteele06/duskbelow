@@ -23,6 +23,8 @@ export interface MetaState {
   shards: number;
   echoLearned: string[];
   hasCompletedFirstRun: boolean;
+  /** Did the player ever clear floor 30 in normal mode? Gates Cursed Depths. */
+  hasClearedNormal: boolean;
   unlockedClasses: ClassId[];
   /** Premium classes the player has purchased (or test-unlocked). */
   ownedClasses: ClassId[];
@@ -43,6 +45,7 @@ export const emptyMeta = (): MetaState => ({
   shards: 0,
   echoLearned: [],
   hasCompletedFirstRun: false,
+  hasClearedNormal: false,
   unlockedClasses: ["warrior", "rogue"],
   ownedClasses: [],
   journal: {

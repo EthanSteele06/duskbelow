@@ -1,9 +1,9 @@
 import { create } from "zustand";
-import type { ClassId, FactionId, Ability, ProfessionId, GearItem, GearSlot, TalentNode, BuffEffect } from "./data";
+import type { ClassId, FactionId, Ability, ProfessionId, GearItem, GearSlot, TalentNode, BuffEffect, DungeonMode, AffixId } from "./data";
 import {
   CLASSES, FACTIONS, VENDOR_ITEMS, QUESTS, TRAINERS, RECIPES, MATERIALS, SPECS, TALENT_TREES, COSMETICS,
   BAG_SIZE_BASE, BAG_SIZE_CHAMPION, RESPEC_GOLD_COST, MAX_ACTIVE_QUESTS, gearSellPrice, profXpForLevel,
-  IDLE_YIELDS, IDLE_SECONDS_PER_UNIT, IDLE_MAX_SECONDS,
+  IDLE_YIELDS, IDLE_SECONDS_PER_UNIT, IDLE_MAX_SECONDS, rollAffixes,
 } from "./data";
 import {
   type MetaState, type EchoNode, emptyMeta, loadMeta, saveMeta,
@@ -84,6 +84,12 @@ interface PlayerState {
   buffGoldMult: number;
   /** first hit each combat is an auto-crit (Echo of Light) — armed at fight start */
   firstHitCritArmed: boolean;
+  /** Current run dungeon mode (normal or cursed). */
+  dungeonMode: DungeonMode;
+  /** Active affixes for the current cursed run. */
+  affixes: AffixId[];
+  /** Stacking weakness debuff turns remaining (reduces ATK/MAG by 25%). */
+  weaknessTurns: number;
 }
 
 export interface RunSummary {
@@ -126,7 +132,7 @@ interface GameState {
   buy: (itemId: string) => boolean;
   buyGem: (itemId: string) => boolean;
   use: (itemId: string) => void;
-  enterDungeon: () => void;
+  enterDungeon: (mode?: DungeonMode) => void;
   exitDungeon: () => void;
   reset: () => void;
   pickSpec: (specId: string) => void;
@@ -151,6 +157,8 @@ interface GameState {
   useRacial: () => boolean;
   consumeNextAttackMult: () => void;
   armNextAttack: (mult: number) => void;
+  applyWeakness: (turns: number) => void;
+  tickWeakness: () => void;
   // Pass 7
   recordKill: (enemyId: string, opts?: { boss?: boolean; shardValue?: number; loreId?: string; itemDropId?: string }) => void;
   useHearthstone: () => boolean;
@@ -178,6 +186,7 @@ const emptyPlayer = (): PlayerState => ({
   racialUsed: 0, racialMax: 1, nextAttackMult: 1,
   runKills: 0, runGold: 0, runXp: 0, runShards: 0,
   activeBuffs: [], buffGoldMult: 1, firstHitCritArmed: false,
+  dungeonMode: "normal", affixes: [], weaknessTurns: 0,
 });
 
 const xpForLevel = (lvl: number) => lvl * 25;
@@ -511,7 +520,7 @@ export const useGame = create<GameState>((set, get) => ({
     get().pushLog(`Drank ${item.name}. +${item.heal} HP.`);
   },
 
-  enterDungeon: () => {
+  enterDungeon: (mode = "normal") => {
     set((s) => {
       const buffs = s.player.activeBuffs ?? [];
       const bAtk = buffs.reduce((a, b) => a + (b.atk ?? 0), 0);
@@ -520,6 +529,7 @@ export const useGame = create<GameState>((set, get) => ({
       const bGold = 1 + buffs.reduce((a, b) => a + (b.goldMult ?? 0), 0);
       // Add Iron Will echo: +1 racial charge for this run if learned.
       const ironWill = hasEcho(s.meta, "iron_will") ? 1 : 0;
+      const affixes = mode === "cursed" ? rollAffixes(2) : [];
       // Apply to base stats temporarily — exitDungeon/finishRun restore them.
       const p = recompute({
         ...s.player,
@@ -533,10 +543,14 @@ export const useGame = create<GameState>((set, get) => ({
         baseMag:   s.player.baseMag + bMag,
         hp:        s.player.hp + bHp,
         buffGoldMult: bGold,
+        dungeonMode: mode,
+        affixes,
+        weaknessTurns: 0,
       });
       return { screen: "dungeon", player: p };
     });
     if ((get().player.activeBuffs ?? []).length > 0) get().pushLog("✦ Town blessings infuse your gear.");
+    if (mode === "cursed") get().pushLog(`☠ Cursed Depths — affixes rolled: ${get().player.affixes.join(", ")}.`);
     get().pushLog("You descend into darkness...");
   },
   exitDungeon: () => {
@@ -794,7 +808,8 @@ export const useGame = create<GameState>((set, get) => ({
 
   restoreBetweenRooms: () => {
     const p = get().player;
-    const amt = Math.max(2, Math.floor(p.maxHp * 0.10));
+    const starved = p.affixes?.includes("starved") ? 0.5 : 1;
+    const amt = Math.max(2, Math.floor(p.maxHp * 0.10 * starved));
     const hp = Math.min(p.maxHp, p.hp + amt);
     if (hp > p.hp) {
       set({ player: { ...p, hp } });
@@ -827,6 +842,16 @@ export const useGame = create<GameState>((set, get) => ({
   armNextAttack: (mult) => {
     const p = get().player;
     set({ player: { ...p, nextAttackMult: mult } });
+  },
+
+  applyWeakness: (turns) => {
+    const p = get().player;
+    set({ player: { ...p, weaknessTurns: Math.max(p.weaknessTurns, turns) } });
+  },
+
+  tickWeakness: () => {
+    const p = get().player;
+    if (p.weaknessTurns > 0) set({ player: { ...p, weaknessTurns: p.weaknessTurns - 1 } });
   },
 
   // ── Pass 7: meta progression ───────────────────────────────────────────
@@ -984,6 +1009,7 @@ export const useGame = create<GameState>((set, get) => ({
     let nextMeta: MetaState = {
       ...meta,
       hasCompletedFirstRun: true,
+      hasClearedNormal: meta.hasClearedNormal || (outcome === "victory" && p.dungeonMode === "normal"),
       journal: { ...j, deepestFloor: newDeepest, bestRun, runsCompleted: j.runsCompleted + 1 },
     };
     // Victory bonus shards + account XP

@@ -21,6 +21,12 @@ import reaverImg from "@/assets/enemy-reaver.jpg";
 import lichImg from "@/assets/enemy-lich.jpg";
 import voidspawnImg from "@/assets/enemy-voidspawn.jpg";
 import sealedImg from "@/assets/enemy-sealed.jpg";
+import spiderSwarmImg from "@/assets/enemy-spider-swarm.jpg";
+import goblinSapperImg from "@/assets/enemy-goblin-sapper.jpg";
+import mireShamblerImg from "@/assets/enemy-mire-shambler.jpg";
+import cinderDrakeImg from "@/assets/enemy-cinder-drake.jpg";
+import soulbinderImg from "@/assets/enemy-soulbinder.jpg";
+import stoneGolemImg from "@/assets/enemy-stone-golem.jpg";
 import trainerWarriorImg from "@/assets/trainer-warrior.jpg";
 import trainerRogueImg from "@/assets/trainer-rogue.jpg";
 import trainerMageImg from "@/assets/trainer-mage.jpg";
@@ -107,7 +113,7 @@ export const FACTIONS: FactionDef[] = [
 
 // ── Abilities ────────────────────────────────────────────────────────────────
 
-export type StatusEffectKind = "burn" | "bleed" | "chill" | "renew";
+export type StatusEffectKind = "burn" | "bleed" | "chill" | "renew" | "weakness" | "regen_enemy";
 
 export interface StatusEffect {
   kind: StatusEffectKind;
@@ -382,6 +388,69 @@ export const ENEMIES: Record<string, EnemyDef> = {
       { id: "ruin",     label: "💀 Worldending Ruin", mult: 2.8, line: "{n} speaks a word of ruin — {d} damage!", telegraphable: true },
     ],
   },
+  // ── Phase 1 additions ──
+  spider_swarm: {
+    id: "spider_swarm", name: "Spider Swarm", image: spiderSwarmImg,
+    hpBase: 12, atkBase: 3,
+    materialDrop: { id: "spider_silk", chance: 0.6 },
+    attackLines: ["The {n} skitters and bites for {d}!"],
+    intents: [
+      { id: "skitter", label: "🕷 Skitter Bite", mult: 1.0, line: "The {n} bites for {d}!" },
+      { id: "web",     label: "🕸 Web Snare",    mult: 0.6, line: "{n} flings webs — chilled and bitten for {d}!", telegraphable: true },
+    ],
+  },
+  goblin_sapper: {
+    id: "goblin_sapper", name: "Goblin Sapper", image: goblinSapperImg,
+    hpBase: 18, atkBase: 5,
+    materialDrop: { id: "iron_scrap", chance: 0.55 },
+    attackLines: ["The {n} hurls a sputtering canister for {d}!"],
+    intents: [
+      { id: "wrench", label: "🔧 Wrench Swing", mult: 1.0, line: "The {n} swings a heavy wrench for {d}!" },
+      { id: "bomb",   label: "💥 Throw Bomb",   mult: 2.0, line: "{n} lobs a bomb — it bursts for {d}!", telegraphable: true },
+    ],
+  },
+  mire_shambler: {
+    id: "mire_shambler", name: "Mire Shambler", image: mireShamblerImg,
+    hpBase: 60, atkBase: 6,
+    materialDrop: { id: "herb_bundle", chance: 0.7 },
+    attackLines: ["The {n} swings a moss-clad limb for {d}!"],
+    intents: [
+      { id: "slam",  label: "🌿 Mossy Slam", mult: 1.0, line: "The {n} slams down for {d}!" },
+      { id: "regen", label: "💚 Regrow",      mult: 0.0, line: "{n} knits itself back together.", telegraphable: true },
+      { id: "spew",  label: "🤢 Spore Spew",  mult: 1.4, line: "{n} spews spores for {d}!", telegraphable: true },
+    ],
+  },
+  cinder_drake: {
+    id: "cinder_drake", name: "Cinder Drake", image: cinderDrakeImg,
+    hpBase: 36, atkBase: 9,
+    materialDrop: { id: "dragon_scale", chance: 0.15 },
+    attackLines: ["The {n} claws you for {d}!"],
+    intents: [
+      { id: "claw",      label: "🐲 Talon Slash",  mult: 1.0, line: "Talons rake for {d}!" },
+      { id: "wingbeat",  label: "🌪 Wingbeat",     mult: 1.3, line: "A wingbeat hurls you for {d}!" },
+      { id: "firebreath",label: "🔥 Firebreath",   mult: 2.0, line: "{n} breathes fire — searing burn for {d}!", telegraphable: true },
+    ],
+  },
+  soulbinder: {
+    id: "soulbinder", name: "Soulbinder", image: soulbinderImg,
+    hpBase: 44, atkBase: 8,
+    materialDrop: { id: "ghost_essence", chance: 0.6 },
+    attackLines: ["The {n} drains essence for {d}!"],
+    intents: [
+      { id: "leech",  label: "🩸 Soul Leech",   mult: 1.0, line: "Soul leech rips {d} from you!" },
+      { id: "bind",   label: "⛓ Bind Weakness", mult: 0.5, line: "{n} binds your strength — weakened, and struck for {d}!", telegraphable: true },
+    ],
+  },
+  stone_golem: {
+    id: "stone_golem", name: "Stone Golem", image: stoneGolemImg,
+    hpBase: 90, atkBase: 11,
+    materialDrop: { id: "iron_scrap", chance: 0.8 },
+    attackLines: ["The {n} brings a fist down for {d}!"],
+    intents: [
+      { id: "fist",  label: "🪨 Stone Fist", mult: 1.0, line: "A stone fist crashes for {d}!" },
+      { id: "quake", label: "💢 Quake",      mult: 1.9, line: "{n} unleashes a quake for {d}!", telegraphable: true },
+    ],
+  },
 };
 
 /** Final dungeon depth. Mini-bosses on 5/15/25, major bosses on 10/20/30. */
@@ -415,12 +484,12 @@ export function enemyForDepth(depth: number, faction?: FactionId | null): EnemyD
   // Faction-specific enemies — appear when player belongs to the OPPOSING side.
   const factionFoe = faction === "allies" ? "brigade_marauder" : faction === "brigade" ? "kingdom_knight" : null;
   const pool: string[] =
-    depth <= 3  ? ["rat", "skeleton", "imp"] :
-    depth <= 9  ? ["skeleton", "cultist", "wraith", "imp", "ghoul"] :
-    depth <= 14 ? ["wraith", "ogre", "cultist", "ghoul"] :
-    depth <= 19 ? ["ogre", "ghoul", "cultist", "wraith"] :
-    depth <= 24 ? ["wraith", "ogre", "cultist", "ghoul"] :
-                  ["ogre", "ghoul", "wraith", "cultist"];
+    depth <= 3  ? ["rat", "skeleton", "imp", "spider_swarm"] :
+    depth <= 9  ? ["skeleton", "cultist", "wraith", "imp", "ghoul", "spider_swarm", "goblin_sapper"] :
+    depth <= 14 ? ["wraith", "ogre", "cultist", "ghoul", "goblin_sapper", "mire_shambler"] :
+    depth <= 19 ? ["ogre", "ghoul", "cultist", "wraith", "mire_shambler", "cinder_drake", "soulbinder"] :
+    depth <= 24 ? ["wraith", "ogre", "cultist", "ghoul", "cinder_drake", "soulbinder", "stone_golem"] :
+                  ["ogre", "ghoul", "wraith", "cultist", "soulbinder", "stone_golem", "cinder_drake"];
   if (factionFoe && depth >= 2) pool.push(factionFoe);
   return ENEMIES[pool[Math.floor(Math.random() * pool.length)]];
 }
@@ -676,6 +745,7 @@ export const MATERIALS: Record<string, MaterialDef> = {
   arcane_dust:   { id: "arcane_dust",   name: "Arcane Dust",   sellPrice: 8 },
   linen_scrap:   { id: "linen_scrap",   name: "Linen Scrap",   sellPrice: 3 },
   herb_bundle:   { id: "herb_bundle",   name: "Herb Bundle",   sellPrice: 4 },
+  spider_silk:   { id: "spider_silk",   name: "Spider Silk",   sellPrice: 9 },
 };
 
 export interface RecipeDef {
@@ -856,15 +926,30 @@ const RARITY_MULT: Record<Rarity, number> = { common: 1, uncommon: 1.5, rare: 2.
 let _itemSeq = 0;
 const newItemId = () => `g_${Date.now().toString(36)}_${(_itemSeq++).toString(36)}`;
 
-export function rollGear(depth: number, opts?: { minRarity?: Rarity }): GearItem {
-  const r = Math.random();
-  const depthBoost = depth / 10;
-  let rarity: Rarity;
-  if (r < 0.45 - depthBoost * 0.25) rarity = "common";
-  else if (r < 0.75 - depthBoost * 0.15) rarity = "uncommon";
-  else if (r < 0.92) rarity = "rare";
-  else if (r < 0.985) rarity = "epic";
-  else rarity = "legendary";
+export type LootSource = "trash" | "chest" | "mini_boss" | "major_boss" | "final_boss";
+
+/** Per-source rarity weight tables. Higher value = more likely. */
+const LOOT_WEIGHTS: Record<LootSource, Record<Rarity, number>> = {
+  trash:      { common: 60, uncommon: 28, rare: 10, epic: 2,  legendary: 0 },
+  chest:      { common: 20, uncommon: 45, rare: 25, epic: 9,  legendary: 1 },
+  mini_boss:  { common: 0,  uncommon: 35, rare: 45, epic: 18, legendary: 2 },
+  major_boss: { common: 0,  uncommon: 0,  rare: 30, epic: 55, legendary: 15 },
+  final_boss: { common: 0,  uncommon: 0,  rare: 10, epic: 60, legendary: 30 },
+};
+
+function rollRarity(source: LootSource): Rarity {
+  const w = LOOT_WEIGHTS[source];
+  const total = (["common","uncommon","rare","epic","legendary"] as Rarity[]).reduce((s, k) => s + w[k], 0);
+  let r = Math.random() * total;
+  for (const k of ["common","uncommon","rare","epic","legendary"] as Rarity[]) {
+    r -= w[k]; if (r <= 0) return k;
+  }
+  return "common";
+}
+
+export function rollGear(depth: number, opts?: { minRarity?: Rarity; source?: LootSource }): GearItem {
+  const source: LootSource = opts?.source ?? "trash";
+  let rarity = rollRarity(source);
   if (opts?.minRarity && RARITY_RANK[rarity] < RARITY_RANK[opts.minRarity]) rarity = opts.minRarity;
 
   const template = GEAR_TEMPLATES[Math.floor(Math.random() * GEAR_TEMPLATES.length)];
@@ -884,6 +969,37 @@ export function rollGear(depth: number, opts?: { minRarity?: Rarity }): GearItem
     name: template.names[rarity] ?? template.names.common ?? "Curio",
     slot: template.slot,
     rarity, ilvl, stats,
+  };
+}
+
+/** Build the class-signature legendary for a final-boss drop. One per class. */
+export interface ClassLegendaryDef {
+  baseId: string;
+  slot: GearSlot;
+  name: string;
+  flavor: string;
+  stats: GearItem["stats"];
+}
+
+export const CLASS_LEGENDARIES: Record<ClassId, ClassLegendaryDef> = {
+  warrior:     { baseId: "sword",  slot: "weapon",  name: "Worldcleaver",          flavor: "The blade that ended a god.",        stats: { atk: 22, crit: 12, maxHp: 20 } },
+  rogue:       { baseId: "dagger", slot: "weapon",  name: "Whisper of the Vanished", flavor: "It was never here. Neither were you.", stats: { atk: 18, crit: 8, dodge: 6 } },
+  mage:        { baseId: "staff",  slot: "weapon",  name: "Aetheric Scepter",      flavor: "Cracks reality on contact.",         stats: { mag: 24, crit: 14 } },
+  priest:      { baseId: "tome",   slot: "offhand", name: "Reliquary of Dawn",     flavor: "Holds a sunrise that never set.",    stats: { mag: 20, maxHp: 36 } },
+  druid:       { baseId: "staff",  slot: "weapon",  name: "Heartwood Branch",      flavor: "Still living. Still listening.",     stats: { mag: 22, maxHp: 28 } },
+  deathknight: { baseId: "sword",  slot: "weapon",  name: "Frostmourne Shard",     flavor: "Asks every kill for a little more.", stats: { atk: 20, maxHp: 24, crit: 8 } },
+};
+
+export function rollClassLegendary(classId: ClassId, depth: number): GearItem {
+  const def = CLASS_LEGENDARIES[classId];
+  return {
+    id: newItemId(),
+    baseId: def.baseId,
+    name: def.name,
+    slot: def.slot,
+    rarity: "legendary",
+    ilvl: Math.max(15, depth),
+    stats: { ...def.stats },
   };
 }
 
@@ -1010,3 +1126,37 @@ export const IDLE_SECONDS_PER_UNIT = 300; // 1 material every 5 minutes
 export const IDLE_MAX_SECONDS = 60 * 60 * 12; // cap at 12 hours
 
 
+// ── Dungeon modes & affixes (Cursed Depths) ──────────────────────────────────
+
+export type DungeonMode = "normal" | "cursed";
+
+export type AffixId =
+  | "fortified" | "sapping" | "bloodlust" | "volatile"
+  | "frostbitten" | "starved" | "greedy" | "echoes";
+
+export interface AffixDef {
+  id: AffixId;
+  name: string;
+  desc: string;
+}
+
+export const AFFIXES: AffixDef[] = [
+  { id: "fortified",   name: "Fortified",   desc: "Enemies have +30% Max HP." },
+  { id: "sapping",     name: "Sapping",     desc: "Enemies deal +20% damage." },
+  { id: "bloodlust",   name: "Bloodlust",   desc: "Enemies below 30% HP enrage (+50% damage)." },
+  { id: "volatile",    name: "Volatile",    desc: "On enemy death, you lose 5% Max HP." },
+  { id: "frostbitten", name: "Frostbitten", desc: "Your chills also chill you (+30% dmg taken, 2t)." },
+  { id: "starved",     name: "Starved",     desc: "Between-room healing is halved." },
+  { id: "greedy",      name: "Greedy",      desc: "Enemies drop +50% gold and double materials." },
+  { id: "echoes",      name: "Echoes",      desc: "Every 5th floor, slain enemies re-rise once." },
+];
+
+export function rollAffixes(count = 2): AffixId[] {
+  const pool = [...AFFIXES];
+  const out: AffixId[] = [];
+  for (let i = 0; i < count && pool.length > 0; i++) {
+    const idx = Math.floor(Math.random() * pool.length);
+    out.push(pool.splice(idx, 1)[0].id);
+  }
+  return out;
+}
