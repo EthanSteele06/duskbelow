@@ -83,7 +83,10 @@ export function CityScreen() {
           )}
         </Section>
 
-        <button onClick={enter} className="pixel-btn pixel-btn-primary w-full text-center !text-[12px] !py-4">▼ DESCEND DUNGEON</button>
+        <button onClick={() => enter()} className="pixel-btn pixel-btn-primary w-full text-center !text-[12px] !py-4">▼ DESCEND DUNGEON</button>
+        {meta.hasClearedNormal && (
+          <button onClick={() => enter("cursed")} className="pixel-btn pixel-btn-danger w-full text-center !text-[10px] !py-3">☠ DESCEND CURSED DEPTHS (Hard)</button>
+        )}
       </div>
 
       <div className="mx-3 mt-2 mb-2 flex-1 overflow-hidden border-2 border-black bg-card/60 p-2">
