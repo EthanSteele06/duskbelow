@@ -56,11 +56,15 @@ export function CharacterHeader() {
               <span className="pixel text-[7px] truncate" style={{ color: titleCos.tint }}>{titleCos.titleText}</span>
             )}
           </div>
-          <div className="flex items-center gap-1 text-[10px] font-body text-muted-foreground leading-tight">
+          <div className="flex items-center gap-1 text-[10px] font-body text-muted-foreground leading-tight flex-wrap">
             <span>Lv {p.level}</span>
             <span className="opacity-50">·</span>
             <span style={{ color: cls.color }}>{cls.name}</span>
             {spec && <><span className="opacity-50">·</span><span style={{ color: spec.color }}>{spec.name}</span></>}
+            <span className="opacity-50">·</span>
+            <span>ATK {p.atk}</span>
+            <span className="opacity-50">·</span>
+            <span>MAG {p.mag}</span>
             {p.isChampion && <span className="pixel text-[7px] text-gold ml-auto">★</span>}
           </div>
           <div className="mt-0.5 h-1.5 w-full bg-stone border border-black">

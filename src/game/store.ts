@@ -150,6 +150,7 @@ interface GameState {
   finishRun: (outcome: "victory" | "defeat") => void;
   markSeenWipeIntro: () => void;
   hydrateMeta: () => void;
+  unlockClass: (classId: ClassId, opts?: { devFree?: boolean }) => boolean;
 }
 
 const emptyPlayer = (): PlayerState => ({
@@ -899,6 +900,25 @@ export const useGame = create<GameState>((set, get) => ({
     if (typeof window === "undefined") return;
     const loaded = loadMeta();
     set({ meta: loaded });
+  },
+
+  unlockClass: (classId, opts) => {
+    const meta = get().meta;
+    if (meta.ownedClasses.includes(classId) || meta.unlockedClasses.includes(classId)) return false;
+    const def = CLASSES.find((c) => c.id === classId);
+    if (!def) return false;
+    const p = get().player;
+    const devFree = opts?.devFree ?? false;
+    const price = def.gemPrice ?? 0;
+    if (!devFree && price > 0) {
+      if (p.gems < price) return false;
+      set({ player: { ...p, gems: p.gems - price } });
+    }
+    const nextMeta: MetaState = { ...meta, ownedClasses: [...meta.ownedClasses, classId] };
+    persistMeta(nextMeta);
+    set({ meta: nextMeta });
+    get().pushLog(`✦ Unlocked hero: ${def.name}${devFree ? " (dev)" : ""}.`);
+    return true;
   },
 }));
 
