@@ -824,6 +824,11 @@ export const useGame = create<GameState>((set, get) => ({
     if (p.nextAttackMult !== 1) set({ player: { ...p, nextAttackMult: 1 } });
   },
 
+  armNextAttack: (mult) => {
+    const p = get().player;
+    set({ player: { ...p, nextAttackMult: mult } });
+  },
+
   // ── Pass 7: meta progression ───────────────────────────────────────────
   recordKill: (enemyId, opts) => {
     const meta = get().meta;
