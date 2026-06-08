@@ -70,11 +70,12 @@ function buildCombat(depth: number, faction?: FactionId | null): CombatEnc {
 }
 
 function rollEncounter(depth: number, faction?: FactionId | null): Encounter {
-  if (depth >= 10) return buildCombat(depth, faction);
+  // Boss floors are always forced combat.
+  if (MAJOR_BOSS_FLOORS.has(depth) || MINI_BOSS_FLOORS.has(depth)) return buildCombat(depth, faction);
   const r = Math.random();
-  if (r < 0.50) return buildCombat(depth, faction);
-  if (r < 0.72) return { kind: "chest", depth, preview: rollChest(depth) };
-  if (r < 0.84) return { kind: "shrine", depth, shrine: Math.random() < 0.6 ? "heal" : "blessing" };
+  if (r < 0.58) return buildCombat(depth, faction);
+  if (r < 0.78) return { kind: "chest", depth, preview: rollChest(depth) };
+  if (r < 0.82) return { kind: "shrine", depth, shrine: Math.random() < 0.6 ? "heal" : "blessing" }; // rare (~4%)
   if (r < 0.94) return { kind: "trap", depth, trap: Math.random() < 0.5 ? "spikes" : "gas", sprung: false };
   return { kind: "path", depth };
 }
