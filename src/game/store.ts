@@ -441,6 +441,11 @@ export const useGame = create<GameState>((set, get) => ({
   acceptQuest: (id) => {
     const exists = get().quests.find((q) => q.id === id);
     if (exists) return;
+    const activeCount = get().quests.filter((q) => !q.turnedIn).length;
+    if (activeCount >= MAX_ACTIVE_QUESTS) {
+      get().pushLog(`Quest log full (${MAX_ACTIVE_QUESTS}/${MAX_ACTIVE_QUESTS}). Turn one in first.`);
+      return;
+    }
     set((s) => ({ quests: [...s.quests, { id, progress: 0, completed: false, turnedIn: false }] }));
     const def = QUESTS.find((d) => d.id === id)!;
     get().pushLog(`Quest accepted: ${def.name}`);
