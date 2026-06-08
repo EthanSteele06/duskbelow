@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { useGame } from "@/game/store";
 import { FACTIONS, TRAINERS, SPECS } from "@/game/data";
 import { nextUnlock } from "@/game/meta";
+import { playMusic } from "@/game/audio";
+import { SettingsButton } from "@/game/Settings";
 import cityImg from "@/assets/city.jpg";
 import cityAlliesImg from "@/assets/city-allies.jpg";
 import cityBrigadeImg from "@/assets/city-brigade.jpg";
@@ -15,6 +17,9 @@ export function CityScreen() {
   const log = useGame((s) => s.log);
   const claimIdle = useGame((s) => s.claimIdleProfession);
   useEffect(() => { claimIdle(); }, [claimIdle]);
+  useEffect(() => {
+    playMusic(player.faction === "brigade" ? "city-brigade" : "city-kingdom");
+  }, [player.faction]);
   const f = FACTIONS.find((x) => x.id === player.faction)!;
   const trainer = player.classId ? TRAINERS[player.classId] : null;
   const spec = player.specId ? SPECS.find((s) => s.id === player.specId) : null;
@@ -34,6 +39,9 @@ export function CityScreen() {
         </div>
         {player.isChampion && (
           <div className="absolute right-2 top-2 pixel text-[8px] text-shadow-pixel text-gold border border-gold px-1 py-0.5">★ CHAMPION</div>
+        )}
+        {!player.isChampion && (
+          <div className="absolute right-2 top-2 z-10"><SettingsButton /></div>
         )}
         {spec && (
           <div className="absolute right-2 bottom-2 pixel text-[8px] text-shadow-pixel" style={{ color: spec.color }}>{spec.name}</div>

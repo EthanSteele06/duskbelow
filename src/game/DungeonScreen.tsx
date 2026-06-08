@@ -7,6 +7,7 @@ import {
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
   type StatusEffect, type EnemyIntent, type FactionId,
 } from "@/game/data";
+import { playMusic, playSfx } from "@/game/audio";
 import corridorImg from "@/assets/dungeon-corridor.jpg";
 import chestImg from "@/assets/dungeon-chest.jpg";
 
@@ -115,6 +116,12 @@ export function DungeonScreen() {
   const dmgSkin    = eq.damageSkin ? COSMETICS.find((c) => c.id === eq.damageSkin)?.tint : undefined;
 
   const [enc, setEnc] = useState<Encounter>(() => ({ kind: "path", depth: 1 }));
+
+  // Music: swap to boss track when fighting a boss, dungeon ambient otherwise.
+  useEffect(() => {
+    const isBoss = enc.kind === "combat" && enc.enemy.id === "dragon";
+    playMusic(isBoss ? "boss" : "dungeon");
+  }, [enc.kind, enc.kind === "combat" ? enc.enemy.id : null]);
   const playerFaction = player.faction;
   const [hit, setHit] = useState(false);
   const [combatLog, setCombatLog] = useState<string[]>([]);
@@ -269,6 +276,7 @@ export function DungeonScreen() {
 
     switch (ab.effect.kind) {
       case "attack": {
+        playSfx("hit");
         const after = applyAttack(e, ab as Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> });
         if (after.enemyHp <= 0) { finishKill(after); return; }
         const cds = tickCooldowns(after); cds[ab.id] = ab.cooldown;
@@ -343,6 +351,7 @@ export function DungeonScreen() {
     rewardGold(goldDrop); rewardXp(xpDrop);
     addLog(`${e.enemy.name} falls. +${goldDrop}g +${xpDrop}xp`);
     vibrate([20, 40, 60]);
+    playSfx("death");
     let questItem: string | undefined;
     let material: string | undefined;
     let gear: GearItem | undefined;
@@ -515,7 +524,7 @@ export function DungeonScreen() {
                   <p className="pixel text-[8px] text-divine text-center border-2 border-divine py-1">✓ EQUIPPED{equippedForSlot ? ` — replaced ${equippedForSlot.name}` : ""}</p>
                 ) : (
                   <div className="grid grid-cols-3 gap-1 pt-1">
-                    <button onClick={() => { equip(lootGear.id); setEquippedFlash(lootGear.id); }} className="pixel-btn pixel-btn-gold !text-[8px]">Equip</button>
+                    <button onClick={() => { playSfx("loot"); equip(lootGear.id); setEquippedFlash(lootGear.id); }} className="pixel-btn pixel-btn-gold !text-[8px]">Equip</button>
                     <button onClick={() => sellBag(lootGear.id)} className="pixel-btn !text-[8px]">Sell {gearSellPrice(lootGear)}g</button>
                     <button onClick={() => discardBag(lootGear.id)} className="pixel-btn !text-[8px]">Discard</button>
                   </div>
