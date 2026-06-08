@@ -305,8 +305,9 @@ export function DungeonScreen() {
     let nextEffects = e.enemyEffects;
     if (ab.effect.applyStatus) {
       const s = ab.effect.applyStatus;
+      const turns = s.kind === "chill" ? s.turns + extraChillTurns : s.turns;
       // refresh or add
-      nextEffects = nextEffects.filter((x) => x.kind !== s.kind).concat({ kind: s.kind, turns: s.turns, power: s.power });
+      nextEffects = nextEffects.filter((x) => x.kind !== s.kind).concat({ kind: s.kind, turns, power: s.power });
       addLog(`${e.enemy.name} is afflicted with ${s.kind}.`);
     }
     return { ...e, enemyHp: e.enemyHp - dmg, enemyEffects: nextEffects };
