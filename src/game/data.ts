@@ -484,12 +484,12 @@ export function enemyForDepth(depth: number, faction?: FactionId | null): EnemyD
   // Faction-specific enemies — appear when player belongs to the OPPOSING side.
   const factionFoe = faction === "allies" ? "brigade_marauder" : faction === "brigade" ? "kingdom_knight" : null;
   const pool: string[] =
-    depth <= 3  ? ["rat", "skeleton", "imp"] :
-    depth <= 9  ? ["skeleton", "cultist", "wraith", "imp", "ghoul"] :
-    depth <= 14 ? ["wraith", "ogre", "cultist", "ghoul"] :
-    depth <= 19 ? ["ogre", "ghoul", "cultist", "wraith"] :
-    depth <= 24 ? ["wraith", "ogre", "cultist", "ghoul"] :
-                  ["ogre", "ghoul", "wraith", "cultist"];
+    depth <= 3  ? ["rat", "skeleton", "imp", "spider_swarm"] :
+    depth <= 9  ? ["skeleton", "cultist", "wraith", "imp", "ghoul", "spider_swarm", "goblin_sapper"] :
+    depth <= 14 ? ["wraith", "ogre", "cultist", "ghoul", "goblin_sapper", "mire_shambler"] :
+    depth <= 19 ? ["ogre", "ghoul", "cultist", "wraith", "mire_shambler", "cinder_drake", "soulbinder"] :
+    depth <= 24 ? ["wraith", "ogre", "cultist", "ghoul", "cinder_drake", "soulbinder", "stone_golem"] :
+                  ["ogre", "ghoul", "wraith", "cultist", "soulbinder", "stone_golem", "cinder_drake"];
   if (factionFoe && depth >= 2) pool.push(factionFoe);
   return ENEMIES[pool[Math.floor(Math.random() * pool.length)]];
 }
