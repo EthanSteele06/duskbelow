@@ -21,11 +21,13 @@ export function SettingsButton() {
 function SettingsModal({ onClose }: { onClose: () => void }) {
   const [audio, setAudio] = useState(getAudioSettings());
   const reset = useGame((s) => s.reset);
+  const isChampion = useGame((s) => s.player?.isChampion ?? false);
   const [confirmWipe, setConfirmWipe] = useState(0);
 
   useEffect(() => subscribeAudioSettings(setAudio), []);
 
   const onWipe = () => {
+    if (isChampion) return;
     if (confirmWipe < 2) { setConfirmWipe(confirmWipe + 1); return; }
     try {
       localStorage.removeItem("duskbelow.meta.v1");
@@ -33,6 +35,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
     } catch { /* ignore */ }
     window.location.reload();
   };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
