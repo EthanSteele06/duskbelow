@@ -4,7 +4,7 @@ import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumb
 import {
   CLASS_ABILITIES, SPEC_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
   RARITY_CLASS, RARITY_LABEL, gearScore, rollDamage, damageRange,
-  MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth,
+  MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth, rollClassLegendary, AFFIXES,
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
   type StatusEffect, type EnemyIntent, type FactionId,
 } from "@/game/data";
@@ -58,9 +58,10 @@ function pickIntent(enemy: EnemyDef): EnemyIntent {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function buildCombat(depth: number, faction?: FactionId | null): CombatEnc {
+function buildCombat(depth: number, faction?: FactionId | null, affixes: string[] = []): CombatEnc {
   const e = enemyForDepth(depth, faction);
-  const hp = e.hpBase + (depth >= 10 ? 0 : Math.floor(depth * 1.4));
+  let hp = e.hpBase + (depth >= 10 ? 0 : Math.floor(depth * 1.4));
+  if (affixes.includes("fortified")) hp = Math.floor(hp * 1.3);
   return {
     kind: "combat", depth, enemy: e, enemyHp: hp, enemyMaxHp: hp,
     stunnedTurns: 0, shieldReduce: 0, cooldowns: {},
@@ -69,13 +70,13 @@ function buildCombat(depth: number, faction?: FactionId | null): CombatEnc {
   };
 }
 
-function rollEncounter(depth: number, faction?: FactionId | null): Encounter {
+function rollEncounter(depth: number, faction?: FactionId | null, affixes: string[] = []): Encounter {
   // Boss floors are always forced combat.
-  if (MAJOR_BOSS_FLOORS.has(depth) || MINI_BOSS_FLOORS.has(depth)) return buildCombat(depth, faction);
+  if (MAJOR_BOSS_FLOORS.has(depth) || MINI_BOSS_FLOORS.has(depth)) return buildCombat(depth, faction, affixes);
   const r = Math.random();
-  if (r < 0.58) return buildCombat(depth, faction);
+  if (r < 0.58) return buildCombat(depth, faction, affixes);
   if (r < 0.78) return { kind: "chest", depth, preview: rollChest(depth) };
-  if (r < 0.82) return { kind: "shrine", depth, shrine: Math.random() < 0.6 ? "heal" : "blessing" }; // rare (~4%)
+  if (r < 0.82) return { kind: "shrine", depth, shrine: Math.random() < 0.6 ? "heal" : "blessing" };
   if (r < 0.94) return { kind: "trap", depth, trap: Math.random() < 0.5 ? "spikes" : "gas", sprung: false };
   return { kind: "path", depth };
 }
