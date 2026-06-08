@@ -106,12 +106,13 @@ export interface StatusEffect {
 }
 
 export type AbilityEffect =
-  | { kind: "attack"; mult: number; useMag?: boolean; flavor: string; applyStatus?: { kind: StatusEffectKind; turns: number; power: number }; lifesteal?: number }
-  | { kind: "heal"; amount: number; flavor: string }
+  | { kind: "attack"; mult: number; useMag?: boolean; flavor: string; applyStatus?: { kind: StatusEffectKind; turns: number; power: number }; lifesteal?: number; bonusVsChill?: number }
+  | { kind: "heal"; amount: number; flavor: string; magMult?: number }
   | { kind: "hot"; healPerTurn: number; turns: number; flavor: string }
   | { kind: "flee"; flavor: string }
   | { kind: "stun"; flavor: string }
-  | { kind: "shield"; reduce: number; flavor: string };
+  | { kind: "shield"; reduce: number; flavor: string; healPct?: number }
+  | { kind: "buff_next"; mult: number; flavor: string };
 
 export interface Ability {
   id: string;
