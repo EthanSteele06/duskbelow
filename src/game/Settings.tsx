@@ -115,6 +115,34 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
 
 
         <section>
+          <button
+            onClick={() => setDevOpen((v) => !v)}
+            className="pixel text-[10px] text-arcane underline"
+          >
+            ▣ Dev Tools {devOpen ? "▾" : "▸"}
+          </button>
+          {devOpen && (
+            <div className="mt-2 space-y-2 border-2 border-arcane/40 bg-arcane/5 p-2">
+              <p className="font-body text-xs text-muted-foreground">
+                Cheats for testing. Not balanced.
+              </p>
+              <button onClick={() => devGrantClassLegendary()} className="pixel-btn w-full !text-[9px]">
+                ✦ Grant Class Legendary
+              </button>
+              <button onClick={() => devGrantRandomEpic()} className="pixel-btn w-full !text-[9px]">
+                ◆ Grant Random Epic
+              </button>
+              <button onClick={() => devGrantGold(500)} className="pixel-btn w-full !text-[9px]">
+                + 500 Gold
+              </button>
+              <button onClick={() => devGrantAllMaterials()} className="pixel-btn w-full !text-[9px]">
+                + 10 of Every Material
+              </button>
+            </div>
+          )}
+        </section>
+
+        <section>
           <h3 className="pixel text-[10px] text-gold mb-2">▣ About</h3>
           <p className="font-body text-xs text-muted-foreground">
             Dusk Below — a dark fantasy idle dungeon crawler. Music: Kevin MacLeod (incompetech.com, CC-BY 4.0).
