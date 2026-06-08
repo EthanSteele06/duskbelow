@@ -15,7 +15,7 @@ export type Screen =
   | "vendor" | "auction" | "quests"
   | "trainer" | "talents" | "profession"
   | "equipment" | "shop" | "champion"
-  | "dungeon" | "victory" | "defeat"
+  | "dungeon"
   | "run_summary" | "echo" | "journal";
 
 export interface QuestState {
@@ -75,8 +75,6 @@ interface PlayerState {
   runXp: number;
   /** soul shards earned during the current run */
   runShards: number;
-  /** floors cleared this run */
-  runFloors: number;
 }
 
 export interface RunSummary {
@@ -151,6 +149,7 @@ interface GameState {
   wipeCharacter: () => void;
   finishRun: (outcome: "victory" | "defeat") => void;
   markSeenWipeIntro: () => void;
+  hydrateMeta: () => void;
 }
 
 const emptyPlayer = (): PlayerState => ({
@@ -163,7 +162,7 @@ const emptyPlayer = (): PlayerState => ({
   profession: null, profLevel: 1, profXp: 0, materials: {}, knownRecipes: [],
   isChampion: false, ownedCosmetics: [], equippedCosmetics: {},
   racialUsed: 0, racialMax: 1, nextAttackMult: 1,
-  runKills: 0, runGold: 0, runXp: 0, runShards: 0, runFloors: 0,
+  runKills: 0, runGold: 0, runXp: 0, runShards: 0,
 });
 
 const xpForLevel = (lvl: number) => lvl * 25;
@@ -232,7 +231,12 @@ function buildFreshPlayer(
     else bag.push(h);
   }
 
-  const startGold = Math.max(50, Math.floor((prev?.gold ?? 0) * echo.retainGoldPct) || 50);
+  // Default starting purse is 50g for a brand-new character. If this is a
+  // wipe-respawn and Buried Coin is learned, carry a fraction of the prior
+  // gold instead — even if that's less than 50.
+  const startGold = prev
+    ? Math.floor(prev.gold * echo.retainGoldPct)
+    : 50;
 
   const base: PlayerState = {
     ...emptyPlayer(),
@@ -272,14 +276,14 @@ function grantAccountXp(meta: MetaState, n: number): MetaState {
   return { ...meta, account: { xp, level } };
 }
 
-const initialMeta = loadMeta();
-
+// Start with emptyMeta on both server and first client render to avoid
+// hydration mismatch; the real meta is loaded via hydrateMeta() in an effect.
 export const useGame = create<GameState>((set, get) => ({
   screen: "title",
   player: emptyPlayer(),
   log: [],
   quests: [],
-  meta: initialMeta,
+  meta: emptyMeta(),
   lastRun: null,
 
   setScreen: (screen) => set({ screen }),
@@ -290,9 +294,13 @@ export const useGame = create<GameState>((set, get) => ({
     const unlocked = meta.unlockedClasses.includes(classId)
       ? meta.unlockedClasses
       : [...meta.unlockedClasses, classId];
-    const nextMeta = { ...meta, unlockedClasses: unlocked };
+    // Consume heirloom stash: items are moved into the new character below,
+    // so clear it from meta so the next wipe doesn't duplicate them.
+    const nextMeta = { ...meta, unlockedClasses: unlocked, stash: [] };
     persistMeta(nextMeta);
-    const player = buildFreshPlayer(faction, classId, name, nextMeta);
+    // buildFreshPlayer needs the items it's about to consume; pass the
+    // pre-clear meta so it sees the stash, but persist the cleared meta.
+    const player = buildFreshPlayer(faction, classId, name, meta);
     const f = FACTIONS.find((x) => x.id === faction)!;
     set({
       meta: nextMeta,
@@ -312,21 +320,22 @@ export const useGame = create<GameState>((set, get) => ({
       get().pushLog("✦ You dodge the blow!");
       return 0;
     }
-    let hp = Math.max(0, p.hp - n);
+    const hpAfter = Math.max(0, p.hp - n);
     // Phoenix Feather intercept: if owned and damage would reach 0, consume one and revive at 50% maxHp.
-    if (hp <= 0) {
+    if (hpAfter <= 0) {
       const featherIdx = p.inventory.indexOf("phoenix");
       if (featherIdx !== -1) {
         const inv = [...p.inventory];
         inv.splice(featherIdx, 1);
-        hp = Math.max(1, Math.floor(p.maxHp * 0.5));
-        set({ player: { ...p, hp, inventory: inv } });
+        const revived = Math.max(1, Math.floor(p.maxHp * 0.5));
+        set({ player: { ...p, hp: revived, inventory: inv } });
         get().pushLog("✦ Phoenix Feather ignites — you are pulled back from the dark.");
-        return n;
+        // Report only the HP actually shed (the killing blow before the revive).
+        return p.hp;
       }
     }
-    set({ player: { ...p, hp } });
-    return n;
+    set({ player: { ...p, hp: hpAfter } });
+    return p.hp - hpAfter;
   },
   heal: (n) => set((s) => ({ player: { ...s.player, hp: Math.min(s.player.maxHp, s.player.hp + n) } })),
 
@@ -485,7 +494,7 @@ export const useGame = create<GameState>((set, get) => ({
         racialUsed: 0,
         racialMax: racialChargesForLevel(s.meta.account.level),
         nextAttackMult: 1,
-        runKills: 0, runGold: 0, runXp: 0, runShards: 0, runFloors: 0,
+        runKills: 0, runGold: 0, runXp: 0, runShards: 0,
       },
     }));
     get().pushLog("You descend into darkness...");
@@ -696,10 +705,8 @@ export const useGame = create<GameState>((set, get) => ({
     const amt = Math.max(2, Math.floor(p.maxHp * 0.10));
     const hp = Math.min(p.maxHp, p.hp + amt);
     if (hp > p.hp) {
-      set({ player: { ...p, hp, runFloors: p.runFloors + 1 } });
+      set({ player: { ...p, hp } });
       get().pushLog(`You catch your breath. +${hp - p.hp} HP.`);
-    } else {
-      set({ player: { ...p, runFloors: p.runFloors + 1 } });
     }
   },
 
@@ -764,6 +771,13 @@ export const useGame = create<GameState>((set, get) => ({
     inv.splice(idx, 1);
     set({ player: { ...p, inventory: inv } });
     get().pushLog("✦ Hearthstone Charm shatters — you are pulled to the city.");
+    // Bailing out still counts as having descended — unlock shop / champion gate.
+    const meta = get().meta;
+    if (!meta.hasCompletedFirstRun) {
+      const nextMeta: MetaState = { ...meta, hasCompletedFirstRun: true };
+      persistMeta(nextMeta);
+      set({ meta: nextMeta });
+    }
     // Treat as a successful retreat — banks rewards, no character wipe, no run summary.
     get().exitDungeon();
     return true;
@@ -788,7 +802,8 @@ export const useGame = create<GameState>((set, get) => ({
     }
     const nextMeta: MetaState = { ...meta, stash: [...meta.stash, item] };
     persistMeta(nextMeta);
-    set({ meta: nextMeta, player: { ...p, equipment: nextEquipment, bag: nextBag } });
+    // recompute so stats drop the stashed equipment immediately.
+    set({ meta: nextMeta, player: recompute({ ...p, equipment: nextEquipment, bag: nextBag }) });
     return true;
   },
 
@@ -877,6 +892,13 @@ export const useGame = create<GameState>((set, get) => ({
     const nextMeta = { ...meta, seenWipeIntro: true };
     persistMeta(nextMeta);
     set({ meta: nextMeta });
+  },
+
+  hydrateMeta: () => {
+    // Called from a client-only useEffect after mount. Idempotent.
+    if (typeof window === "undefined") return;
+    const loaded = loadMeta();
+    set({ meta: loaded });
   },
 }));
 

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useGame } from "@/game/store";
 import { TitleScreen } from "@/game/TitleScreen";
@@ -10,7 +11,7 @@ import { ProfessionScreen } from "@/game/ProfessionScreen";
 import { EquipmentScreen } from "@/game/EquipmentScreen";
 import { ShopScreen } from "@/game/ShopScreen";
 import { ChampionPassScreen } from "@/game/ChampionPassScreen";
-import { DungeonScreen, VictoryScreen, DefeatScreen } from "@/game/DungeonScreen";
+import { DungeonScreen } from "@/game/DungeonScreen";
 import { CharacterHeader } from "@/game/CharacterHeader";
 import { RunSummaryScreen } from "@/game/RunSummaryScreen";
 import { EchoTreeScreen } from "@/game/EchoTreeScreen";
@@ -33,6 +34,9 @@ const HEADERLESS = new Set(["title", "intro"]);
 
 function Game() {
   const screen = useGame((s) => s.screen);
+  const hydrateMeta = useGame((s) => s.hydrateMeta);
+  // Load persisted meta after mount to avoid SSR/client hydration mismatch.
+  useEffect(() => { hydrateMeta(); }, [hydrateMeta]);
   return (
     <main className="mx-auto h-dvh max-w-md overflow-y-auto bg-background text-foreground">
       {!HEADERLESS.has(screen) && <CharacterHeader />}
@@ -48,8 +52,6 @@ function Game() {
       {screen === "shop" && <ShopScreen />}
       {screen === "champion" && <ChampionPassScreen />}
       {screen === "dungeon" && <DungeonScreen />}
-      {screen === "victory" && <VictoryScreen />}
-      {screen === "defeat" && <DefeatScreen />}
       {screen === "run_summary" && <RunSummaryScreen />}
       {screen === "echo" && <EchoTreeScreen />}
       {screen === "journal" && <JournalScreen />}

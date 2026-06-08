@@ -297,7 +297,8 @@ export function DungeonScreen() {
   };
 
   const onRacial = () => {
-    if (enc.kind !== "combat" || !faction || player.racialUsed) return;
+    if (enc.kind !== "combat" || !faction) return;
+    if (player.racialUsed >= player.racialMax) return;
     useRacial();
     // Racial doesn't consume a turn — it's a free instant.
   };
@@ -563,24 +564,6 @@ export function DungeonScreen() {
   );
 }
 
-export function VictoryScreen() {
-  const reset = useGame((s) => s.reset);
-  return (
-    <div className="flex min-h-full flex-col items-center justify-center p-6 text-center gap-4">
-      <h1 className="pixel text-2xl text-gold text-shadow-pixel">VICTORY</h1>
-      <p className="font-body text-lg text-muted-foreground">You reach the dungeon's heart and emerge alive.</p>
-      <button onClick={reset} className="pixel-btn pixel-btn-gold w-full">▶ New Run</button>
-    </div>
-  );
-}
+// VictoryScreen / DefeatScreen were removed — the run summary screen handles
+// both outcomes now.
 
-export function DefeatScreen() {
-  const reset = useGame((s) => s.reset);
-  return (
-    <div className="flex min-h-full flex-col items-center justify-center p-6 text-center gap-4">
-      <h1 className="pixel text-2xl text-blood text-shadow-pixel">YOU DIED</h1>
-      <p className="font-body text-lg text-muted-foreground">The dark keeps what it claims.</p>
-      <button onClick={reset} className="pixel-btn pixel-btn-primary w-full">▶ Try Again</button>
-    </div>
-  );
-}
