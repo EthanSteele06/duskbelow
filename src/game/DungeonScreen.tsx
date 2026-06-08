@@ -111,8 +111,6 @@ export function DungeonScreen() {
   const useRacial = useGame((s) => s.useRacial);
   const consumeMult = useGame((s) => s.consumeNextAttackMult);
   const equip = useGame((s) => s.equip);
-  const sellBag = useGame((s) => s.sellBagItem);
-  const discardBag = useGame((s) => s.discardBagItem);
 
   const abilities = player.classId ? CLASS_ABILITIES[player.classId] : [];
   const inv = player.inventory;
