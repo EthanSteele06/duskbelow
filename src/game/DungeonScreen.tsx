@@ -30,19 +30,23 @@ type CombatEnc = {
   enemyHp: number; enemyMaxHp: number;
   stunnedTurns: number; shieldReduce: number;
   cooldowns: Record<string, number>;
-  enemyEffects: StatusEffect[];  // bleed / burn on enemy, chill on enemy
-  playerEffects: StatusEffect[]; // renew / burn on player (future)
-  nextIntent: EnemyIntent;       // telegraphed action for the upcoming enemy turn
+  enemyEffects: StatusEffect[];
+  playerEffects: StatusEffect[];
+  nextIntent: EnemyIntent;
 };
+
+type ShrineKind = "heal" | "blessing";
+type TrapKind = "spikes" | "gas";
 
 type Encounter =
   | { kind: "path"; depth: number }
   | { kind: "victory"; depth: number; loot: Loot }
   | { kind: "chest"; depth: number; preview: ChestPreview }
+  | { kind: "shrine"; depth: number; shrine: ShrineKind }
+  | { kind: "trap"; depth: number; trap: TrapKind; sprung: boolean }
   | CombatEnc;
 
 function pickIntent(enemy: EnemyDef): EnemyIntent {
-  // Telegraphable intents fire ~35% of the time; otherwise pick a non-telegraphable
   const teleg = enemy.intents.filter((i) => i.telegraphable);
   const normal = enemy.intents.filter((i) => !i.telegraphable);
   if (teleg.length && Math.random() < 0.35) return teleg[Math.floor(Math.random() * teleg.length)];
@@ -64,8 +68,10 @@ function buildCombat(depth: number, faction?: FactionId | null): CombatEnc {
 function rollEncounter(depth: number, faction?: FactionId | null): Encounter {
   if (depth >= 10) return buildCombat(depth, faction);
   const r = Math.random();
-  if (r < 0.55) return buildCombat(depth, faction);
-  if (r < 0.85) return { kind: "chest", depth, preview: rollChest(depth) };
+  if (r < 0.50) return buildCombat(depth, faction);
+  if (r < 0.72) return { kind: "chest", depth, preview: rollChest(depth) };
+  if (r < 0.84) return { kind: "shrine", depth, shrine: Math.random() < 0.6 ? "heal" : "blessing" };
+  if (r < 0.94) return { kind: "trap", depth, trap: Math.random() < 0.5 ? "spikes" : "gas", sprung: false };
   return { kind: "path", depth };
 }
 
