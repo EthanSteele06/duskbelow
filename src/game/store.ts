@@ -346,7 +346,7 @@ export const useGame = create<GameState>((set, get) => ({
   },
 
   enterDungeon: () => {
-    set((s) => ({ screen: "dungeon", player: { ...s.player, dungeonDepth: 1 } }));
+    set((s) => ({ screen: "dungeon", player: { ...s.player, dungeonDepth: 1, racialUsed: false, nextAttackMult: 1 } }));
     get().pushLog("You descend into darkness...");
   },
   exitDungeon: () => {
