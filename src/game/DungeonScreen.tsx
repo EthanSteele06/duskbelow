@@ -619,7 +619,13 @@ export function DungeonScreen() {
                   {lootGear.stats.maxHp ? `+${lootGear.stats.maxHp} HP ` : ""}
                   {lootGear.stats.crit ? `+${lootGear.stats.crit}% crit ` : ""}
                   {lootGear.stats.dodge ? `+${lootGear.stats.dodge}% dodge` : ""}
+                  {lootGear.stats.dodge ? `+${lootGear.stats.dodge}% dodge` : ""}
                 </p>
+                {lootGear.legendaryDesc && (
+                  <p className="pixel text-[8px] text-rarity-legendary border-l-2 border-rarity-legendary pl-2">
+                    ✦ {lootGear.legendaryDesc}
+                  </p>
+                )}
                 <p className={`pixel text-[7px] ${gearDelta > 0 ? "text-divine" : gearDelta < 0 ? "text-blood" : "text-muted-foreground"}`}>
                   {equippedForSlot ? (gearDelta > 0 ? `▲ +${gearDelta} vs equipped` : gearDelta < 0 ? `▼ ${gearDelta} vs equipped` : "= same score") : "▲ slot empty"}
                 </p>
