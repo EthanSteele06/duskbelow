@@ -566,13 +566,22 @@ export function DungeonScreen() {
                 );
               })}
             </div>
-            {(hoveredAbility ?? abilities[0]) && (
-              <div className={`border-2 px-2 py-1.5 ${armedAbility ? "border-gold bg-card" : "border-black bg-popover"}`}>
-                <p className="pixel text-[8px] text-gold">{armedAbility ? "▶ " : ""}{(hoveredAbility ?? abilities[0]).name}</p>
-                <p className="font-body text-sm text-muted-foreground leading-tight">{(hoveredAbility ?? abilities[0]).desc}</p>
-                {armedAbility && <p className="pixel text-[7px] text-divine mt-1">Tap the same ability again to use it.</p>}
-              </div>
-            )}
+            {(hoveredAbility ?? abilities[0]) && (() => {
+              const ab = hoveredAbility ?? abilities[0];
+              let rangeStr = "";
+              if (ab.effect.kind === "attack") {
+                const base = ab.effect.useMag ? player.mag : player.atk;
+                const [lo, hi] = damageRange(base * ab.effect.mult);
+                rangeStr = ` — ${lo}–${hi} dmg`;
+              }
+              return (
+                <div className={`border-2 px-2 py-1.5 ${armedAbility ? "border-gold bg-card" : "border-black bg-popover"}`}>
+                  <p className="pixel text-[8px] text-gold">{armedAbility ? "▶ " : ""}{ab.name}{rangeStr}</p>
+                  <p className="font-body text-sm text-muted-foreground leading-tight">{ab.desc}</p>
+                  {armedAbility && <p className="pixel text-[7px] text-divine mt-1">Tap the same ability again to use it.</p>}
+                </div>
+              );
+            })()}
             {faction && (
               <button
                 onClick={onRacial}
@@ -598,7 +607,13 @@ export function DungeonScreen() {
           {inv.includes("hearth") && <button onClick={useHearth} className="pixel-btn pixel-btn-gold !text-[8px]">⌂ Hearthstone — bail out</button>}
         </div>
 
-        <button onClick={exitDungeon} className="pixel-btn !text-[8px] w-full text-center">⌂ Retreat to City</button>
+        {enc.kind === "combat" ? (
+          <p className="pixel text-[7px] text-blood text-center opacity-80 mt-1">
+            ⚠ Locked in combat — use a Hearthstone Charm to bail out.
+          </p>
+        ) : (
+          <button onClick={exitDungeon} className="pixel-btn !text-[8px] w-full text-center">⌂ Retreat to City</button>
+        )}
       </div>
     </div>
   );
