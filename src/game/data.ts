@@ -236,9 +236,13 @@ export interface VendorItem {
   name: string;
   desc: string;
   price: number;
-  kind: "weapon" | "potion" | "trinket";
+  kind: "weapon" | "potion" | "trinket" | "consumable";
   atk?: number;
   heal?: number;
+  /** if set, sold in the Cobalt Vault for gems instead of gold */
+  gemPrice?: number;
+  /** consumable effect identifier */
+  effect?: "hearthstone" | "phoenix";
 }
 
 export const VENDOR_ITEMS: VendorItem[] = [
@@ -247,6 +251,9 @@ export const VENDOR_ITEMS: VendorItem[] = [
   { id: "w1", name: "Ironbite Blade", desc: "+2 ATK.", price: 45, kind: "weapon", atk: 2 },
   { id: "w2", name: "Runed Cleaver", desc: "+4 ATK.", price: 110, kind: "weapon", atk: 4 },
   { id: "t1", name: "Ember Charm", desc: "Pulses with dungeon heat.", price: 25, kind: "trinket" },
+  // Premium revive consumables — sold for gems in the Cobalt Vault.
+  { id: "hearth",  name: "Hearthstone Charm", desc: "Bail out of the dungeon at any moment. Keeps your run rewards. One use.", price: 0, gemPrice: 75,  kind: "consumable", effect: "hearthstone" },
+  { id: "phoenix", name: "Phoenix Feather",   desc: "On lethal damage, revives at 50% HP. Auto-trigger. One use.",            price: 0, gemPrice: 150, kind: "consumable", effect: "phoenix" },
 ];
 
 export interface AuctionListing {

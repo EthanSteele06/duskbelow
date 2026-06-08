@@ -1,5 +1,6 @@
 import { useGame } from "@/game/store";
 import { FACTIONS, TRAINERS, SPECS } from "@/game/data";
+import { nextUnlock } from "@/game/meta";
 import { StatBar } from "./StatBar";
 import cityImg from "@/assets/city.jpg";
 
@@ -8,11 +9,14 @@ export function CityScreen() {
   const enter = useGame((s) => s.enterDungeon);
   const reset = useGame((s) => s.reset);
   const player = useGame((s) => s.player);
+  const meta = useGame((s) => s.meta);
   const log = useGame((s) => s.log);
   const f = FACTIONS.find((x) => x.id === player.faction)!;
   const trainer = player.classId ? TRAINERS[player.classId] : null;
   const spec = player.specId ? SPECS.find((s) => s.id === player.specId) : null;
   const newGear = player.bag.length > 0;
+  const firstRunDone = meta.hasCompletedFirstRun;
+  const upNext = nextUnlock(meta.account.level);
 
   return (
     <div className="relative flex min-h-full flex-col">
@@ -51,8 +55,18 @@ export function CityScreen() {
           <ActionTile title="Quest Board" desc="Take on jobs for gold." icon="✦" onClick={() => setScreen("quests")} />
           <ActionTile title="Crafter's Row" desc="Professions & recipes." icon="⚒" onClick={() => setScreen("profession")} />
           <ActionTile title="Auction House" desc="Bid on rare relics." icon="⚖" onClick={() => setScreen("auction")} />
-          <ActionTile title="Cobalt Vault" desc="Cosmetic shop & gems." icon="◆" onClick={() => setScreen("shop")} />
-          <ActionTile title="Champion's Pass" desc={player.isChampion ? "Active — manage perks." : "Unlock +50% XP & more."} icon="★" onClick={() => setScreen("champion")} accent={!player.isChampion} />
+          <ActionTile title="Echo Tree" desc={`Spend Soul Shards (✦ ${meta.shards}).`} icon="✦" onClick={() => setScreen("echo")} />
+          <ActionTile title="Dungeon Journal" desc={`Wanderer Lv ${meta.account.level}${upNext ? ` · next: ${upNext.label}` : " · MAX"}`} icon="▣" onClick={() => setScreen("journal")} />
+          {firstRunDone ? (
+            <ActionTile title="Cobalt Vault" desc="Cosmetic shop & gems." icon="◆" onClick={() => setScreen("shop")} />
+          ) : (
+            <ActionTile title="Cobalt Vault" desc="Unlocks after your first descent." icon="◆" onClick={() => undefined} />
+          )}
+          {firstRunDone ? (
+            <ActionTile title="Champion's Pass" desc={player.isChampion ? "Active — manage perks." : "Unlock +50% XP & more."} icon="★" onClick={() => setScreen("champion")} accent={!player.isChampion} />
+          ) : (
+            <ActionTile title="Champion's Pass" desc="Unlocks after your first descent." icon="★" onClick={() => undefined} />
+          )}
           <ActionTile title="Descend Dungeon" desc="Brave the depths." icon="▼" onClick={enter} accent />
         </div>
       </div>

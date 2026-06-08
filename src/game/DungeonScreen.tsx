@@ -132,9 +132,13 @@ export function DungeonScreen() {
     pushLog(msg);
   };
 
+  const finishRun = useGame((s) => s.finishRun);
+  const recordKill = useGame((s) => s.recordKill);
+  const useHearth = useGame((s) => s.useHearthstone);
+
   useEffect(() => {
-    if (player.hp <= 0) setScreen("defeat");
-  }, [player.hp, setScreen]);
+    if (player.hp <= 0) finishRun("defeat");
+  }, [player.hp, finishRun]);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -142,7 +146,7 @@ export function DungeonScreen() {
 
   const advance = () => {
     const newDepth = enc.depth + 1;
-    if (newDepth > 10) { setScreen("victory"); return; }
+    if (newDepth > 10) { finishRun("victory"); return; }
     restoreBetweenRooms();
     const next = rollEncounter(newDepth);
     setEnc(next);
@@ -319,12 +323,21 @@ export function DungeonScreen() {
       if (addToBag(rolled)) gear = rolled;
       else addLog("Bag full — gear left behind.");
     }
+    // Journal + shards
+    const loreByEnemy: Record<string, string> = {
+      cultist: "lore_seals", wraith: "lore_wraith", ogre: "lore_ogre", dragon: "lore_dragon", skeleton: "lore_brigade",
+    };
+    recordKill(e.enemy.id, {
+      boss: e.enemy.id === "dragon",
+      loreId: Math.random() < 0.4 ? loreByEnemy[e.enemy.id] : undefined,
+      itemDropId: gear?.baseId,
+    });
     setEnc({ kind: "victory", depth: e.depth, loot: { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material, gear } });
   };
 
   const closeVictory = () => {
     if (enc.kind !== "victory") return;
-    if (enc.loot.enemy.id === "dragon") { setScreen("victory"); return; }
+    if (enc.loot.enemy.id === "dragon") { finishRun("victory"); return; }
     restoreBetweenRooms();
     setEnc({ kind: "path", depth: enc.depth });
   };
@@ -522,11 +535,13 @@ export function DungeonScreen() {
             {faction && (
               <button
                 onClick={onRacial}
-                disabled={player.racialUsed}
+                disabled={player.racialUsed >= player.racialMax}
                 className="pixel-btn !text-[8px] w-full disabled:opacity-40"
                 style={{ borderColor: faction.color }}
               >
-                {player.racialUsed ? `✦ ${faction.racial.name} — used` : `✦ ${faction.racial.name} — ${faction.racial.desc}`}
+                {player.racialUsed >= player.racialMax
+                  ? `✦ ${faction.racial.name} — used`
+                  : `✦ ${faction.racial.name} (${player.racialMax - player.racialUsed} left) — ${faction.racial.desc}`}
               </button>
             )}
             {player.nextAttackMult !== 1 && (
@@ -538,6 +553,8 @@ export function DungeonScreen() {
         <div className="grid grid-cols-2 gap-2">
           {inv.includes("p1") && <button onClick={() => use("p1")} className="pixel-btn !text-[8px]">Lesser Potion ({inv.filter(x=>x==="p1").length})</button>}
           {inv.includes("p2") && <button onClick={() => use("p2")} className="pixel-btn !text-[8px]">Greater Potion ({inv.filter(x=>x==="p2").length})</button>}
+          {inv.includes("phoenix") && <span className="pixel-btn !text-[8px] text-center text-divine">✦ Phoenix Feather armed ({inv.filter(x=>x==="phoenix").length})</span>}
+          {inv.includes("hearth") && <button onClick={useHearth} className="pixel-btn pixel-btn-gold !text-[8px]">⌂ Hearthstone — bail out</button>}
         </div>
 
         <button onClick={exitDungeon} className="pixel-btn !text-[8px] w-full text-center">⌂ Retreat to City</button>
