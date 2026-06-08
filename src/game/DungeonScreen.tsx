@@ -661,7 +661,7 @@ export function DungeonScreen() {
 
         {enc.kind === "combat" && (
           <div className="space-y-2">
-            <div className="grid grid-cols-3 gap-2">
+            <div className={`grid gap-2 ${abilities.length >= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
               {abilities.map((ab) => {
                 const cd = enc.cooldowns[ab.id] ?? 0;
                 const armed = armedAbility === ab.id;
