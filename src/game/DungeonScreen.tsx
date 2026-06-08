@@ -3,9 +3,9 @@ import { useGame } from "@/game/store";
 import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumber";
 import {
   CLASS_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
-  RARITY_CLASS, RARITY_LABEL, gearScore, gearSellPrice,
+  RARITY_CLASS, RARITY_LABEL, gearScore, gearSellPrice, rollDamage, damageRange,
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
-  type StatusEffect, type EnemyIntent,
+  type StatusEffect, type EnemyIntent, type FactionId,
 } from "@/game/data";
 import corridorImg from "@/assets/dungeon-corridor.jpg";
 import chestImg from "@/assets/dungeon-chest.jpg";
@@ -48,8 +48,8 @@ function pickIntent(enemy: EnemyDef): EnemyIntent {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function buildCombat(depth: number): CombatEnc {
-  const e = enemyForDepth(depth);
+function buildCombat(depth: number, faction?: FactionId | null): CombatEnc {
+  const e = enemyForDepth(depth, faction);
   const hp = e.hpBase + (depth >= 10 ? 0 : Math.floor(depth * 1.4));
   return {
     kind: "combat", depth, enemy: e, enemyHp: hp, enemyMaxHp: hp,
@@ -59,10 +59,10 @@ function buildCombat(depth: number): CombatEnc {
   };
 }
 
-function rollEncounter(depth: number): Encounter {
-  if (depth >= 10) return buildCombat(depth);
+function rollEncounter(depth: number, faction?: FactionId | null): Encounter {
+  if (depth >= 10) return buildCombat(depth, faction);
   const r = Math.random();
-  if (r < 0.55) return buildCombat(depth);
+  if (r < 0.55) return buildCombat(depth, faction);
   if (r < 0.85) return { kind: "chest", depth, preview: rollChest(depth) };
   return { kind: "path", depth };
 }
