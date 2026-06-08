@@ -898,6 +898,12 @@ export interface GearItem {
   rarity: Rarity;
   ilvl: number;
   stats: { atk?: number; mag?: number; maxHp?: number; crit?: number; dodge?: number };
+  /** If set, this item is a class-signature legendary tied to that class. */
+  classId?: ClassId;
+  /** Class ability id this legendary empowers (its basic attack). */
+  empowersAbilityId?: string;
+  /** Short description of the unique on-hit buff. */
+  legendaryDesc?: string;
 }
 
 interface GearTemplate {
