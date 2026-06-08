@@ -615,8 +615,10 @@ export interface TalentNode {
   id: string;
   name: string;
   desc: string;
-  tier: 1 | 2 | 3 | 4;
+  tier: 1 | 2 | 3 | 4 | 5;
   requires?: string;
+  /** True for tier-5 capstones — only one capstone may be learned per spec. */
+  capstone?: boolean;
   effect: { atk?: number; mag?: number; maxHp?: number; crit?: number; dodge?: number };
 }
 
@@ -632,8 +634,15 @@ function tree(prefix: string, t: { atk?: number; mag?: number; maxHp?: number })
     { id: `${prefix}_3b`, name: "Precision",   desc: "+8% crit chance.",                            tier: 3, requires: `${prefix}_2b`, effect: { crit: 8 } },
     { id: `${prefix}_4a`, name: "Capstone I",  desc: `+${5+a} ATK, +${5+h} Max HP.`,                tier: 4, requires: `${prefix}_3a`, effect: { atk: 5+a, maxHp: 5+h } },
     { id: `${prefix}_4b`, name: "Capstone II", desc: `+${4+m} MAG, +10% crit.`,                     tier: 4, requires: `${prefix}_3b`, effect: { mag: 4+m, crit: 10 } },
+    // Capstone tier — pick ONE.
+    { id: `${prefix}_5a`, name: "Warlord's Edge",  desc: `Capstone (pick 1): +${10+a} ATK, +10% crit.`,    tier: 5, requires: `${prefix}_4a`, capstone: true, effect: { atk: 10+a, crit: 10 } },
+    { id: `${prefix}_5b`, name: "Archmage's Will", desc: `Capstone (pick 1): +${10+m} MAG, +${20+h} Max HP.`, tier: 5, requires: `${prefix}_4b`, capstone: true, effect: { mag: 10+m, maxHp: 20+h } },
+    { id: `${prefix}_5c`, name: "Bulwark Eternal", desc: `Capstone (pick 1): +${35+h} Max HP, +6% dodge.`, tier: 5, requires: `${prefix}_4a`, capstone: true, effect: { maxHp: 35+h, dodge: 6 } },
   ];
 }
+
+/** Cap on active (accepted, not-yet-turned-in) quests. */
+export const MAX_ACTIVE_QUESTS = 3;
 
 export const TALENT_TREES: Record<string, TalentNode[]> = {
   arms:          tree("arms",       { atk: 3 }),
