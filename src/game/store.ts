@@ -893,6 +893,13 @@ export const useGame = create<GameState>((set, get) => ({
     persistMeta(nextMeta);
     set({ meta: nextMeta });
   },
+
+  hydrateMeta: () => {
+    // Called from a client-only useEffect after mount. Idempotent.
+    if (typeof window === "undefined") return;
+    const loaded = loadMeta();
+    set({ meta: loaded });
+  },
 }));
 
 export { xpForLevel, bagCap };
