@@ -38,12 +38,12 @@ export function CityScreen() {
           <img src={f.sigil} alt={f.name} className="h-8 w-8 object-contain torch-flicker" />
           <p className="pixel text-[8px] text-shadow-pixel text-gold">{f.name}</p>
         </div>
-        {player.isChampion && (
-          <div className="absolute right-2 top-2 pixel text-[8px] text-shadow-pixel text-gold border border-gold px-1 py-0.5">★ CHAMPION</div>
-        )}
-        {!player.isChampion && (
-          <div className="absolute right-2 top-2 z-10"><SettingsButton /></div>
-        )}
+        <div className="absolute right-2 top-2 z-10 flex items-center gap-2">
+          {player.isChampion && (
+            <div className="pixel text-[8px] text-shadow-pixel text-gold border border-gold px-1 py-0.5">★ CHAMPION</div>
+          )}
+          <SettingsButton />
+        </div>
         {spec && (
           <div className="absolute right-2 bottom-2 pixel text-[8px] text-shadow-pixel" style={{ color: spec.color }}>{spec.name}</div>
         )}
