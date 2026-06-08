@@ -1103,6 +1103,40 @@ export const useGame = create<GameState>((set, get) => ({
     get().pushLog(`✦ Unlocked hero: ${def.name}${devFree ? " (dev)" : ""}.`);
     return true;
   },
+
+  devGrantClassLegendary: () => {
+    const p = get().player;
+    if (!p.classId) { get().pushLog("Dev: pick a class first."); return false; }
+    const owns =
+      Object.values(p.equipment).some((g) => g?.rarity === "legendary") ||
+      p.bag.some((g) => g.rarity === "legendary");
+    if (owns) { get().pushLog("Dev: you already own a legendary."); return false; }
+    const legend = rollClassLegendary(p.classId, 30);
+    if (!get().addToBag(legend)) { get().pushLog("Dev: bag full."); return false; }
+    get().pushLog(`✦ Dev grant: ${legend.name}.`);
+    return true;
+  },
+
+  devGrantRandomEpic: () => {
+    const item = rollGear(15, { source: "major_boss", minRarity: "epic" });
+    if (!get().addToBag(item)) { get().pushLog("Dev: bag full."); return false; }
+    get().pushLog(`Dev grant: ${item.name}.`);
+    return true;
+  },
+
+  devGrantGold: (n) => {
+    const p = get().player;
+    set({ player: { ...p, gold: p.gold + n } });
+    get().pushLog(`Dev grant: +${n}g.`);
+  },
+
+  devGrantAllMaterials: () => {
+    const p = get().player;
+    const mats = { ...p.materials };
+    for (const id of Object.keys(MATERIALS)) mats[id] = (mats[id] ?? 0) + 10;
+    set({ player: { ...p, materials: mats } });
+    get().pushLog("Dev grant: +10 of every material.");
+  },
 }));
 
 export { xpForLevel, bagCap };
