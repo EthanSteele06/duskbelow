@@ -276,14 +276,14 @@ function grantAccountXp(meta: MetaState, n: number): MetaState {
   return { ...meta, account: { xp, level } };
 }
 
-const initialMeta = loadMeta();
-
+// Start with emptyMeta on both server and first client render to avoid
+// hydration mismatch; the real meta is loaded via hydrateMeta() in an effect.
 export const useGame = create<GameState>((set, get) => ({
   screen: "title",
   player: emptyPlayer(),
   log: [],
   quests: [],
-  meta: initialMeta,
+  meta: emptyMeta(),
   lastRun: null,
 
   setScreen: (screen) => set({ screen }),
