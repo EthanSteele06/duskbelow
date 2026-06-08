@@ -8,6 +8,7 @@ import {
   type StatusEffect, type EnemyIntent, type FactionId,
 } from "@/game/data";
 import { playMusic, playSfx } from "@/game/audio";
+import { TutorialTip } from "@/game/Tutorial";
 import corridorImg from "@/assets/dungeon-corridor.jpg";
 import chestImg from "@/assets/dungeon-chest.jpg";
 
@@ -624,10 +625,18 @@ export function DungeonScreen() {
           <button onClick={exitDungeon} className="pixel-btn !text-[8px] w-full text-center">⌂ Retreat to City</button>
         )}
       </div>
+
+      <TutorialTip
+        id="dungeon-combat"
+        title="Into the Dark"
+        body="Tap an ability to use it. You can't retreat mid-fight — keep a Hearthstone Charm if you want a safe escape. Dying drops your loot."
+        position="top"
+      />
     </div>
   );
 }
 
 // VictoryScreen / DefeatScreen were removed — the run summary screen handles
 // both outcomes now.
+
 
