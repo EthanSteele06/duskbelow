@@ -22,7 +22,8 @@ export function EquipmentScreen() {
   const unequip = useGame((s) => s.unequip);
   const sell = useGame((s) => s.sellBagItem);
   const discard = useGame((s) => s.discardBagItem);
-  const cap = bagCap(player);
+  const meta = useGame((s) => s.meta);
+  const cap = bagCap(player, meta);
 
   return (
     <div className="flex min-h-full flex-col p-3 gap-3">
