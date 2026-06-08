@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useGame } from "@/game/store";
-import { COSMETICS, GEM_PACKS, COSMETIC_KIND_LABEL, type CosmeticKind, type CosmeticDef } from "@/game/data";
+import { COSMETICS, GEM_PACKS, COSMETIC_KIND_LABEL, VENDOR_ITEMS, type CosmeticKind, type CosmeticDef } from "@/game/data";
 import shopBg from "@/assets/shop-bg.jpg";
 
 const TABS: { id: "shop" | "collection" | "gems"; label: string }[] = [
@@ -60,8 +60,10 @@ export function ShopScreen() {
   const setScreen = useGame((s) => s.setScreen);
   const player = useGame((s) => s.player);
   const buy = useGame((s) => s.buyCosmetic);
+  const buyGem = useGame((s) => s.buyGem);
   const equip = useGame((s) => s.equipCosmetic);
   const [tab, setTab] = useState<"shop" | "collection" | "gems">("shop");
+  const revives = VENDOR_ITEMS.filter((v) => v.gemPrice);
 
   const owned = new Set(player.ownedCosmetics);
 
@@ -94,6 +96,25 @@ export function ShopScreen() {
 
         {tab === "shop" && (
           <div className="space-y-4">
+          <div className="space-y-4">
+            <div>
+              <h3 className="pixel text-[10px] text-gold mb-1.5">Run Insurance</h3>
+              <div className="grid grid-cols-1 gap-2">
+                {revives.map((it) => {
+                  const owned = player.inventory.filter((x) => x === it.id).length;
+                  const canBuy = player.gems >= (it.gemPrice ?? 0);
+                  return (
+                    <div key={it.id} className="border-2 border-black bg-card p-2 flex items-center gap-2">
+                      <div className="flex-1">
+                        <p className="pixel text-[8px] text-gold">{it.name} {owned > 0 && <span className="text-divine">×{owned}</span>}</p>
+                        <p className="font-body text-xs text-muted-foreground leading-tight">{it.desc}</p>
+                      </div>
+                      <button onClick={() => buyGem(it.id)} disabled={!canBuy} className="pixel-btn pixel-btn-gold !text-[7px] !p-2 disabled:opacity-40">◆ {it.gemPrice}</button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
             {KIND_ORDER.map((kind) => {
               const items = COSMETICS.filter((c) => c.kind === kind);
               return (
