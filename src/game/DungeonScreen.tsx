@@ -132,9 +132,13 @@ export function DungeonScreen() {
     pushLog(msg);
   };
 
+  const finishRun = useGame((s) => s.finishRun);
+  const recordKill = useGame((s) => s.recordKill);
+  const useHearth = useGame((s) => s.useHearthstone);
+
   useEffect(() => {
-    if (player.hp <= 0) setScreen("defeat");
-  }, [player.hp, setScreen]);
+    if (player.hp <= 0) finishRun("defeat");
+  }, [player.hp, finishRun]);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -142,7 +146,7 @@ export function DungeonScreen() {
 
   const advance = () => {
     const newDepth = enc.depth + 1;
-    if (newDepth > 10) { setScreen("victory"); return; }
+    if (newDepth > 10) { finishRun("victory"); return; }
     restoreBetweenRooms();
     const next = rollEncounter(newDepth);
     setEnc(next);
@@ -319,12 +323,21 @@ export function DungeonScreen() {
       if (addToBag(rolled)) gear = rolled;
       else addLog("Bag full — gear left behind.");
     }
+    // Journal + shards
+    const loreByEnemy: Record<string, string> = {
+      cultist: "lore_seals", wraith: "lore_wraith", ogre: "lore_ogre", dragon: "lore_dragon", skeleton: "lore_brigade",
+    };
+    recordKill(e.enemy.id, {
+      boss: e.enemy.id === "dragon",
+      loreId: Math.random() < 0.4 ? loreByEnemy[e.enemy.id] : undefined,
+      itemDropId: gear?.baseId,
+    });
     setEnc({ kind: "victory", depth: e.depth, loot: { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material, gear } });
   };
 
   const closeVictory = () => {
     if (enc.kind !== "victory") return;
-    if (enc.loot.enemy.id === "dragon") { setScreen("victory"); return; }
+    if (enc.loot.enemy.id === "dragon") { finishRun("victory"); return; }
     restoreBetweenRooms();
     setEnc({ kind: "path", depth: enc.depth });
   };
