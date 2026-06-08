@@ -172,6 +172,11 @@ interface GameState {
   markTutorialSeen: (id: string, all?: boolean) => void;
   hydrateMeta: () => void;
   unlockClass: (classId: ClassId, opts?: { devFree?: boolean }) => boolean;
+  // Dev cheats
+  devGrantClassLegendary: () => boolean;
+  devGrantRandomEpic: () => boolean;
+  devGrantGold: (n: number) => void;
+  devGrantAllMaterials: () => void;
 }
 
 const emptyPlayer = (): PlayerState => ({
