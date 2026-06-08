@@ -239,10 +239,31 @@ export function DungeonScreen() {
 
   const applyAttack = (e: CombatEnc, ab: Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> }): CombatEnc => {
     const base = ab.effect.useMag ? player.mag : player.atk;
+    // Legendary class-signature buff: applies only when using the empowered ability
+    // and the equipped legendary matches the player's class.
+    const legendary = Object.values(player.equipment).find(
+      (g) => g && g.classId === player.classId && g.empowersAbilityId === ab.id,
+    );
+    let dmgMult = 1;
+    let bonusCritPct = 0;
+    let lifestealMult = 1;
+    let extraChillTurns = 0;
+    let postHitHeal = 0;
+    if (legendary) {
+      switch (player.classId) {
+        case "warrior":     dmgMult = 1.6; break;
+        case "rogue":       bonusCritPct = 35; break;
+        case "mage":        dmgMult = 1.5; extraChillTurns = 1; break;
+        case "priest":      postHitHeal = -1; break; // sentinel: heal 40% of dmg
+        case "druid":       dmgMult = 1.4; postHitHeal = 6; break;
+        case "deathknight": dmgMult = 1.35; lifestealMult = 2; break;
+      }
+    }
     // Roll damage in a ±20% range so hits feel less robotic.
-    let dmg = rollDamage(base * ab.effect.mult);
+    let dmg = rollDamage(base * ab.effect.mult * dmgMult);
     // Crit
-    const crit = player.crit > 0 && Math.random() * 100 < player.crit;
+    const critChance = player.crit + bonusCritPct;
+    const crit = critChance > 0 && Math.random() * 100 < critChance;
     if (crit) dmg = Math.floor(dmg * 1.5);
     // Frenzy / Rally next-attack multiplier
     if (player.nextAttackMult !== 1) {
@@ -263,21 +284,30 @@ export function DungeonScreen() {
 
     addFloater("player", dmg, dmgSkin);
     const flavor = ab.effect.flavor.replace("{p}", player.name);
-    addLog(`${flavor} for ${dmg}${crit ? " CRIT" : ""} damage!`);
+    addLog(`${flavor} for ${dmg}${crit ? " CRIT" : ""}${legendary ? " ✦" : ""} damage!`);
 
     // Lifesteal
-    if (ab.effect.lifesteal && ab.effect.lifesteal > 0) {
-      const healed = Math.max(1, Math.floor(dmg * ab.effect.lifesteal));
+    const effectiveLifesteal = (ab.effect.lifesteal ?? 0) * lifestealMult;
+    if (effectiveLifesteal > 0) {
+      const healed = Math.max(1, Math.floor(dmg * effectiveLifesteal));
       heal(healed);
       addFloater("heal", healed);
       addLog(`${player.name} drains ${healed} life.`);
+    }
+    // Legendary post-hit heal
+    if (postHitHeal === -1) {
+      const healed = Math.max(1, Math.floor(dmg * 0.4));
+      heal(healed); addFloater("heal", healed);
+    } else if (postHitHeal > 0) {
+      heal(postHitHeal); addFloater("heal", postHitHeal);
     }
 
     let nextEffects = e.enemyEffects;
     if (ab.effect.applyStatus) {
       const s = ab.effect.applyStatus;
+      const turns = s.kind === "chill" ? s.turns + extraChillTurns : s.turns;
       // refresh or add
-      nextEffects = nextEffects.filter((x) => x.kind !== s.kind).concat({ kind: s.kind, turns: s.turns, power: s.power });
+      nextEffects = nextEffects.filter((x) => x.kind !== s.kind).concat({ kind: s.kind, turns, power: s.power });
       addLog(`${e.enemy.name} is afflicted with ${s.kind}.`);
     }
     return { ...e, enemyHp: e.enemyHp - dmg, enemyEffects: nextEffects };
@@ -392,11 +422,27 @@ export function DungeonScreen() {
     let gear: GearItem | undefined;
     if (e.enemy.questItemId && Math.random() < 0.6) { addQuestItem(e.enemy.questItemId); questItem = e.enemy.questItemId; }
     if (e.enemy.materialDrop && Math.random() < e.enemy.materialDrop.chance) { addMaterial(e.enemy.materialDrop.id); material = e.enemy.materialDrop.id; }
-    const gearChance = e.enemy.id === "dragon" ? 1 : 0.35 + e.depth * 0.04;
-    if (Math.random() < gearChance) {
-      const rolled = e.enemy.id === "dragon" ? rollGear(e.depth, { minRarity: "rare" }) : rollGear(e.depth);
-      if (addToBag(rolled)) gear = rolled;
-      else addLog("Bag full — gear left behind.");
+    const isFinalBoss = e.depth >= MAX_DEPTH;
+    const ownsLegendary =
+      Object.values(player.equipment).some((g) => g?.rarity === "legendary") ||
+      player.bag.some((g) => g.rarity === "legendary");
+    // Final-boss class legendary: 1% drop, only if the player owns none.
+    if (isFinalBoss && player.classId && !ownsLegendary && Math.random() < 0.01) {
+      const legend = rollClassLegendary(player.classId, e.depth);
+      if (addToBag(legend)) { gear = legend; addLog(`✦ A legendary stirs in the wreckage — ${legend.name}!`); }
+      else addLog("Bag full — a legendary was left behind!");
+    } else {
+      const source: "trash" | "chest" | "mini_boss" | "major_boss" | "final_boss" =
+        isFinalBoss ? "final_boss"
+        : MAJOR_BOSS_FLOORS.has(e.depth) ? "major_boss"
+        : MINI_BOSS_FLOORS.has(e.depth) ? "mini_boss"
+        : "trash";
+      const gearChance = isFinalBoss ? 1 : 0.35 + e.depth * 0.04;
+      if (Math.random() < gearChance) {
+        const rolled = rollGear(e.depth, { source });
+        if (addToBag(rolled)) gear = rolled;
+        else addLog("Bag full — gear left behind.");
+      }
     }
     // Journal + shards
     const loreByEnemy: Record<string, string> = {
@@ -573,7 +619,13 @@ export function DungeonScreen() {
                   {lootGear.stats.maxHp ? `+${lootGear.stats.maxHp} HP ` : ""}
                   {lootGear.stats.crit ? `+${lootGear.stats.crit}% crit ` : ""}
                   {lootGear.stats.dodge ? `+${lootGear.stats.dodge}% dodge` : ""}
+                  {lootGear.stats.dodge ? `+${lootGear.stats.dodge}% dodge` : ""}
                 </p>
+                {lootGear.legendaryDesc && (
+                  <p className="pixel text-[8px] text-rarity-legendary border-l-2 border-rarity-legendary pl-2">
+                    ✦ {lootGear.legendaryDesc}
+                  </p>
+                )}
                 <p className={`pixel text-[7px] ${gearDelta > 0 ? "text-divine" : gearDelta < 0 ? "text-blood" : "text-muted-foreground"}`}>
                   {equippedForSlot ? (gearDelta > 0 ? `▲ +${gearDelta} vs equipped` : gearDelta < 0 ? `▼ ${gearDelta} vs equipped` : "= same score") : "▲ slot empty"}
                 </p>

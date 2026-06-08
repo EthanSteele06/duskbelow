@@ -23,6 +23,11 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   const reset = useGame((s) => s.reset);
   const isChampion = useGame((s) => s.player?.isChampion ?? false);
   const [confirmWipe, setConfirmWipe] = useState(0);
+  const devGrantClassLegendary = useGame((s) => s.devGrantClassLegendary);
+  const devGrantRandomEpic = useGame((s) => s.devGrantRandomEpic);
+  const devGrantGold = useGame((s) => s.devGrantGold);
+  const devGrantAllMaterials = useGame((s) => s.devGrantAllMaterials);
+  const [devOpen, setDevOpen] = useState(false);
 
   useEffect(() => subscribeAudioSettings(setAudio), []);
 
@@ -108,6 +113,34 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
           )}
         </section>
 
+
+        <section>
+          <button
+            onClick={() => setDevOpen((v) => !v)}
+            className="pixel text-[10px] text-arcane underline"
+          >
+            ▣ Dev Tools {devOpen ? "▾" : "▸"}
+          </button>
+          {devOpen && (
+            <div className="mt-2 space-y-2 border-2 border-arcane/40 bg-arcane/5 p-2">
+              <p className="font-body text-xs text-muted-foreground">
+                Cheats for testing. Not balanced.
+              </p>
+              <button onClick={() => devGrantClassLegendary()} className="pixel-btn w-full !text-[9px]">
+                ✦ Grant Class Legendary
+              </button>
+              <button onClick={() => devGrantRandomEpic()} className="pixel-btn w-full !text-[9px]">
+                ◆ Grant Random Epic
+              </button>
+              <button onClick={() => devGrantGold(500)} className="pixel-btn w-full !text-[9px]">
+                + 500 Gold
+              </button>
+              <button onClick={() => devGrantAllMaterials()} className="pixel-btn w-full !text-[9px]">
+                + 10 of Every Material
+              </button>
+            </div>
+          )}
+        </section>
 
         <section>
           <h3 className="pixel text-[10px] text-gold mb-2">▣ About</h3>

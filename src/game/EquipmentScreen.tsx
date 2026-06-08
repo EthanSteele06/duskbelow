@@ -46,6 +46,9 @@ export function EquipmentScreen() {
                 <>
                   <p className={`pixel text-[8px] mt-1 ${RARITY_CLASS[it.rarity]}`}>{it.name}</p>
                   <p className="font-body text-xs opacity-80 leading-tight mt-1">{statsLine(it)}</p>
+                  {it.legendaryDesc && (
+                    <p className="pixel text-[6px] text-rarity-legendary mt-1 leading-tight">✦ {it.legendaryDesc}</p>
+                  )}
                   <p className="pixel text-[7px] text-muted-foreground mt-1">iLvl {it.ilvl}</p>
                 </>
               ) : (
@@ -75,6 +78,9 @@ export function EquipmentScreen() {
                 <span className="pixel text-[7px] text-muted-foreground">iLvl {it.ilvl} · {RARITY_LABEL[it.rarity]}</span>
               </div>
               <p className="font-body text-sm opacity-90 mt-1">{statsLine(it)}</p>
+              {it.legendaryDesc && (
+                <p className="pixel text-[7px] text-rarity-legendary mt-1">✦ {it.legendaryDesc}</p>
+              )}
               <p className={`pixel text-[7px] mt-1 ${delta > 0 ? "text-divine" : delta < 0 ? "text-blood" : "text-muted-foreground"}`}>
                 {delta > 0 ? `▲ +${delta} vs equipped` : delta < 0 ? `▼ ${delta} vs equipped` : "= same score"}
               </p>
