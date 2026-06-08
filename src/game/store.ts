@@ -150,6 +150,7 @@ interface GameState {
   restoreBetweenRooms: () => void;
   useRacial: () => boolean;
   consumeNextAttackMult: () => void;
+  armNextAttack: (mult: number) => void;
   // Pass 7
   recordKill: (enemyId: string, opts?: { boss?: boolean; shardValue?: number; loreId?: string; itemDropId?: string }) => void;
   useHearthstone: () => boolean;
@@ -821,6 +822,11 @@ export const useGame = create<GameState>((set, get) => ({
   consumeNextAttackMult: () => {
     const p = get().player;
     if (p.nextAttackMult !== 1) set({ player: { ...p, nextAttackMult: 1 } });
+  },
+
+  armNextAttack: (mult) => {
+    const p = get().player;
+    set({ player: { ...p, nextAttackMult: mult } });
   },
 
   // ── Pass 7: meta progression ───────────────────────────────────────────

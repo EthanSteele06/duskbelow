@@ -2,15 +2,19 @@ import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useGame } from "@/game/store";
 import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumber";
 import {
-  CLASS_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
+  CLASS_ABILITIES, SPEC_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
   RARITY_CLASS, RARITY_LABEL, gearScore, rollDamage, damageRange,
+  MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth,
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
   type StatusEffect, type EnemyIntent, type FactionId,
 } from "@/game/data";
 import { playMusic, playSfx } from "@/game/audio";
 import { TutorialTip } from "@/game/Tutorial";
-import corridorImg from "@/assets/dungeon-corridor.jpg";
+import { SettingsButton } from "@/game/Settings";
 import chestImg from "@/assets/dungeon-chest.jpg";
+import shrineImg from "@/assets/dungeon-shrine.png";
+import trapSpikesImg from "@/assets/trap-spikes.png";
+import trapGasImg from "@/assets/trap-gas.png";
 
 const vibrate = (ms: number | number[]) => { try { (navigator as Navigator & { vibrate?: (p: number | number[]) => boolean }).vibrate?.(ms); } catch { /* noop */ } };
 
@@ -66,11 +70,12 @@ function buildCombat(depth: number, faction?: FactionId | null): CombatEnc {
 }
 
 function rollEncounter(depth: number, faction?: FactionId | null): Encounter {
-  if (depth >= 10) return buildCombat(depth, faction);
+  // Boss floors are always forced combat.
+  if (MAJOR_BOSS_FLOORS.has(depth) || MINI_BOSS_FLOORS.has(depth)) return buildCombat(depth, faction);
   const r = Math.random();
-  if (r < 0.50) return buildCombat(depth, faction);
-  if (r < 0.72) return { kind: "chest", depth, preview: rollChest(depth) };
-  if (r < 0.84) return { kind: "shrine", depth, shrine: Math.random() < 0.6 ? "heal" : "blessing" };
+  if (r < 0.58) return buildCombat(depth, faction);
+  if (r < 0.78) return { kind: "chest", depth, preview: rollChest(depth) };
+  if (r < 0.82) return { kind: "shrine", depth, shrine: Math.random() < 0.6 ? "heal" : "blessing" }; // rare (~4%)
   if (r < 0.94) return { kind: "trap", depth, trap: Math.random() < 0.5 ? "spikes" : "gas", sprung: false };
   return { kind: "path", depth };
 }
@@ -112,7 +117,10 @@ export function DungeonScreen() {
   const consumeMult = useGame((s) => s.consumeNextAttackMult);
   const equip = useGame((s) => s.equip);
 
-  const abilities = player.classId ? CLASS_ABILITIES[player.classId] : [];
+  const armNextAttack = useGame((s) => s.armNextAttack);
+  const baseAbilities = player.classId ? CLASS_ABILITIES[player.classId] : [];
+  const specAbility = player.specId ? SPEC_ABILITIES[player.specId] : null;
+  const abilities: Ability[] = specAbility ? [...baseAbilities, specAbility] : baseAbilities;
   const inv = player.inventory;
   const faction = player.faction ? FACTIONS.find((f) => f.id === player.faction)! : null;
 
@@ -124,7 +132,7 @@ export function DungeonScreen() {
 
   // Music: swap to boss track when fighting a boss, dungeon ambient otherwise.
   useEffect(() => {
-    const isBoss = enc.kind === "combat" && enc.enemy.id === "dragon";
+    const isBoss = enc.kind === "combat" && (MAJOR_BOSS_FLOORS.has(enc.depth) || MINI_BOSS_FLOORS.has(enc.depth));
     playMusic(isBoss ? "boss" : "dungeon");
   }, [enc.kind, enc.kind === "combat" ? enc.enemy.id : null]);
   const playerFaction = player.faction;
@@ -168,7 +176,7 @@ export function DungeonScreen() {
 
   const advance = () => {
     const newDepth = enc.depth + 1;
-    if (newDepth > 10) { finishRun("victory"); return; }
+    if (newDepth > MAX_DEPTH) { finishRun("victory"); return; }
     restoreBetweenRooms();
     const next = rollEncounter(newDepth, playerFaction);
     setEnc(next);
@@ -291,7 +299,7 @@ export function DungeonScreen() {
         return;
       }
       case "heal": {
-        const amt = Math.max(4, player.mag * 2);
+        const amt = ab.effect.magMult ? Math.max(4, Math.floor(player.mag * ab.effect.magMult)) : Math.max(4, ab.effect.amount || player.mag * 2);
         heal(amt);
         addFloater("heal", amt);
         addLog(`${flavor} — restored ${amt} HP.`);
@@ -302,7 +310,7 @@ export function DungeonScreen() {
         return;
       }
       case "hot": {
-        const power = Math.max(2, Math.floor(player.mag * 0.8));
+        const power = ab.effect.healPerTurn > 0 ? ab.effect.healPerTurn : Math.max(2, Math.floor(player.mag * 0.8));
         addLog(`${flavor}.`);
         const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
         const fresh = e.playerEffects.filter((x) => x.kind !== "renew").concat({ kind: "renew", turns: ab.effect.turns, power });
@@ -315,7 +323,6 @@ export function DungeonScreen() {
         addLog(`${flavor}. ${e.enemy.name} is frozen!`);
         const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
         let stepped: CombatEnc = { ...e, cooldowns: cds, stunnedTurns: 1 };
-        // Tick player effects but skip enemy turn (frozen)
         stepped = tickPlayerEffects(stepped);
         stepped = tickEffectsOnEnemy(stepped, addLog);
         if (stepped.enemyHp <= 0) { finishKill(stepped); return; }
@@ -324,8 +331,22 @@ export function DungeonScreen() {
       }
       case "shield": {
         addLog(`${flavor}.`);
+        if (ab.effect.healPct && ab.effect.healPct > 0) {
+          const healed = Math.max(1, Math.floor(player.maxHp * ab.effect.healPct));
+          heal(healed); addFloater("heal", healed);
+          addLog(`${player.name} steels themselves — restored ${healed} HP.`);
+        }
         const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
         let stepped: CombatEnc = { ...e, shieldReduce: ab.effect.reduce, cooldowns: cds };
+        stepped = tickPlayerEffects(stepped);
+        setEnc(enemyTurn(stepped));
+        return;
+      }
+      case "buff_next": {
+        armNextAttack(ab.effect.mult);
+        addLog(`${flavor}. Next attack will hit for ×${ab.effect.mult}.`);
+        const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
+        let stepped: CombatEnc = { ...e, cooldowns: cds };
         stepped = tickPlayerEffects(stepped);
         setEnc(enemyTurn(stepped));
         return;
@@ -382,7 +403,7 @@ export function DungeonScreen() {
 
   const closeVictory = () => {
     if (enc.kind !== "victory") return;
-    if (enc.loot.enemy.id === "dragon") { finishRun("victory"); return; }
+    if (enc.depth >= MAX_DEPTH) { finishRun("victory"); return; }
     restoreBetweenRooms();
     setEnc({ kind: "path", depth: enc.depth });
   };
@@ -417,7 +438,7 @@ export function DungeonScreen() {
   return (
     <div className="flex min-h-full flex-col">
       <div className={`relative h-64 overflow-hidden border-b-2 border-black ${hit ? "shake" : ""}`}>
-        <img src={corridorImg} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <img src={dungeonBgForDepth(enc.depth)} alt="" className="absolute inset-0 h-full w-full object-cover" />
         {showEnemyOverlay && enemyOverlay && (
           <img
             key={(enc.kind === "combat" ? enc.enemy.id : "v_" + enc.loot.enemy.id) + enc.depth}
@@ -436,9 +457,14 @@ export function DungeonScreen() {
         )}
         <div className="absolute inset-0 vignette" />
         <div className="absolute inset-0 scanlines" />
-        <div className="absolute left-2 top-2 pixel text-[8px] text-gold text-shadow-pixel bg-background/70 px-1.5 py-0.5 border border-black">Depth {enc.depth}/10</div>
+        <div className="absolute left-2 top-2 pixel text-[8px] text-gold text-shadow-pixel bg-background/70 px-1.5 py-0.5 border border-black">
+          Depth {enc.depth}/{MAX_DEPTH}
+          {MAJOR_BOSS_FLOORS.has(enc.depth) && enc.kind === "combat" && <span className="ml-1 text-blood">⚑ BOSS</span>}
+          {MINI_BOSS_FLOORS.has(enc.depth) && enc.kind === "combat" && <span className="ml-1 text-ember">★ ELITE</span>}
+        </div>
+        <div className="absolute top-2 right-2 z-10"><SettingsButton /></div>
         {enc.kind === "combat" && (
-          <div className="absolute right-2 top-2 pixel text-[8px] text-blood text-shadow-pixel bg-background/80 px-1.5 py-0.5 border border-black">
+          <div className="absolute right-2 top-9 pixel text-[8px] text-blood text-shadow-pixel bg-background/80 px-1.5 py-0.5 border border-black">
             {enc.enemy.name} {enc.enemyHp}/{enc.enemyMaxHp}
           </div>
         )}
@@ -455,14 +481,14 @@ export function DungeonScreen() {
           </div>
         )}
         {enc.kind === "shrine" && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <p className="pixel text-2xl text-divine text-shadow-pixel">✦ SHRINE ✦</p>
-          </div>
+          <img src={shrineImg} alt="Shrine" className="absolute inset-0 m-auto h-[82%] w-auto max-w-[82%] object-contain fade-in-up drop-shadow-[0_8px_0_rgba(0,0,0,0.7)]" />
         )}
         {enc.kind === "trap" && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <p className="pixel text-2xl text-blood text-shadow-pixel">⚠ TRAP ⚠</p>
-          </div>
+          <img
+            src={enc.trap === "spikes" ? trapSpikesImg : trapGasImg}
+            alt={enc.trap === "spikes" ? "Spike trap" : "Gas trap"}
+            className="absolute inset-0 m-auto h-[78%] w-auto max-w-[78%] object-contain fade-in-up drop-shadow-[0_8px_0_rgba(0,0,0,0.7)]"
+          />
         )}
         <div className="absolute inset-0 pointer-events-none">
           {floaters.map((f) => <FloatingNumber key={f.id} num={f} onDone={removeFloater} />)}
@@ -555,7 +581,7 @@ export function DungeonScreen() {
               <p className="font-body text-sm text-muted-foreground">No drops this time.</p>
             )}
             <button onClick={closeVictory} className="pixel-btn pixel-btn-gold !text-[8px] w-full text-center">
-              {enc.loot.enemy.id === "dragon" ? "Claim the Heart →" : lootGear ? "Move on ▸" : "Continue ▸"}
+              {enc.depth >= MAX_DEPTH ? "Claim the Crown →" : lootGear ? "Move on ▸" : "Continue ▸"}
             </button>
           </div>
         )}
@@ -588,25 +614,26 @@ export function DungeonScreen() {
               {enc.sprung
                 ? "The corridor is quiet again."
                 : enc.trap === "spikes"
-                  ? "Pressure plates click as you near. You can try to dart through, or search for a safer route."
-                  : "Sickly green gas pools ahead. Hold your breath and rush — or take the long way around."}
+                  ? "Iron spikes choke the passage. You can push through and take the wounds, or turn back to find another way."
+                  : "Toxic gas pools ahead. Push through and take the burn, or turn back to find another way."}
             </p>
             {!enc.sprung && (
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button className="pixel-btn !text-[8px]" onClick={() => {
-                  const dodged = player.dodge > 0 && Math.random() * 100 < (player.dodge + 30);
-                  if (dodged) { addLog("You weave through the trap unscathed."); }
-                  else {
-                    const dmg = Math.max(3, Math.floor(player.maxHp * (enc.trap === "spikes" ? 0.18 : 0.12)));
-                    const taken = damage(dmg);
-                    addFloater("enemy", taken);
-                    setHit(true); setTimeout(() => setHit(false), 350);
-                    addLog(`The ${enc.trap === "spikes" ? "spikes bite" : "gas burns"} for ${taken}.`);
-                    playSfx("hit");
-                  }
+                  const dmg = Math.max(3, Math.floor(player.maxHp * (enc.trap === "spikes" ? 0.22 : 0.15)));
+                  const taken = damage(dmg);
+                  addFloater("enemy", taken);
+                  setHit(true); setTimeout(() => setHit(false), 350);
+                  addLog(`The ${enc.trap === "spikes" ? "spikes bite" : "gas burns"} for ${taken}.`);
+                  playSfx("hit");
                   setEnc({ ...enc, sprung: true });
-                }}>Rush through</button>
-                <button className="pixel-btn !text-[8px]" onClick={() => { addLog("You take the long way around."); setEnc({ kind: "path", depth: enc.depth }); }}>Detour</button>
+                }}>Push through (take damage)</button>
+                <button className="pixel-btn !text-[8px]" onClick={() => {
+                  const back = Math.max(1, enc.depth - 3);
+                  addLog(`You turn back. Retreated to floor ${back}.`);
+                  restoreBetweenRooms();
+                  setEnc({ kind: "path", depth: back });
+                }}>↩ Turn back (−3 floors)</button>
               </div>
             )}
             {enc.sprung && (

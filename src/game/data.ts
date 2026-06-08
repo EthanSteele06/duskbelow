@@ -16,12 +16,23 @@ import knightImg from "@/assets/enemy-knight.jpg";
 import marauderImg from "@/assets/enemy-marauder.jpg";
 import ghoulImg from "@/assets/enemy-ghoul.jpg";
 import impImg from "@/assets/enemy-imp.jpg";
+import boneWardenImg from "@/assets/enemy-bonewarden.jpg";
+import reaverImg from "@/assets/enemy-reaver.jpg";
+import lichImg from "@/assets/enemy-lich.jpg";
+import voidspawnImg from "@/assets/enemy-voidspawn.jpg";
+import sealedImg from "@/assets/enemy-sealed.jpg";
 import trainerWarriorImg from "@/assets/trainer-warrior.jpg";
 import trainerRogueImg from "@/assets/trainer-rogue.jpg";
 import trainerMageImg from "@/assets/trainer-mage.jpg";
 import trainerPriestImg from "@/assets/trainer-priest.jpg";
 import trainerDruidImg from "@/assets/trainer-druid.jpg";
 import trainerDeathKnightImg from "@/assets/trainer-deathknight.jpg";
+import corridorImg from "@/assets/dungeon-corridor.jpg";
+import cryptImg from "@/assets/dungeon-crypt.jpg";
+import barracksImg from "@/assets/dungeon-barracks.jpg";
+import sanctumImg from "@/assets/dungeon-sanctum.jpg";
+import vaultImg from "@/assets/dungeon-vault.jpg";
+import throneImg from "@/assets/dungeon-throne.jpg";
 
 export type ClassId = "warrior" | "rogue" | "mage" | "priest" | "druid" | "deathknight";
 export type FactionId = "allies" | "brigade";
@@ -106,12 +117,13 @@ export interface StatusEffect {
 }
 
 export type AbilityEffect =
-  | { kind: "attack"; mult: number; useMag?: boolean; flavor: string; applyStatus?: { kind: StatusEffectKind; turns: number; power: number }; lifesteal?: number }
-  | { kind: "heal"; amount: number; flavor: string }
+  | { kind: "attack"; mult: number; useMag?: boolean; flavor: string; applyStatus?: { kind: StatusEffectKind; turns: number; power: number }; lifesteal?: number; bonusVsChill?: number }
+  | { kind: "heal"; amount: number; flavor: string; magMult?: number }
   | { kind: "hot"; healPerTurn: number; turns: number; flavor: string }
   | { kind: "flee"; flavor: string }
   | { kind: "stun"; flavor: string }
-  | { kind: "shield"; reduce: number; flavor: string };
+  | { kind: "shield"; reduce: number; flavor: string; healPct?: number }
+  | { kind: "buff_next"; mult: number; flavor: string };
 
 export interface Ability {
   id: string;
@@ -154,7 +166,40 @@ export const CLASS_ABILITIES: Record<ClassId, Ability[]> = {
   ],
 };
 
+// ── Spec Abilities (WoW-inspired signature ability per specialization) ───────
+// One ability per spec, granted automatically once the player picks a spec.
+// Shown as a 4th button in the combat UI alongside the 3 class abilities.
+
+export const SPEC_ABILITIES: Record<string, Ability> = {
+  // Warrior
+  arms:        { id: "spec_arms",       name: "Mortal Strike",    desc: "2.0× ATK + deep Bleed (4t).",                  cooldown: 3, effect: { kind: "attack", mult: 2.0, flavor: "{p} unleashes a mortal strike", applyStatus: { kind: "bleed", turns: 4, power: 5 } } },
+  fury:        { id: "spec_fury",       name: "Bloodthirst",      desc: "1.6× ATK and heal for 40% damage dealt.",      cooldown: 2, effect: { kind: "attack", mult: 1.6, flavor: "{p} buries a fang of steel", lifesteal: 0.40 } },
+  protection:  { id: "spec_prot",       name: "Last Stand",       desc: "Brace 80% next hit AND heal 25% Max HP.",      cooldown: 5, effect: { kind: "shield", reduce: 0.8, healPct: 0.25, flavor: "{p} plants their feet and stands" } },
+  // Rogue
+  assassination:{ id: "spec_assn",      name: "Rupture",          desc: "1.2× ATK + crippling Bleed (6t).",             cooldown: 3, effect: { kind: "attack", mult: 1.2, flavor: "{p} ruptures a vein", applyStatus: { kind: "bleed", turns: 6, power: 6 } } },
+  outlaw:      { id: "spec_outlaw",     name: "Adrenaline Rush",  desc: "Charge up — next attack hits for ×2.5.",       cooldown: 4, effect: { kind: "buff_next", mult: 2.5, flavor: "{p}'s eyes go wide — adrenaline floods in" } },
+  subtlety:    { id: "spec_sub",        name: "Shadowstrike",     desc: "2.2× ATK from the dark.",                      cooldown: 3, effect: { kind: "attack", mult: 2.2, flavor: "{p} flickers in and out of shadow — a strike from nowhere" } },
+  // Mage
+  frost:       { id: "spec_frost",      name: "Ice Lance",        desc: "1.0× MAG (3.0× MAG if foe is Chilled).",       cooldown: 2, effect: { kind: "attack", mult: 1.0, useMag: true, flavor: "{p} hurls a glittering ice lance", bonusVsChill: 3.0 } },
+  fire:        { id: "spec_fire",       name: "Pyroblast",        desc: "2.2× MAG + heavy Burn (4t).",                  cooldown: 4, effect: { kind: "attack", mult: 2.2, useMag: true, flavor: "{p} channels a pyroblast", applyStatus: { kind: "burn", turns: 4, power: 6 } } },
+  arcane:      { id: "spec_arc",        name: "Arcane Blast",     desc: "1.8× MAG, short cooldown.",                    cooldown: 1, effect: { kind: "attack", mult: 1.8, useMag: true, flavor: "{p} unleashes an arcane blast" } },
+  // Priest
+  discipline:  { id: "spec_disc",       name: "Power Word: Shield",desc: "Brace 60% next hit AND heal for 1.5× MAG.",   cooldown: 3, effect: { kind: "shield", reduce: 0.6, healPct: 0, flavor: "{p} weaves a power-word shield" } },
+  holy:        { id: "spec_holy",       name: "Holy Word: Serenity",desc: "Heal for 3× MAG instantly.",                 cooldown: 3, effect: { kind: "heal", amount: 0, magMult: 3, flavor: "{p} speaks a word of serenity" } },
+  shadow:      { id: "spec_shadow",     name: "Mind Blast",       desc: "1.7× MAG shadow damage.",                      cooldown: 2, effect: { kind: "attack", mult: 1.7, useMag: true, flavor: "{p} blasts the {n}'s mind" } },
+  // Druid
+  balance:     { id: "spec_bal",        name: "Starsurge",        desc: "1.6× MAG + Burn (3t).",                        cooldown: 3, effect: { kind: "attack", mult: 1.6, useMag: true, flavor: "{p} calls down a starsurge", applyStatus: { kind: "burn", turns: 3, power: 5 } } },
+  feral:       { id: "spec_feral",      name: "Rake",             desc: "1.3× ATK + Bleed (4t).",                       cooldown: 2, effect: { kind: "attack", mult: 1.3, flavor: "{p} rakes with savage claws", applyStatus: { kind: "bleed", turns: 4, power: 5 } } },
+  restoration: { id: "spec_resto",      name: "Wild Growth",      desc: "Renew — 5 HP/turn for 5 turns.",               cooldown: 4, effect: { kind: "hot", healPerTurn: 5, turns: 5, flavor: "{p} calls forth a wild growth" } },
+  // Death Knight
+  blood_dk:    { id: "spec_blood_dk",   name: "Death Coil",       desc: "1.4× ATK and heal for 50% damage dealt.",      cooldown: 3, effect: { kind: "attack", mult: 1.4, flavor: "{p} lashes a coil of unholy power", lifesteal: 0.50 } },
+  frost_dk:    { id: "spec_frost_dk",   name: "Obliterate",       desc: "2.0× ATK (×2 if foe is Chilled).",             cooldown: 3, effect: { kind: "attack", mult: 2.0, flavor: "{p} obliterates the foe", bonusVsChill: 2.0 } },
+  unholy:      { id: "spec_unholy",     name: "Festering Strike", desc: "1.4× ATK + festering Bleed (4t).",             cooldown: 2, effect: { kind: "attack", mult: 1.4, flavor: "{p} drives a festering blade in", applyStatus: { kind: "bleed", turns: 4, power: 4 } } },
+};
+
 // ── Enemies ──────────────────────────────────────────────────────────────────
+
+
 
 export interface EnemyIntent {
   id: string;
@@ -284,19 +329,103 @@ export const ENEMIES: Record<string, EnemyDef> = {
       { id: "execute",label: "💀 Execute", mult: 1.9, line: "{n} winds up an execution swing — {d} damage!", telegraphable: true },
     ],
   },
+  // ── Bosses ────────────────────────────────────────────────────────────────
+  bone_warden: {
+    id: "bone_warden", name: "Bone Warden", image: boneWardenImg,
+    hpBase: 90, atkBase: 10,
+    materialDrop: { id: "bone_dust", chance: 1.0 },
+    attackLines: ["The {n} swings its great glaive for {d}!"],
+    intents: [
+      { id: "glaive",   label: "⚔ Glaive Swing", mult: 1.0, line: "The {n} swings its great glaive for {d}!" },
+      { id: "marrow",   label: "🦴 Marrow Rend", mult: 1.7, line: "{n} rends marrow itself — {d} damage!", telegraphable: true },
+    ],
+  },
+  crimson_reaver: {
+    id: "crimson_reaver", name: "Crimson Reaver", image: reaverImg,
+    hpBase: 180, atkBase: 14,
+    materialDrop: { id: "iron_scrap", chance: 1.0 },
+    attackLines: ["The {n} cleaves with twin axes for {d}!"],
+    intents: [
+      { id: "cleave",   label: "🪓 Twin Cleave", mult: 1.1, line: "Twin axes bite for {d}!" },
+      { id: "frenzy",   label: "🩸 Bloodfrenzy", mult: 2.0, line: "{n} enters a bloodfrenzy — {d} damage!", telegraphable: true },
+    ],
+  },
+  frostbound_lich: {
+    id: "frostbound_lich", name: "Frostbound Lich", image: lichImg,
+    hpBase: 280, atkBase: 18,
+    materialDrop: { id: "ghost_essence", chance: 1.0 },
+    attackLines: ["The {n} hurls a shard of ice for {d}!"],
+    intents: [
+      { id: "shard",    label: "❄ Ice Shard",   mult: 1.0, line: "An ice shard pierces you for {d}!" },
+      { id: "blizzard", label: "🌨 Blizzard",   mult: 2.1, line: "{n} unleashes a blizzard — {d} damage!", telegraphable: true },
+    ],
+  },
+  voidspawn: {
+    id: "voidspawn", name: "Voidspawn Hierarch", image: voidspawnImg,
+    hpBase: 420, atkBase: 22,
+    materialDrop: { id: "ghost_essence", chance: 1.0 },
+    attackLines: ["The {n} lashes with void tendrils for {d}!"],
+    intents: [
+      { id: "tendril",  label: "🐙 Void Tendril", mult: 1.1, line: "Void tendrils lash for {d}!" },
+      { id: "eye",      label: "👁 Eye of Madness", mult: 1.6, line: "An eye opens — your mind buckles for {d}!" },
+      { id: "consume",  label: "🌑 Consume",      mult: 2.4, line: "{n} consumes light itself — {d} damage!", telegraphable: true },
+    ],
+  },
+  sealed_one: {
+    id: "sealed_one", name: "The Sealed One", image: sealedImg,
+    hpBase: 700, atkBase: 28,
+    materialDrop: { id: "dragon_scale", chance: 1.0 },
+    attackLines: ["The {n} reaches a chained hand for {d}!"],
+    intents: [
+      { id: "grasp",    label: "🖐 Chained Grasp", mult: 1.2, line: "Chained fingers close — {d} damage!" },
+      { id: "judgment", label: "⚖ Final Judgment", mult: 1.8, line: "Judgment falls upon you for {d}!" },
+      { id: "ruin",     label: "💀 Worldending Ruin", mult: 2.8, line: "{n} speaks a word of ruin — {d} damage!", telegraphable: true },
+    ],
+  },
 };
 
+/** Final dungeon depth. Mini-bosses on 5/15/25, major bosses on 10/20/30. */
+export const MAX_DEPTH = 30;
+
+/** Boss floors: maps depth → enemy id. Forced combat. */
+export const BOSS_FLOORS: Record<number, string> = {
+  5: "bone_warden",
+  10: "dragon",
+  15: "crimson_reaver",
+  20: "voidspawn",
+  25: "frostbound_lich",
+  30: "sealed_one",
+};
+
+export const MAJOR_BOSS_FLOORS = new Set([10, 20, 30]);
+export const MINI_BOSS_FLOORS = new Set([5, 15, 25]);
+
+/** Dungeon background image per 5-floor tier (depths 1-5, 6-10, ..., 26-30). */
+export const DUNGEON_BGS: string[] = [corridorImg, cryptImg, barracksImg, sanctumImg, vaultImg, throneImg];
+
+export function dungeonBgForDepth(depth: number): string {
+  const idx = Math.min(DUNGEON_BGS.length - 1, Math.floor(Math.max(1, depth) - 1) / 5 | 0);
+  return DUNGEON_BGS[idx];
+}
+
 export function enemyForDepth(depth: number, faction?: FactionId | null): EnemyDef {
-  if (depth >= 10) return ENEMIES.dragon;
+  // Boss floors are deterministic.
+  const boss = BOSS_FLOORS[depth];
+  if (boss) return ENEMIES[boss];
   // Faction-specific enemies — appear when player belongs to the OPPOSING side.
   const factionFoe = faction === "allies" ? "brigade_marauder" : faction === "brigade" ? "kingdom_knight" : null;
   const pool: string[] =
-    depth <= 3 ? ["rat", "skeleton", "imp"] :
-    depth <= 6 ? ["skeleton", "cultist", "wraith", "imp", "ghoul"] :
-                 ["wraith", "ogre", "cultist", "ghoul"];
+    depth <= 3  ? ["rat", "skeleton", "imp"] :
+    depth <= 9  ? ["skeleton", "cultist", "wraith", "imp", "ghoul"] :
+    depth <= 14 ? ["wraith", "ogre", "cultist", "ghoul"] :
+    depth <= 19 ? ["ogre", "ghoul", "cultist", "wraith"] :
+    depth <= 24 ? ["wraith", "ogre", "cultist", "ghoul"] :
+                  ["ogre", "ghoul", "wraith", "cultist"];
   if (factionFoe && depth >= 2) pool.push(factionFoe);
   return ENEMIES[pool[Math.floor(Math.random() * pool.length)]];
 }
+
+
 
 // ── Vendor / Auction ─────────────────────────────────────────────────────────
 
