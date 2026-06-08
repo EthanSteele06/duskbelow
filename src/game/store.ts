@@ -132,7 +132,7 @@ interface GameState {
   buy: (itemId: string) => boolean;
   buyGem: (itemId: string) => boolean;
   use: (itemId: string) => void;
-  enterDungeon: () => void;
+  enterDungeon: (mode?: DungeonMode) => void;
   exitDungeon: () => void;
   reset: () => void;
   pickSpec: (specId: string) => void;
@@ -157,6 +157,8 @@ interface GameState {
   useRacial: () => boolean;
   consumeNextAttackMult: () => void;
   armNextAttack: (mult: number) => void;
+  applyWeakness: (turns: number) => void;
+  tickWeakness: () => void;
   // Pass 7
   recordKill: (enemyId: string, opts?: { boss?: boolean; shardValue?: number; loreId?: string; itemDropId?: string }) => void;
   useHearthstone: () => boolean;
@@ -518,7 +520,7 @@ export const useGame = create<GameState>((set, get) => ({
     get().pushLog(`Drank ${item.name}. +${item.heal} HP.`);
   },
 
-  enterDungeon: () => {
+  enterDungeon: (mode = "normal") => {
     set((s) => {
       const buffs = s.player.activeBuffs ?? [];
       const bAtk = buffs.reduce((a, b) => a + (b.atk ?? 0), 0);
@@ -527,6 +529,7 @@ export const useGame = create<GameState>((set, get) => ({
       const bGold = 1 + buffs.reduce((a, b) => a + (b.goldMult ?? 0), 0);
       // Add Iron Will echo: +1 racial charge for this run if learned.
       const ironWill = hasEcho(s.meta, "iron_will") ? 1 : 0;
+      const affixes = mode === "cursed" ? rollAffixes(2) : [];
       // Apply to base stats temporarily — exitDungeon/finishRun restore them.
       const p = recompute({
         ...s.player,
@@ -540,10 +543,14 @@ export const useGame = create<GameState>((set, get) => ({
         baseMag:   s.player.baseMag + bMag,
         hp:        s.player.hp + bHp,
         buffGoldMult: bGold,
+        dungeonMode: mode,
+        affixes,
+        weaknessTurns: 0,
       });
       return { screen: "dungeon", player: p };
     });
     if ((get().player.activeBuffs ?? []).length > 0) get().pushLog("✦ Town blessings infuse your gear.");
+    if (mode === "cursed") get().pushLog(`☠ Cursed Depths — affixes rolled: ${get().player.affixes.join(", ")}.`);
     get().pushLog("You descend into darkness...");
   },
   exitDungeon: () => {
