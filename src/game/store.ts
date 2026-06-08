@@ -350,7 +350,7 @@ export const useGame = create<GameState>((set, get) => ({
   rewardGold: (n) => set((s) => {
     const champBonus = s.player.isChampion ? Math.floor(n * 0.5) : 0;
     const echo = echoStart(s.meta);
-    const total = Math.floor((n + champBonus) * echo.goldMult);
+    const total = Math.floor((n + champBonus) * echo.goldMult * (s.player.buffGoldMult || 1));
     return { player: { ...s.player, gold: s.player.gold + total, runGold: s.player.runGold + total } };
   }),
   rewardGems: (n) => set((s) => ({ player: { ...s.player, gems: s.player.gems + n } })),
@@ -464,6 +464,12 @@ export const useGame = create<GameState>((set, get) => ({
     if (!item || item.gemPrice) return false;
     const p = get().player;
     if (p.gold < item.price) return false;
+    // Buff items go into a queued blessings list; they bake in on enterDungeon.
+    if (item.kind === "buff" && item.buff) {
+      set({ player: { ...p, gold: p.gold - item.price, activeBuffs: [...p.activeBuffs, item.buff] } });
+      get().pushLog(`Blessing queued: ${item.name}.`);
+      return true;
+    }
     const next: PlayerState = { ...p, gold: p.gold - item.price, inventory: [...p.inventory, itemId] };
     if (item.kind === "weapon" && item.atk) next.baseAtk = p.baseAtk + item.atk;
     set({ player: recompute(next) });
@@ -494,21 +500,51 @@ export const useGame = create<GameState>((set, get) => ({
   },
 
   enterDungeon: () => {
-    set((s) => ({
-      screen: "dungeon",
-      player: {
+    set((s) => {
+      const buffs = s.player.activeBuffs ?? [];
+      const bAtk = buffs.reduce((a, b) => a + (b.atk ?? 0), 0);
+      const bMag = buffs.reduce((a, b) => a + (b.mag ?? 0), 0);
+      const bHp  = buffs.reduce((a, b) => a + (b.maxHp ?? 0), 0);
+      const bGold = 1 + buffs.reduce((a, b) => a + (b.goldMult ?? 0), 0);
+      // Add Iron Will echo: +1 racial charge for this run if learned.
+      const ironWill = hasEcho(s.meta, "iron_will") ? 1 : 0;
+      // Apply to base stats temporarily — exitDungeon/finishRun restore them.
+      const p = recompute({
         ...s.player,
         dungeonDepth: 1,
         racialUsed: 0,
-        racialMax: racialChargesForLevel(s.meta.account.level),
+        racialMax: racialChargesForLevel(s.meta.account.level) + ironWill,
         nextAttackMult: 1,
         runKills: 0, runGold: 0, runXp: 0, runShards: 0,
-      },
-    }));
+        baseMaxHp: s.player.baseMaxHp + bHp,
+        baseAtk:   s.player.baseAtk + bAtk,
+        baseMag:   s.player.baseMag + bMag,
+        hp:        s.player.hp + bHp,
+        buffGoldMult: bGold,
+      });
+      return { screen: "dungeon", player: p };
+    });
+    if ((get().player.activeBuffs ?? []).length > 0) get().pushLog("✦ Town blessings infuse your gear.");
     get().pushLog("You descend into darkness...");
   },
   exitDungeon: () => {
-    set((s) => ({ screen: "city", player: { ...s.player, dungeonDepth: 0 } }));
+    set((s) => {
+      const buffs = s.player.activeBuffs ?? [];
+      const bAtk = buffs.reduce((a, b) => a + (b.atk ?? 0), 0);
+      const bMag = buffs.reduce((a, b) => a + (b.mag ?? 0), 0);
+      const bHp  = buffs.reduce((a, b) => a + (b.maxHp ?? 0), 0);
+      const p = recompute({
+        ...s.player,
+        dungeonDepth: 0,
+        baseMaxHp: s.player.baseMaxHp - bHp,
+        baseAtk:   s.player.baseAtk - bAtk,
+        baseMag:   s.player.baseMag - bMag,
+        hp:        Math.max(1, s.player.hp - bHp),
+        activeBuffs: [],
+        buffGoldMult: 1,
+      });
+      return { screen: "city", player: p };
+    });
     get().pushLog("You return to the city.");
   },
   reset: () => set({ screen: "title", player: emptyPlayer(), log: [], quests: [], lastRun: null }),
