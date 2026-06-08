@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useGame } from "@/game/store";
 import { CLASSES, FACTIONS, type ClassId, type FactionId } from "@/game/data";
 import { nextUnlock, unlockedClassesFor } from "@/game/meta";
+import { playMusic } from "@/game/audio";
+import { SettingsButton } from "@/game/Settings";
 import titleBg from "@/assets/title-bg.jpg";
 
 export function TitleScreen() {
@@ -11,6 +13,8 @@ export function TitleScreen() {
   const [faction, setFaction] = useState<FactionId | null>(null);
   const [classId, setClassId] = useState<ClassId | null>(null);
   const [name, setName] = useState("");
+
+  useEffect(() => { playMusic("title"); }, []);
 
   const leveledUnlocks = new Set(unlockedClassesFor(meta.account.level, meta.unlockedClasses));
   const owned = new Set(meta.ownedClasses);
@@ -28,6 +32,8 @@ export function TitleScreen() {
       />
       <div className="absolute inset-0 vignette" />
       <div className="absolute inset-0 scanlines" />
+
+      <div className="absolute right-2 top-2 z-20"><SettingsButton /></div>
 
       <div className="relative z-10 flex min-h-full flex-col px-4 py-6">
         <header className="text-center fade-in-up">
