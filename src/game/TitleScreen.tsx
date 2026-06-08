@@ -6,14 +6,17 @@ import titleBg from "@/assets/title-bg.jpg";
 
 export function TitleScreen() {
   const start = useGame((s) => s.startGame);
+  const setScreen = useGame((s) => s.setScreen);
   const meta = useGame((s) => s.meta);
   const [faction, setFaction] = useState<FactionId | null>(null);
   const [classId, setClassId] = useState<ClassId | null>(null);
   const [name, setName] = useState("");
 
-  const unlocked = new Set(unlockedClassesFor(meta.account.level, meta.unlockedClasses));
+  const leveledUnlocks = new Set(unlockedClassesFor(meta.account.level, meta.unlockedClasses));
+  const owned = new Set(meta.ownedClasses);
+  const isAvailable = (id: ClassId) => leveledUnlocks.has(id) || owned.has(id);
   const up = nextUnlock(meta.account.level);
-  const ready = faction && classId && unlocked.has(classId);
+  const ready = faction && classId && isAvailable(classId);
 
 
   return (
