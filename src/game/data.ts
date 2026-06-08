@@ -166,7 +166,40 @@ export const CLASS_ABILITIES: Record<ClassId, Ability[]> = {
   ],
 };
 
+// ── Spec Abilities (WoW-inspired signature ability per specialization) ───────
+// One ability per spec, granted automatically once the player picks a spec.
+// Shown as a 4th button in the combat UI alongside the 3 class abilities.
+
+export const SPEC_ABILITIES: Record<string, Ability> = {
+  // Warrior
+  arms:        { id: "spec_arms",       name: "Mortal Strike",    desc: "2.0× ATK + deep Bleed (4t).",                  cooldown: 3, effect: { kind: "attack", mult: 2.0, flavor: "{p} unleashes a mortal strike", applyStatus: { kind: "bleed", turns: 4, power: 5 } } },
+  fury:        { id: "spec_fury",       name: "Bloodthirst",      desc: "1.6× ATK and heal for 40% damage dealt.",      cooldown: 2, effect: { kind: "attack", mult: 1.6, flavor: "{p} buries a fang of steel", lifesteal: 0.40 } },
+  protection:  { id: "spec_prot",       name: "Last Stand",       desc: "Brace 80% next hit AND heal 25% Max HP.",      cooldown: 5, effect: { kind: "shield", reduce: 0.8, healPct: 0.25, flavor: "{p} plants their feet and stands" } },
+  // Rogue
+  assassination:{ id: "spec_assn",      name: "Rupture",          desc: "1.2× ATK + crippling Bleed (6t).",             cooldown: 3, effect: { kind: "attack", mult: 1.2, flavor: "{p} ruptures a vein", applyStatus: { kind: "bleed", turns: 6, power: 6 } } },
+  outlaw:      { id: "spec_outlaw",     name: "Adrenaline Rush",  desc: "Charge up — next attack hits for ×2.5.",       cooldown: 4, effect: { kind: "buff_next", mult: 2.5, flavor: "{p}'s eyes go wide — adrenaline floods in" } },
+  subtlety:    { id: "spec_sub",        name: "Shadowstrike",     desc: "2.2× ATK from the dark.",                      cooldown: 3, effect: { kind: "attack", mult: 2.2, flavor: "{p} flickers in and out of shadow — a strike from nowhere" } },
+  // Mage
+  frost:       { id: "spec_frost",      name: "Ice Lance",        desc: "1.0× MAG (3.0× MAG if foe is Chilled).",       cooldown: 2, effect: { kind: "attack", mult: 1.0, useMag: true, flavor: "{p} hurls a glittering ice lance", bonusVsChill: 3.0 } },
+  fire:        { id: "spec_fire",       name: "Pyroblast",        desc: "2.2× MAG + heavy Burn (4t).",                  cooldown: 4, effect: { kind: "attack", mult: 2.2, useMag: true, flavor: "{p} channels a pyroblast", applyStatus: { kind: "burn", turns: 4, power: 6 } } },
+  arcane:      { id: "spec_arc",        name: "Arcane Blast",     desc: "1.8× MAG, short cooldown.",                    cooldown: 1, effect: { kind: "attack", mult: 1.8, useMag: true, flavor: "{p} unleashes an arcane blast" } },
+  // Priest
+  discipline:  { id: "spec_disc",       name: "Power Word: Shield",desc: "Brace 60% next hit AND heal for 1.5× MAG.",   cooldown: 3, effect: { kind: "shield", reduce: 0.6, healPct: 0, flavor: "{p} weaves a power-word shield" } },
+  holy:        { id: "spec_holy",       name: "Holy Word: Serenity",desc: "Heal for 3× MAG instantly.",                 cooldown: 3, effect: { kind: "heal", amount: 0, magMult: 3, flavor: "{p} speaks a word of serenity" } },
+  shadow:      { id: "spec_shadow",     name: "Mind Blast",       desc: "1.7× MAG shadow damage.",                      cooldown: 2, effect: { kind: "attack", mult: 1.7, useMag: true, flavor: "{p} blasts the {n}'s mind" } },
+  // Druid
+  balance:     { id: "spec_bal",        name: "Starsurge",        desc: "1.6× MAG + Burn (3t).",                        cooldown: 3, effect: { kind: "attack", mult: 1.6, useMag: true, flavor: "{p} calls down a starsurge", applyStatus: { kind: "burn", turns: 3, power: 5 } } },
+  feral:       { id: "spec_feral",      name: "Rake",             desc: "1.3× ATK + Bleed (4t).",                       cooldown: 2, effect: { kind: "attack", mult: 1.3, flavor: "{p} rakes with savage claws", applyStatus: { kind: "bleed", turns: 4, power: 5 } } },
+  restoration: { id: "spec_resto",      name: "Wild Growth",      desc: "Renew — 5 HP/turn for 5 turns.",               cooldown: 4, effect: { kind: "hot", healPerTurn: 5, turns: 5, flavor: "{p} calls forth a wild growth" } },
+  // Death Knight
+  blood_dk:    { id: "spec_blood_dk",   name: "Death Coil",       desc: "1.4× ATK and heal for 50% damage dealt.",      cooldown: 3, effect: { kind: "attack", mult: 1.4, flavor: "{p} lashes a coil of unholy power", lifesteal: 0.50 } },
+  frost_dk:    { id: "spec_frost_dk",   name: "Obliterate",       desc: "2.0× ATK (×2 if foe is Chilled).",             cooldown: 3, effect: { kind: "attack", mult: 2.0, flavor: "{p} obliterates the foe", bonusVsChill: 2.0 } },
+  unholy:      { id: "spec_unholy",     name: "Festering Strike", desc: "1.4× ATK + festering Bleed (4t).",             cooldown: 2, effect: { kind: "attack", mult: 1.4, flavor: "{p} drives a festering blade in", applyStatus: { kind: "bleed", turns: 4, power: 4 } } },
+};
+
 // ── Enemies ──────────────────────────────────────────────────────────────────
+
+
 
 export interface EnemyIntent {
   id: string;
