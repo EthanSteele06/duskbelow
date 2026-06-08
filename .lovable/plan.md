@@ -1,112 +1,105 @@
-# Pre-Launch Polish Pass
 
-Five workstreams, ordered roughly by user-visible impact. Each is self-contained so we can ship/test incrementally.
+# Pre-Launch Pass 3 — Depth + Polish
 
----
+## 1. Spec abilities (WoW-inspired, one per spec)
 
-## 1. Audio: Music + SFX (ElevenLabs)
+Today `CLASS_ABILITIES` gives 3 abilities per class; picking a spec only grants stat talents. I'll add **one signature ability per spec** (18 total) that slots in as a **4th combat button** once the player picks a spec.
 
-**Generation (server-side, one-time):** A `/api/public/audio/generate` script-style server route calls ElevenLabs once per asset, we save the MP3 output to `src/assets/audio/*.mp3`, then commit. Audio is bundled, not generated at runtime — keeps cost at zero per play and works offline.
+- New `SPEC_ABILITIES: Record<SpecId, Ability>` in `data.ts`.
+- `DungeonScreen` builds `abilities = [...CLASS_ABILITIES[classId], SPEC_ABILITIES[specId]]` when `specId` set.
+- Grid switches from `grid-cols-3` → `grid-cols-2` (2×2) when a spec ability is present so the new button fits cleanly on mobile.
 
-Tracks to generate (looping, ~60s each):
-- `title.mp3` — somber dark-fantasy theme, harp + low strings
-- `city-kingdom.mp3` — hopeful medieval, lute + soft choir
-- `city-brigade.mp3` — grim war-camp, low drums + bone flute
-- `dungeon.mp3` — tense ambient drone with sparse percussion
-- `boss.mp3` — driving, percussive, brass stabs
+Spec ability picks (each uses the existing `AbilityEffect` types — no engine changes):
 
-SFX (~1–2s each):
-- `hit.mp3`, `crit.mp3`, `enemy-hit.mp3`, `death.mp3`
-- `loot.mp3`, `shard.mp3`, `levelup.mp3`, `purchase.mp3`
-- `ui-tap.mp3`, `ui-confirm.mp3`
+| Spec | Ability | Effect |
+|---|---|---|
+| Arms | Mortal Strike | 2.0× ATK + Bleed(4t,5), CD 3 |
+| Fury | Bloodthirst | 1.6× ATK + 40% lifesteal, CD 2 |
+| Protection | Last Stand | Shield 80% next hit + heal 25% maxHp, CD 5 (heal via stacked effects on the action) |
+| Assassination | Rupture | 1.2× ATK + Bleed(6t,6), CD 3 |
+| Outlaw | Adrenaline Rush | next attack ×2.5 (via `nextAttackMult` shim), CD 4 |
+| Subtlety | Shadowstrike | 2.2× ATK, CD 3 |
+| Frost | Ice Lance | 1.0× MAG + chill — 3.0× MAG vs already-chilled, CD 2 |
+| Fire | Pyroblast | 2.2× MAG + Burn(4t,6), CD 4 |
+| Arcane | Arcane Blast | 1.8× MAG, CD 1 |
+| Discipline | Power Word: Shield | shield 60% next hit + heal small, CD 3 |
+| Holy | Holy Word: Serenity | flat heal = 3× MAG, CD 3 |
+| Shadow | Mind Blast | 1.7× MAG, CD 2 |
+| Balance | Starsurge | 1.6× MAG + Burn(3t,5), CD 3 |
+| Feral | Rake | 1.3× ATK + Bleed(4t,5), CD 2 |
+| Restoration | Wild Growth | renew 5/t for 5t, CD 4 |
+| Blood (DK) | Death Coil | 1.4× ATK + 50% lifesteal, CD 3 |
+| Frost (DK) | Obliterate | 2.0× ATK, double damage if chilled, CD 3 |
+| Unholy | Festering Strike | 1.4× ATK + Bleed(4t,4), CD 2 |
 
-**Playback:** New `src/game/audio.ts` exposes `playSfx(name)` and `playMusic(track)` using a small Howler-free implementation (Web Audio + HTMLAudio). Music crossfades on route change. Wired into:
-- `TitleScreen` → title track
-- `CityScreen` → faction-based city track
-- `DungeonScreen` → dungeon track, swaps to boss track on boss encounter
-- Combat actions, loot pickup, shard gain, vendor purchase, tap-to-confirm
+Where the effect doesn't map cleanly to an existing kind (Adrenaline Rush "next attack ×N", Last Stand combined shield+heal), I'll add a tiny extension to the `attack`/`shield` handlers in `DungeonScreen` so a single ability can also bump `nextAttackMult` or `heal()` — no new effect-kind unions needed.
 
-**Settings:** Master / music / SFX volume sliders + mute toggle, persisted to `localStorage` under `dusk.audio`. Default music 50%, SFX 70%. Auto-mute if user hasn't interacted yet (browser autoplay policy) — first tap unlocks.
+## 2. Dungeon: 30 floors with boss cadence + art
 
----
+- `MAX_DEPTH = 30` (replaces hard-coded `>= 10`). Victory triggers on floor 30 kill.
+- Encounter pacing:
+  - Floors 5, 15, 25 → **mini-boss** (forced combat with elite enemy).
+  - Floors 10, 20, 30 → **major boss** (forced combat, guaranteed rare+ gear drop).
+  - Other floors → existing random table, with shrine rarity cut (see §3).
+- New enemies (`ENEMIES` entries with art):
+  - Mini-bosses: **Bone Warden** (5), **Crimson Reaver** (15), **Frostbound Lich** (25)
+  - Major bosses: keep **Black Dragon** as floor 10, add **Voidspawn Hierarch** (20), **The Sealed One** (30 — final boss)
+- `enemyForDepth(depth, faction)` updated tier buckets:
+  - 1–5: rat, skeleton, imp
+  - 6–10: skeleton, cultist, wraith, imp, ghoul
+  - 11–15: wraith, ogre, cultist, ghoul
+  - 16–20: ogre, ghoul, cultist + faction foe
+  - 21–25: wraith, ogre, cultist + faction foe
+  - 26–30: ogre, ghoul, wraith + faction foe
+  - Forced returns at boss floors.
 
-## 2. First-Run Tutorial
+### Background art per tier
+Generate 6 dungeon backgrounds (one per 5-floor tier) — `DungeonScreen` selects via `Math.floor((depth-1)/5)`:
+- 1–5: existing `corridor` (reuse, no regen)
+- 6–10: catacomb crypt
+- 11–15: blood-soaked barracks
+- 16–20: cultist sanctum
+- 21–25: frozen vault
+- 26–30: voidscarred throne
 
-Lightweight popover system, not a forced linear tour. Triggers only on `meta.tutorialSeen[stepId] !== true`, dismissible with "Got it" (marks seen) or "Skip all" (marks all seen).
+All generated with `imagegen` (standard quality, pixel-gothic to match house style).
 
-Steps:
-1. **Title screen** — "Pick a class. Locked classes unlock via the Echo Tree."
-2. **First city visit** — "Spend gold at the Vendor for run-only blessings. Visit the Trainer to spec, Professions to craft."
-3. **First dungeon entry** — "Tap an ability to see what it does. Tap again to confirm. You can't retreat mid-fight without a Hearthstone."
-4. **First shard earned** — "Echo Shards persist between runs. Spend them in the Echo Tree."
-5. **First defeat** — "On defeat you lose loot and gold. Use Hearthstone to escape safely."
+## 3. Shrines: rarer + art
 
-Implementation: `src/game/Tutorial.tsx` renders a fixed overlay with arrow + text. `meta.tutorialSeen: Record<string, boolean>` added to store.
+- Rarity drop: shrines from ~12% → **~4%** of non-boss floors. Update `rollEncounter` thresholds.
+- Generate **shrine art** (single image, runed altar with cool light) → swap the centered "✦ SHRINE ✦" label for a small overlay sprite over the corridor BG.
 
----
+## 4. Traps: art + new branch
 
-## 3. Settings Menu + Run Summary
+- Replace current "Rush through / Detour" with:
+  - **Push through** — take damage (existing damage formula, no dodge skip).
+  - **Turn back** — retreat 3 floors (`depth = max(1, depth - 3)`, `restoreBetweenRooms()` to refresh).
+- Generate 2 trap art assets: **spike pit** and **gas vent**. Show as overlay sprite (same pattern as shrine).
 
-**Settings modal** (gear icon top-right of CityScreen + TitleScreen):
-- Audio: master / music / SFX sliders, mute
-- Gameplay: tap-to-confirm toggle (currently auto-detected), show damage numbers toggle
-- Account: reset current run, hard reset account (with double-confirm), sign in/out (see §5)
-- Info: version, link to patch notes modal
+## 5. Champion's Pass disables settings toggles
 
-**Run summary screen** — new `RunSummaryScreen.tsx` shown between dungeon exit and city:
-- Outcome banner (Victory / Defeat / Escaped)
-- Stats: deepest floor, kills, XP gained, gold earned/lost, shards earned, items found, items kept (0 on defeat)
-- Highlight: best loot equipped this run
-- "Continue" button → city
+Interpretation: Champion-account players can't tinker with **gameplay-affecting** settings (Abandon Run, Hard Reset) — audio and the about section stay open. Rationale matches the existing "no free respec for non-champs" pattern but inverted: Champs already get reset perks elsewhere and shouldn't double-dip with a free wipe from the modal.
 
-Hooks into existing `finishRun()` — we already compute most of this, just need to surface it.
+If you meant something else (lock the gear icon entirely, hide audio sliders, etc.) say so before I build.
 
----
+- In `Settings.tsx`, when `player.isChampion`, the Account section shows a locked banner ("Champion accounts use the Trainer's free weekly respec instead") and hides the two destructive buttons.
 
-## 4. SEO + Favicon + OG Image
+## 6. Settings accessible in the dungeon
 
-- **Title/meta** per route in `__root.tsx` + `src/routes/index.tsx`: "Dusk Below — A Dark Fantasy Idle RPG"
-- **OG image**: generate a 1200×630 hero shot (pixel art castle silhouette + game logo) → `src/assets/og-image.jpg`, wire into og:image + twitter:image
-- **Favicon**: generate 512×512 icon (stylized rune/sword), convert to favicon set, replace default in `public/`
-- **PWA manifest**: `public/manifest.webmanifest` with name, short_name, icons, theme_color (#0f0a14), display:standalone — makes it installable on mobile home screen
-- **robots.txt + sitemap.xml**: allow all, list `/` and `/auth` if we add it
-- Run `seo--trigger_scan` at the end to verify
-
----
-
-## 5. Cloud Save (Account-Based)
-
-**Requires enabling Lovable Cloud** (will prompt for this first).
-
-Schema:
-- `profiles` table (id → auth.users, display_name, created_at)
-- `save_states` table (user_id, slot int default 1, meta jsonb, player jsonb, updated_at) with RLS: user can only read/write own rows
-
-Flow:
-- Settings → "Sign in to sync" → email/password + Google sign-in
-- On sign-in: if cloud save exists and is newer → prompt "Use cloud save / Keep local / Merge"; if no cloud save → upload local
-- Auto-save to cloud after each run completion + each city visit (debounced)
-- Signed-out users keep using `localStorage` (unchanged)
-- New `src/game/sync.ts` handles serialize/deserialize + conflict resolution
-
-**Out of scope:** Cross-device live sync, multiple save slots, social/leaderboard features.
+- Add `<SettingsButton />` to `DungeonScreen` header (top-right, next to the Depth chip). Reuses the existing modal — no new logic.
 
 ---
 
-## Technical notes
+## Files touched
 
-- Audio: bundled MP3s ~3-5MB total. Acceptable for a game; lazy-load music tracks per screen if size becomes an issue.
-- Tutorial state lives in `meta` (persists with account if signed in).
-- Settings state lives in a new `settings` slice of the store, persisted separately from `player`/`meta` so it survives `finishRun`.
-- Cloud save serializes `{meta, player, settings}` as JSON; schema-version stamped so we can migrate later.
+- `src/game/data.ts` — `SPEC_ABILITIES`, `MAX_DEPTH`, new enemies, `enemyForDepth` rebalance, `rollEncounter` rarity tuning.
+- `src/game/DungeonScreen.tsx` — 4th ability slot, tier-based BG, boss-floor forcing, shrine/trap art overlays, trap branch rewrite, SettingsButton in header.
+- `src/game/Settings.tsx` — champion lockout for Account section.
+- `src/game/store.ts` — minor: surface depth cap from `MAX_DEPTH` if referenced (and bag/run logic stays as-is).
+- New assets via `imagegen` (standard): 6 dungeon BGs (jpg), 5 new enemy portraits (jpg), 1 shrine sprite (png transparent), 2 trap sprites (png transparent).
 
-## Order of operations
+## Out of scope (this pass)
 
-1. Audio system + generation (biggest impact, no deps)
-2. Settings menu (needed for audio controls anyway)
-3. Run summary screen
-4. First-run tutorial
-5. SEO/favicon/OG/PWA
-6. Enable Lovable Cloud → cloud save (last, since it's the highest-risk change)
-
-After all five, run security scan + SEO scan, then we're ready to publish.
+- Cloud save (deferred earlier, still deferred).
+- Re-balancing existing class abilities or talent stat values.
+- Mini-boss-specific mechanics beyond stat scaling + guaranteed loot.
