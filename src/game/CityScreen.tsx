@@ -1,7 +1,6 @@
 import { useGame } from "@/game/store";
 import { FACTIONS, TRAINERS, SPECS } from "@/game/data";
 import { nextUnlock } from "@/game/meta";
-import { StatBar } from "./StatBar";
 import cityImg from "@/assets/city.jpg";
 
 export function CityScreen() {
@@ -20,7 +19,7 @@ export function CityScreen() {
 
   return (
     <div className="relative flex min-h-full flex-col">
-      <div className="relative h-48 overflow-hidden border-b-2 border-black">
+      <div className="relative h-40 overflow-hidden border-b-2 border-black">
         <img src={cityImg} alt="City" className="h-full w-full object-cover" />
         <div className="absolute inset-0 vignette" />
         <div className="absolute inset-0 scanlines" />
@@ -36,44 +35,46 @@ export function CityScreen() {
         )}
       </div>
 
-      <div className="p-3">
-        <StatBar />
-      </div>
-
-      <div className="px-3">
-        <h2 className="pixel text-[10px] text-gold mb-2">▣ Hub</h2>
-        <div className="grid grid-cols-1 gap-2">
-          <ActionTile title="Equipment" desc={newGear ? `New gear in bag (${player.bag.length})` : "Manage gear & inventory."} icon="▩" onClick={() => setScreen("equipment")} badge={newGear ? "NEW" : undefined} />
+      <div className="p-3 space-y-3">
+        <Section title="▣ Character">
+          <ActionTile title="Equipment" desc={newGear ? `New gear (${player.bag.length})` : "Manage gear."} icon="▩" onClick={() => setScreen("equipment")} badge={newGear ? "NEW" : undefined} />
           <ActionTile
             title={trainer ? trainer.name : "Trainer"}
-            desc={player.level < 3 ? `Talents unlock at Lv 3 (Lv ${player.level})` : player.talentPoints > 0 ? `${player.talentPoints} talent point${player.talentPoints>1?"s":""} to spend!` : spec ? `${spec.name} tree & class quests.` : "Choose a spec."}
+            desc={player.level < 3 ? `Talents at Lv 3` : player.talentPoints > 0 ? `${player.talentPoints} point${player.talentPoints>1?"s":""}!` : spec ? `${spec.name}` : "Choose a spec."}
             icon="✦"
             onClick={() => setScreen("talents")}
             badge={player.talentPoints > 0 && player.level >= 3 ? String(player.talentPoints) : undefined}
           />
-          <ActionTile title="Vendors" desc="Buy potions and gear." icon="⚒" onClick={() => setScreen("vendor")} />
-          <ActionTile title="Quest Board" desc="Take on jobs for gold." icon="✦" onClick={() => setScreen("quests")} />
-          <ActionTile title="Crafter's Row" desc="Professions & recipes." icon="⚒" onClick={() => setScreen("profession")} />
-          <ActionTile title="Auction House" desc="Bid on rare relics." icon="⚖" onClick={() => setScreen("auction")} />
-          <ActionTile title="Echo Tree" desc={`Spend Soul Shards (✦ ${meta.shards}).`} icon="✦" onClick={() => setScreen("echo")} />
-          <ActionTile title="Dungeon Journal" desc={`Wanderer Lv ${meta.account.level}${upNext ? ` · next: ${upNext.label}` : " · MAX"}`} icon="▣" onClick={() => setScreen("journal")} />
+        </Section>
+
+        <Section title="▣ City">
+          <ActionTile title="Vendors" desc="Buy potions & gear." icon="⚒" onClick={() => setScreen("vendor")} />
+          <ActionTile title="Quest Board" desc="Jobs for gold." icon="✦" onClick={() => setScreen("quests")} />
+          <ActionTile title="Crafter's Row" desc="Professions." icon="⚒" onClick={() => setScreen("profession")} />
+          <ActionTile title="Auction House" desc="Bid on relics." icon="⚖" onClick={() => setScreen("auction")} />
+        </Section>
+
+        <Section title="▣ Meta">
+          <ActionTile title="Echo Tree" desc={`✦ ${meta.shards} shards`} icon="✦" onClick={() => setScreen("echo")} />
+          <ActionTile title="Journal" desc={`Wanderer Lv ${meta.account.level}${upNext ? ` · ${upNext.label}` : " · MAX"}`} icon="▣" onClick={() => setScreen("journal")} />
           {firstRunDone ? (
-            <ActionTile title="Cobalt Vault" desc="Cosmetic shop & gems." icon="◆" onClick={() => setScreen("shop")} />
+            <ActionTile title="Cobalt Vault" desc="Cosmetics & heroes." icon="◆" onClick={() => setScreen("shop")} />
           ) : (
-            <ActionTile title="Cobalt Vault" desc="Unlocks after your first descent." icon="◆" onClick={() => undefined} />
+            <ActionTile title="Cobalt Vault" desc="After first descent." icon="◆" onClick={() => undefined} />
           )}
           {firstRunDone ? (
-            <ActionTile title="Champion's Pass" desc={player.isChampion ? "Active — manage perks." : "Unlock +50% XP & more."} icon="★" onClick={() => setScreen("champion")} accent={!player.isChampion} />
+            <ActionTile title="Champion's Pass" desc={player.isChampion ? "Active." : "+50% XP & more."} icon="★" onClick={() => setScreen("champion")} accent={!player.isChampion} />
           ) : (
-            <ActionTile title="Champion's Pass" desc="Unlocks after your first descent." icon="★" onClick={() => undefined} />
+            <ActionTile title="Champion's Pass" desc="After first descent." icon="★" onClick={() => undefined} />
           )}
-          <ActionTile title="Descend Dungeon" desc="Brave the depths." icon="▼" onClick={enter} accent />
-        </div>
+        </Section>
+
+        <button onClick={enter} className="pixel-btn pixel-btn-primary w-full text-center !text-[12px] !py-4">▼ DESCEND DUNGEON</button>
       </div>
 
-      <div className="mx-3 mt-4 flex-1 overflow-hidden border-2 border-black bg-card/60 p-2">
+      <div className="mx-3 mt-2 mb-2 flex-1 overflow-hidden border-2 border-black bg-card/60 p-2">
         <p className="pixel text-[8px] text-muted-foreground mb-1">▣ Journal</p>
-        <div className="font-body max-h-40 overflow-y-auto text-sm leading-tight text-muted-foreground">
+        <div className="font-body max-h-32 overflow-y-auto text-sm leading-tight text-muted-foreground">
           {log.slice().reverse().map((l, i) => <p key={i}>› {l}</p>)}
         </div>
       </div>
@@ -83,16 +84,24 @@ export function CityScreen() {
   );
 }
 
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h2 className="pixel text-[10px] text-gold mb-1.5">{title}</h2>
+      <div className="grid grid-cols-2 gap-2">{children}</div>
+    </div>
+  );
+}
+
 function ActionTile({ title, desc, icon, onClick, accent, badge }: { title: string; desc: string; icon: string; onClick: () => void; accent?: boolean; badge?: string }) {
   return (
-    <button onClick={onClick} className={`pixel-btn flex items-center gap-3 ${accent ? "pixel-btn-primary" : ""}`}>
-      <span className="text-2xl">{icon}</span>
-      <span className="flex-1">
-        <span className="block pixel text-[9px]">{title}</span>
-        <span className="block font-body text-sm opacity-80 mt-1">{desc}</span>
+    <button onClick={onClick} className={`pixel-btn flex items-center gap-2 !p-2 ${accent ? "pixel-btn-primary" : ""}`}>
+      <span className="text-xl">{icon}</span>
+      <span className="flex-1 min-w-0">
+        <span className="block pixel text-[8px] truncate">{title}</span>
+        <span className="block font-body text-xs opacity-80 mt-0.5 truncate">{desc}</span>
       </span>
-      {badge && <span className="pixel text-[8px] bg-gold text-black px-1.5 py-1 border border-black">{badge}</span>}
-      <span className="pixel text-[10px]">›</span>
+      {badge && <span className="pixel text-[7px] bg-gold text-black px-1 py-0.5 border border-black">{badge}</span>}
     </button>
   );
 }

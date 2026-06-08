@@ -1,52 +1,64 @@
-# Pass 7 Bug Sweep
 
-Scope: bug fixes only, no new mechanics. Grouped by file.
+# Polish Pass: animations, art, classes, unlocks, hub cleanup
 
-## `src/game/store.ts`
+## 1. Combat animations
+In `DungeonScreen.tsx`, drive short CSS animations off the last ability used:
+- **Melee** (warrior/rogue + class `attack` w/o `useMag`): a `swing` keyframe — quick translateX + 12° rotate on a transparent slash glyph layered over the enemy portrait.
+- **Spell** (mage/priest + `useMag`): a `cast` keyframe — scale-in + radial glow pulse tinted by the class color, plus a slight screen-flash via an overlay div.
+- Enemy hit reaction already exists (`hit` shake). Add a quick `recoil` (translateX -6px → 0) on the enemy portrait when damage lands.
+- Implementation: `useState<{kind:"melee"|"spell"; key:number}>` set inside `applyAttack`; conditionally render a slash/cast overlay `<div>` keyed by `key` so each cast retriggers the animation. Keyframes added to `src/styles.css`.
 
-1. **Heirloom stash is never consumed.** `buildFreshPlayer` reads `meta.stash` and equips/bags every item, but `meta.stash` is left untouched, so the next wipe re-applies the same heirlooms (duplicate item ids, infinite gear). Fix: in `startGame` (and any place that calls `buildFreshPlayer`), clear `meta.stash` after consuming it, and persist.
+## 2. Priest art → female "Sister"
+Regenerate `src/assets/class-priest.jpg` and `src/assets/trainer-priest.jpg` with a clearly female cleric matching the existing dark-gothic pixel-portrait style. Tagline kept; flavor lines unchanged.
 
-2. **`startGold` floor erases Buried Coin.** `Math.max(50, Math.floor(prev.gold * retainGoldPct) || 50)` forces a minimum of 50, so retained gold below 50 silently disappears and the echo node has no effect for small purses. Fix: when `retainGoldPct > 0`, use the retained amount as-is (no `max(50, …)` clamp); only default to 50 when there is no previous run.
+## 3. Starting unlocks + how to unlock the rest
+Update `meta.ts`:
+- `emptyMeta().unlockedClasses` → `["warrior", "rogue"]`.
+- `ACCOUNT_UNLOCKS`: drop the lvl-2 rogue entry, keep mage at lvl 4 (rename to "Class — Mage"), keep priest at lvl 6. Wanderer XP from runs already feeds this — no new mechanic needed.
+- TitleScreen already shows 🔒 + "next: …" so unlock path is visible.
 
-3. **`stashItem` doesn't recompute stats.** Stashing an *equipped* item removes it from `player.equipment` but never calls `recompute`, so ATK/MAG/MaxHP keep counting the stashed piece until the next equip/level. Fix: wrap the `set({ player: … })` in `recompute(...)`.
+## 4. New classes (paywall): Druid & Death Knight
+- Extend `ClassId` with `"druid" | "deathknight"`.
+- Add `ClassDef` entries (HP/ATK/MAG balanced: druid 30/5/8 hybrid healer-caster; DK 38/8/4 self-sustain bruiser).
+- Add `CLASS_ABILITIES`:
+  - **Druid**: Wrath (1.0× MAG), Moonfire (1.2× MAG + burn 3t), Rejuvenation (HoT).
+  - **Death Knight**: Death Strike (1.3× ATK + self-heal 25% of dmg dealt — needs a new `lifesteal` sub-effect OR reuse `attack` with a `lifesteal` field), Frost Strike (1.0× ATK + chill), Blood Boil (1.5× ATK AoE-flavored single-target + bleed).
+  - Lifesteal: add optional `lifesteal: number` to the `attack` effect; honored inside `applyAttack` in DungeonScreen.
+- Generate two new portrait assets + two trainer assets (pixel-gothic style, on-theme).
+- Add `TRAINERS` + intro/quest entries; class-specific quest for each.
+- Cosmetic-shop entitlement: extend `MetaState` with `ownedClasses: ClassId[]` (default `[]`). A class is playable if `unlocked.has(id) || meta.ownedClasses.includes(id)`.
+- Paywall UI: in `ShopScreen.tsx` ("Cobalt Vault"), add a "Heroes" section listing Druid + DK with a gem price (e.g. 300◆) and a **"Test unlock (dev)"** button that calls `unlockClass(id)` without spending gems — explicitly for your testing.
+- TitleScreen shows them with 🔒 + a small ◆ badge if not owned; tapping a locked premium class jumps to Cobalt Vault → Heroes.
 
-4. **`useHearthstone` never marks `hasCompletedFirstRun`.** Bailing out via hearth banks shards/XP but the Shop and Champion's Pass stay gated as if you'd never descended. Decide and apply one of:
-   - Treat hearth as a completed run (set `hasCompletedFirstRun: true`, bump `journal.runsCompleted`), OR
-   - Document that hearth doesn't count; instead set the first-run flag the first time `enterDungeon` is invoked.
-   Recommended: set `hasCompletedFirstRun = true` on hearth use, since the player did descend.
+## 5. Redundant stat info
+`CharacterHeader` already shows name, level, HP bar, gold, gems. The separate `<StatBar />` repeats most of it.
+- Delete `StatBar` usage from `CityScreen`, `DungeonScreen`, and any other screen that mounts it under the header.
+- Move ATK · MAG into the `CharacterHeader` row (compact: `Lv X · Class · Spec · ATK X · MAG X`) so no info is lost.
+- Keep `StatBar.tsx` deleted (or leave file unused if simpler — will remove).
 
-5. **`runFloors` is dead state.** It's incremented in `restoreBetweenRooms` but `finishRun` reports `p.dungeonDepth` for floors. Either delete `runFloors` from `PlayerState` and the reset paths, or use it in the summary. Recommended: delete it.
+## 6. Hub screen cleanup
+`CityScreen` currently lists 11 tiles in one flat grid. Reorganize into three labeled sections + a fixed Descend CTA:
 
-6. **`Phoenix Feather` reports lethal damage as taken.** `damage()` returns `n` even when the feather revives, so the floating damage number shows the killing blow as if it landed normally. Fix: when the feather triggers, return the actual HP delta (`p.hp` before → 0 → revived hp), or surface a distinct floater color/log line in `DungeonScreen` for the revive.
+```text
+▣ Character
+  Equipment   Trainer
+▣ City
+  Vendors   Quests   Crafter's Row   Auction
+▣ Meta
+  Echo Tree   Dungeon Journal   Cobalt Vault   Champion's Pass
+▼ Descend Dungeon  (big primary)
+```
 
-7. **Dead screens still wired.** `screen === "victory" / "defeat"` cases in `src/routes/index.tsx` and the `VictoryScreen` / `DefeatScreen` exports are never reachable now (everything routes through `run_summary`). Remove the imports/render branches and the two exports from `DungeonScreen.tsx`. Also drop `"victory" | "defeat"` from the `Screen` union in `store.ts`.
+- 2-column grid inside each section; section header in the existing `pixel text-[10px] text-gold` style.
+- Locked tiles (Cobalt Vault / Champion's Pass before first run) stay in place but render disabled — same as today.
+- Keep the journal log block below.
 
-## `src/game/DungeonScreen.tsx`
+## Technical details
+- New types: `ownedClasses: ClassId[]` in `MetaState`, `unlockClass(id)` store action that mutates+saves meta.
+- Lifesteal: in `applyAttack`, if `ab.effect.lifesteal`, call `heal(Math.floor(dmg * lifesteal))` and float a green number.
+- Animations live in `src/styles.css` as `@keyframes swing`, `@keyframes cast`, `@keyframes recoil` + utility classes. Existing `shake` reused for screen shudder.
+- Art generation uses `imagegen--generate_image` (premium for portraits to match existing detail) at 512×512, then referenced via existing imports — no new asset wiring needed.
+- No data migration required: `loadMeta` already merges new fields against `emptyMeta()`, so `ownedClasses` defaults safely.
 
-8. **`restoreBetweenRooms` called twice per kill.** After a combat win, `closeVictory()` calls `restoreBetweenRooms()` and then `advance()` (via the next path) also calls it on the *next* transition — but the immediate "Continue" button path is `closeVictory` → set to `path` (no advance). Trace again: `closeVictory` calls `restoreBetweenRooms` then sets path. `advance` calls `restoreBetweenRooms` when moving to the next depth. That's OK. **Real issue:** on a non-combat path encounter, `advance` is invoked from path → restore fires once. Good. Cancel this item.
-
-9. **`onRacial` gating bug.** `if (... !player.racialUsed) return;` blocks the second racial charge entirely — once `racialUsed === 1` the button still renders (button disabled-check uses `>= racialMax`, correct), but the click handler early-returns. Fix: use `player.racialUsed >= player.racialMax` instead.
-
-## `src/game/RunSummaryScreen.tsx`
-
-10. **Stash-button disabled check uses item identity but stash holds copies.** `meta.stash.some(s => s.id === it.id)` works only because items have unique ids — confirmed in `data.ts` (`newItemId`). No fix needed, but tied to #1: if we clear the stash on consume, the same ids won't ever collide.
-
-## `src/game/meta.ts`
-
-11. **SSR / hydration of `loadMeta()`.** `initialMeta = loadMeta()` runs at module top-level. On the server it returns `emptyMeta()`; on the client it reads localStorage. The store is created once per environment, so titles will render "Wanderer Lv 1" during SSR then jump to the real level after hydration (visible flicker, possible React hydration warning for the level text). Fix: initialize the store with `emptyMeta()`, then hydrate from `loadMeta()` inside a `useEffect` in `TitleScreen` / root, or behind a `typeof window !== "undefined"` lazy initializer that runs once on first client access.
-
-## Out of scope (intentionally not changing)
-
-- XP curves, shard values, echo node costs.
-- The fact that `gems` persist through wipes (design choice — they're the paywall currency).
-- The unused `closeVictory` + `equippedForSlot` / `gearDelta` UI rendering paths — they're reachable.
-
-## Order of changes
-
-1. Fixes 1–3 (stash + gold + recompute) — most player-visible save corruption.
-2. Fix 4 (hearth unlock flag) — gating correctness.
-3. Fixes 5, 7 (dead state + dead screens) — cleanup.
-4. Fixes 6, 9 (combat polish).
-5. Fix 11 (SSR hydration) — last; touches store init.
-
-No new screens, no new data tables.
+## Out of scope
+- New abilities for existing classes, balance pass, animation for enemy abilities beyond the existing telegraph, real IAP wiring (the gem cost + dev-unlock button is the placeholder paywall).
