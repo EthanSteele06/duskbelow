@@ -12,6 +12,9 @@ import { ShopScreen } from "@/game/ShopScreen";
 import { ChampionPassScreen } from "@/game/ChampionPassScreen";
 import { DungeonScreen, VictoryScreen, DefeatScreen } from "@/game/DungeonScreen";
 import { CharacterHeader } from "@/game/CharacterHeader";
+import { RunSummaryScreen } from "@/game/RunSummaryScreen";
+import { EchoTreeScreen } from "@/game/EchoTreeScreen";
+import { JournalScreen } from "@/game/JournalScreen";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -47,6 +50,9 @@ function Game() {
       {screen === "dungeon" && <DungeonScreen />}
       {screen === "victory" && <VictoryScreen />}
       {screen === "defeat" && <DefeatScreen />}
+      {screen === "run_summary" && <RunSummaryScreen />}
+      {screen === "echo" && <EchoTreeScreen />}
+      {screen === "journal" && <JournalScreen />}
     </main>
   );
 }

@@ -553,6 +553,8 @@ export function DungeonScreen() {
         <div className="grid grid-cols-2 gap-2">
           {inv.includes("p1") && <button onClick={() => use("p1")} className="pixel-btn !text-[8px]">Lesser Potion ({inv.filter(x=>x==="p1").length})</button>}
           {inv.includes("p2") && <button onClick={() => use("p2")} className="pixel-btn !text-[8px]">Greater Potion ({inv.filter(x=>x==="p2").length})</button>}
+          {inv.includes("phoenix") && <span className="pixel-btn !text-[8px] text-center text-divine">✦ Phoenix Feather armed ({inv.filter(x=>x==="phoenix").length})</span>}
+          {inv.includes("hearth") && <button onClick={useHearth} className="pixel-btn pixel-btn-gold !text-[8px]">⌂ Hearthstone — bail out</button>}
         </div>
 
         <button onClick={exitDungeon} className="pixel-btn !text-[8px] w-full text-center">⌂ Retreat to City</button>
