@@ -926,15 +926,30 @@ const RARITY_MULT: Record<Rarity, number> = { common: 1, uncommon: 1.5, rare: 2.
 let _itemSeq = 0;
 const newItemId = () => `g_${Date.now().toString(36)}_${(_itemSeq++).toString(36)}`;
 
-export function rollGear(depth: number, opts?: { minRarity?: Rarity }): GearItem {
-  const r = Math.random();
-  const depthBoost = depth / 10;
-  let rarity: Rarity;
-  if (r < 0.45 - depthBoost * 0.25) rarity = "common";
-  else if (r < 0.75 - depthBoost * 0.15) rarity = "uncommon";
-  else if (r < 0.92) rarity = "rare";
-  else if (r < 0.985) rarity = "epic";
-  else rarity = "legendary";
+export type LootSource = "trash" | "chest" | "mini_boss" | "major_boss" | "final_boss";
+
+/** Per-source rarity weight tables. Higher value = more likely. */
+const LOOT_WEIGHTS: Record<LootSource, Record<Rarity, number>> = {
+  trash:      { common: 60, uncommon: 28, rare: 10, epic: 2,  legendary: 0 },
+  chest:      { common: 20, uncommon: 45, rare: 25, epic: 9,  legendary: 1 },
+  mini_boss:  { common: 0,  uncommon: 35, rare: 45, epic: 18, legendary: 2 },
+  major_boss: { common: 0,  uncommon: 0,  rare: 30, epic: 55, legendary: 15 },
+  final_boss: { common: 0,  uncommon: 0,  rare: 10, epic: 60, legendary: 30 },
+};
+
+function rollRarity(source: LootSource): Rarity {
+  const w = LOOT_WEIGHTS[source];
+  const total = (["common","uncommon","rare","epic","legendary"] as Rarity[]).reduce((s, k) => s + w[k], 0);
+  let r = Math.random() * total;
+  for (const k of ["common","uncommon","rare","epic","legendary"] as Rarity[]) {
+    r -= w[k]; if (r <= 0) return k;
+  }
+  return "common";
+}
+
+export function rollGear(depth: number, opts?: { minRarity?: Rarity; source?: LootSource }): GearItem {
+  const source: LootSource = opts?.source ?? "trash";
+  let rarity = rollRarity(source);
   if (opts?.minRarity && RARITY_RANK[rarity] < RARITY_RANK[opts.minRarity]) rarity = opts.minRarity;
 
   const template = GEAR_TEMPLATES[Math.floor(Math.random() * GEAR_TEMPLATES.length)];
@@ -954,6 +969,37 @@ export function rollGear(depth: number, opts?: { minRarity?: Rarity }): GearItem
     name: template.names[rarity] ?? template.names.common ?? "Curio",
     slot: template.slot,
     rarity, ilvl, stats,
+  };
+}
+
+/** Build the class-signature legendary for a final-boss drop. One per class. */
+export interface ClassLegendaryDef {
+  baseId: string;
+  slot: GearSlot;
+  name: string;
+  flavor: string;
+  stats: GearItem["stats"];
+}
+
+export const CLASS_LEGENDARIES: Record<ClassId, ClassLegendaryDef> = {
+  warrior:     { baseId: "sword",  slot: "weapon",  name: "Worldcleaver",          flavor: "The blade that ended a god.",        stats: { atk: 22, crit: 12, maxHp: 20 } },
+  rogue:       { baseId: "dagger", slot: "weapon",  name: "Whisper of the Vanished", flavor: "It was never here. Neither were you.", stats: { atk: 18, crit: 8, dodge: 6 } },
+  mage:        { baseId: "staff",  slot: "weapon",  name: "Aetheric Scepter",      flavor: "Cracks reality on contact.",         stats: { mag: 24, crit: 14 } },
+  priest:      { baseId: "tome",   slot: "offhand", name: "Reliquary of Dawn",     flavor: "Holds a sunrise that never set.",    stats: { mag: 20, maxHp: 36 } },
+  druid:       { baseId: "staff",  slot: "weapon",  name: "Heartwood Branch",      flavor: "Still living. Still listening.",     stats: { mag: 22, maxHp: 28 } },
+  deathknight: { baseId: "sword",  slot: "weapon",  name: "Frostmourne Shard",     flavor: "Asks every kill for a little more.", stats: { atk: 20, maxHp: 24, crit: 8 } },
+};
+
+export function rollClassLegendary(classId: ClassId, depth: number): GearItem {
+  const def = CLASS_LEGENDARIES[classId];
+  return {
+    id: newItemId(),
+    baseId: def.baseId,
+    name: def.name,
+    slot: def.slot,
+    rarity: "legendary",
+    ilvl: Math.max(15, depth),
+    stats: { ...def.stats },
   };
 }
 
