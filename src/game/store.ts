@@ -808,7 +808,8 @@ export const useGame = create<GameState>((set, get) => ({
 
   restoreBetweenRooms: () => {
     const p = get().player;
-    const amt = Math.max(2, Math.floor(p.maxHp * 0.10));
+    const starved = p.affixes?.includes("starved") ? 0.5 : 1;
+    const amt = Math.max(2, Math.floor(p.maxHp * 0.10 * starved));
     const hp = Math.min(p.maxHp, p.hp + amt);
     if (hp > p.hp) {
       set({ player: { ...p, hp } });
@@ -1008,6 +1009,7 @@ export const useGame = create<GameState>((set, get) => ({
     let nextMeta: MetaState = {
       ...meta,
       hasCompletedFirstRun: true,
+      hasClearedNormal: meta.hasClearedNormal || (outcome === "victory" && p.dungeonMode === "normal"),
       journal: { ...j, deepestFloor: newDeepest, bestRun, runsCompleted: j.runsCompleted + 1 },
     };
     // Victory bonus shards + account XP
