@@ -422,11 +422,27 @@ export function DungeonScreen() {
     let gear: GearItem | undefined;
     if (e.enemy.questItemId && Math.random() < 0.6) { addQuestItem(e.enemy.questItemId); questItem = e.enemy.questItemId; }
     if (e.enemy.materialDrop && Math.random() < e.enemy.materialDrop.chance) { addMaterial(e.enemy.materialDrop.id); material = e.enemy.materialDrop.id; }
-    const gearChance = e.enemy.id === "dragon" ? 1 : 0.35 + e.depth * 0.04;
-    if (Math.random() < gearChance) {
-      const rolled = e.enemy.id === "dragon" ? rollGear(e.depth, { minRarity: "rare" }) : rollGear(e.depth);
-      if (addToBag(rolled)) gear = rolled;
-      else addLog("Bag full — gear left behind.");
+    const isFinalBoss = e.depth >= MAX_DEPTH;
+    const ownsLegendary =
+      Object.values(player.equipment).some((g) => g?.rarity === "legendary") ||
+      player.bag.some((g) => g.rarity === "legendary");
+    // Final-boss class legendary: 1% drop, only if the player owns none.
+    if (isFinalBoss && player.classId && !ownsLegendary && Math.random() < 0.01) {
+      const legend = rollClassLegendary(player.classId, e.depth);
+      if (addToBag(legend)) { gear = legend; addLog(`✦ A legendary stirs in the wreckage — ${legend.name}!`); }
+      else addLog("Bag full — a legendary was left behind!");
+    } else {
+      const source: "trash" | "chest" | "mini_boss" | "major_boss" | "final_boss" =
+        isFinalBoss ? "final_boss"
+        : MAJOR_BOSS_FLOORS.has(e.depth) ? "major_boss"
+        : MINI_BOSS_FLOORS.has(e.depth) ? "mini_boss"
+        : "trash";
+      const gearChance = isFinalBoss ? 1 : 0.35 + e.depth * 0.04;
+      if (Math.random() < gearChance) {
+        const rolled = rollGear(e.depth, { source });
+        if (addToBag(rolled)) gear = rolled;
+        else addLog("Bag full — gear left behind.");
+      }
     }
     // Journal + shards
     const loreByEnemy: Record<string, string> = {
