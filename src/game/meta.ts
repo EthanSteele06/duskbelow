@@ -73,9 +73,7 @@ export interface AccountUnlock {
 
 export const ACCOUNT_UNLOCKS: AccountUnlock[] = [
   { level: 3, label: "Heirloom Stash slot 1",      effect: { kind: "stashSlot" } },
-  { level: 4, label: "Class — Mage",               effect: { kind: "class", classId: "mage" } },
   { level: 5, label: "Zone — The Bone Halls",      effect: { kind: "zone", name: "The Bone Halls" } },
-  { level: 6, label: "Class — Priest",             effect: { kind: "class", classId: "priest" } },
   { level: 7, label: "Heirloom Stash slot 2",      effect: { kind: "stashSlot" } },
   { level: 8, label: "Second racial charge",       effect: { kind: "racialCharge" } },
   { level: 10, label: "Zone — Void Sanctum",       effect: { kind: "zone", name: "Void Sanctum" } },
@@ -119,15 +117,27 @@ export interface EchoNode {
 }
 
 export const ECHO_TREE: EchoNode[] = [
+  // Tier 1 — cheap starters
   { id: "start_hp",     name: "Lingering Vigor",  desc: "Start each run with +8 Max HP.",          cost: 1 },
   { id: "start_atk",    name: "Sharper Memory",   desc: "Start each run with +1 ATK.",             cost: 1 },
   { id: "start_potion", name: "Pocket Apothecary",desc: "Start each run with 1 Lesser Potion.",    cost: 1 },
+  // Tier 2 — economy
   { id: "gold_bonus",   name: "Soul Tithe",       desc: "Earn +10% gold from kills & chests.",     cost: 2, requires: "start_atk" },
   { id: "xp_bonus",     name: "Echoes of Battle", desc: "Earn +10% XP.",                           cost: 2, requires: "start_hp" },
   { id: "bag_slot",     name: "Wider Pack",       desc: "+10 bag slots.",                          cost: 2, requires: "start_potion" },
+  { id: "grave_robber", name: "Grave Robber",     desc: "Chests appear more often in dungeons.",   cost: 3, requires: "gold_bonus" },
+  // Tier 3 — heavier
   { id: "retain_gold",  name: "Buried Coin",      desc: "Keep 25% of your gold through a wipe.",   cost: 3, requires: "gold_bonus" },
   { id: "shard_bonus",  name: "Soul Resonance",   desc: "+25% Soul Shards from runs.",             cost: 3, requires: "xp_bonus" },
   { id: "second_pot",   name: "Field Surgeon",    desc: "Also start with 1 Greater Potion.",       cost: 3, requires: "bag_slot" },
+  { id: "echo_light",   name: "Echo of Light",    desc: "Your first hit each fight is a guaranteed crit.", cost: 4, requires: "xp_bonus" },
+  { id: "iron_will",    name: "Iron Will",        desc: "Begin every run with +1 racial charge.",  cost: 4, requires: "start_hp" },
+  { id: "hoarder",      name: "Hoarder",          desc: "Keep 1 random bag item through a wipe.",  cost: 4, requires: "retain_gold" },
+  // Class unlocks — shard-gated only path to the casters
+  { id: "unlock_mage",   name: "Awaken the Mage",   desc: "Permanently unlock the Mage class on the title screen.",   cost: 6, requires: "xp_bonus" },
+  { id: "unlock_priest", name: "Awaken the Priest", desc: "Permanently unlock the Priest class on the title screen.", cost: 10, requires: "unlock_mage" },
+  // Capstone
+  { id: "ascendance",   name: "Ascendance",       desc: "New characters begin at level 2.",        cost: 8, requires: "shard_bonus" },
 ];
 
 export function hasEcho(meta: MetaState, id: string) { return meta.echoLearned.includes(id); }
