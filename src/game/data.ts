@@ -433,6 +433,24 @@ export const TRAINERS: Record<ClassId, TrainerDef> = {
       { id: "p_radiant",name: "Radiant Conduit", desc: "+3 MAG, +6 Max HP.",        cost: 2, requires: "p_grace", effect: { kind: "stat", mag: 3, maxHp: 6 } },
     ],
   },
+  druid: {
+    classId: "druid", name: "Elder Thorn", title: "Speaker of the Mossfather", portrait: trainerDruidImg,
+    greeting: "The grove watched you climb back out. It would like a word — and a tithe of focus.",
+    skills: [
+      { id: "d_bark",   name: "Barkskin",        desc: "+8 Max HP.",                cost: 1, effect: { kind: "stat", maxHp: 8 } },
+      { id: "d_bloom",  name: "Wild Bloom",      desc: "+3 MAG.",                   cost: 1, effect: { kind: "stat", mag: 3 } },
+      { id: "d_root",   name: "Deep Roots",      desc: "+4 MAG, +6 Max HP.",        cost: 2, requires: "d_bloom", effect: { kind: "stat", mag: 4, maxHp: 6 } },
+    ],
+  },
+  deathknight: {
+    classId: "deathknight", name: "Lich-Marshal Korr", title: "Crown of the Frozen Keep", portrait: trainerDeathKnightImg,
+    greeting: "You died well. Few do. Choose a rune — the blade gets hungrier with each.",
+    skills: [
+      { id: "dk_rune",  name: "Rune of Iron",    desc: "+2 ATK.",                   cost: 1, effect: { kind: "stat", atk: 2 } },
+      { id: "dk_chill", name: "Chill of the Grave", desc: "+8 Max HP.",             cost: 1, effect: { kind: "stat", maxHp: 8 } },
+      { id: "dk_unholy",name: "Unholy Vigor",    desc: "+3 ATK, +6 Max HP.",        cost: 2, requires: "dk_rune", effect: { kind: "stat", atk: 3, maxHp: 6 } },
+    ],
+  },
 };
 
 // ── Professions ──────────────────────────────────────────────────────────────
