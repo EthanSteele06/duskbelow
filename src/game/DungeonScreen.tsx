@@ -547,10 +547,8 @@ export function DungeonScreen() {
                 {equippedFlash === lootGear.id ? (
                   <p className="pixel text-[8px] text-divine text-center border-2 border-divine py-1">✓ EQUIPPED{equippedForSlot ? ` — replaced ${equippedForSlot.name}` : ""}</p>
                 ) : (
-                  <div className="grid grid-cols-3 gap-1 pt-1">
-                    <button onClick={() => { playSfx("loot"); equip(lootGear.id); setEquippedFlash(lootGear.id); }} className="pixel-btn pixel-btn-gold !text-[8px]">Equip</button>
-                    <button onClick={() => sellBag(lootGear.id)} className="pixel-btn !text-[8px]">Sell {gearSellPrice(lootGear)}g</button>
-                    <button onClick={() => discardBag(lootGear.id)} className="pixel-btn !text-[8px]">Discard</button>
+                  <div className="pt-1">
+                    <button onClick={() => { playSfx("loot"); equip(lootGear.id); setEquippedFlash(lootGear.id); }} className="pixel-btn pixel-btn-gold !text-[8px] w-full">Equip</button>
                   </div>
                 )}
               </div>
@@ -559,8 +557,63 @@ export function DungeonScreen() {
               <p className="font-body text-sm text-muted-foreground">No drops this time.</p>
             )}
             <button onClick={closeVictory} className="pixel-btn pixel-btn-gold !text-[8px] w-full text-center">
-              {enc.loot.enemy.id === "dragon" ? "Claim the Heart →" : "Continue ▸"}
+              {enc.loot.enemy.id === "dragon" ? "Claim the Heart →" : lootGear ? "Move on ▸" : "Continue ▸"}
             </button>
+          </div>
+        )}
+
+        {enc.kind === "shrine" && (
+          <div className="border-2 border-divine bg-card p-3 fade-in-up">
+            <p className="pixel text-[10px] text-divine">✦ A forgotten shrine</p>
+            <p className="font-body text-sm text-muted-foreground mt-1">
+              {enc.shrine === "heal" ? "Cool water trickles from the stone. Drink and be mended." : "Embers swirl above the altar — kneel and be quickened."}
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button className="pixel-btn pixel-btn-gold !text-[8px]" onClick={() => {
+                if (enc.shrine === "heal") {
+                  const amt = Math.max(10, Math.floor(player.maxHp * 0.5));
+                  heal(amt); addFloater("heal", amt); addLog(`The shrine restores ${amt} HP.`); playSfx("ui-confirm");
+                } else {
+                  rewardXp(20 + enc.depth * 6); addLog("The shrine fills you with insight."); playSfx("ui-confirm");
+                }
+                setEnc({ kind: "path", depth: enc.depth });
+              }}>Pray</button>
+              <button className="pixel-btn !text-[8px]" onClick={() => setEnc({ kind: "path", depth: enc.depth })}>Move on</button>
+            </div>
+          </div>
+        )}
+
+        {enc.kind === "trap" && (
+          <div className="border-2 border-blood bg-card p-3 fade-in-up">
+            <p className="pixel text-[10px] text-blood">⚠ {enc.trap === "spikes" ? "Spiked floor plates" : "Hissing gas vents"}</p>
+            <p className="font-body text-sm text-muted-foreground mt-1">
+              {enc.sprung
+                ? "The corridor is quiet again."
+                : enc.trap === "spikes"
+                  ? "Pressure plates click as you near. You can try to dart through, or search for a safer route."
+                  : "Sickly green gas pools ahead. Hold your breath and rush — or take the long way around."}
+            </p>
+            {!enc.sprung && (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button className="pixel-btn !text-[8px]" onClick={() => {
+                  const dodged = player.dodge > 0 && Math.random() * 100 < (player.dodge + 30);
+                  if (dodged) { addLog("You weave through the trap unscathed."); }
+                  else {
+                    const dmg = Math.max(3, Math.floor(player.maxHp * (enc.trap === "spikes" ? 0.18 : 0.12)));
+                    const taken = damage(dmg);
+                    addFloater("enemy", taken);
+                    setHit(true); setTimeout(() => setHit(false), 350);
+                    addLog(`The ${enc.trap === "spikes" ? "spikes bite" : "gas burns"} for ${taken}.`);
+                    playSfx("hit");
+                  }
+                  setEnc({ ...enc, sprung: true });
+                }}>Rush through</button>
+                <button className="pixel-btn !text-[8px]" onClick={() => { addLog("You take the long way around."); setEnc({ kind: "path", depth: enc.depth }); }}>Detour</button>
+              </div>
+            )}
+            {enc.sprung && (
+              <button className="pixel-btn pixel-btn-gold !text-[8px] w-full mt-3" onClick={() => setEnc({ kind: "path", depth: enc.depth })}>Press on ▸</button>
+            )}
           </div>
         )}
 
@@ -575,6 +628,7 @@ export function DungeonScreen() {
             </div>
           </div>
         )}
+
 
         {enc.kind === "combat" && (
           <div className="space-y-2">
