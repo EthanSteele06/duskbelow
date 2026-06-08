@@ -132,6 +132,18 @@ export const CLASS_ABILITIES: Record<ClassId, Ability[]> = {
 
 // ── Enemies ──────────────────────────────────────────────────────────────────
 
+export interface EnemyIntent {
+  id: string;
+  /** UI label shown above the enemy ("⚔ Bite", "🔥 Hellfire") */
+  label: string;
+  /** damage multiplier on enemy.atkBase */
+  mult: number;
+  /** narration line; supports {n} (name) and {d} (damage) */
+  line: string;
+  /** if true, telegraphed — the enemy WILL use this next turn (shown before player acts) */
+  telegraphable?: boolean;
+}
+
 export interface EnemyDef {
   id: string;
   name: string;
@@ -141,6 +153,7 @@ export interface EnemyDef {
   questItemId?: string;
   materialDrop?: { id: string; chance: number };
   attackLines: string[];
+  intents: EnemyIntent[];
 }
 
 export const ENEMIES: Record<string, EnemyDef> = {
@@ -149,36 +162,61 @@ export const ENEMIES: Record<string, EnemyDef> = {
     hpBase: 8, atkBase: 2, questItemId: "rat_tail",
     materialDrop: { id: "rough_pelt", chance: 0.5 },
     attackLines: ["The {n} lunges and bites for {d}!", "The {n} claws at your shins for {d}!", "Mangy teeth tear in for {d}!"],
+    intents: [
+      { id: "bite", label: "🦷 Bite", mult: 1.0, line: "The {n} lunges and bites for {d}!" },
+      { id: "claw", label: "🪓 Claw", mult: 0.8, line: "The {n} claws at your shins for {d}!" },
+    ],
   },
   skeleton: {
     id: "skeleton", name: "Risen Skeleton", image: skeletonImg,
     hpBase: 14, atkBase: 4,
     materialDrop: { id: "bone_dust", chance: 0.55 },
-    attackLines: ["The {n} swings a rusted sword for {d}!", "Bone fingers rake you for {d}!", "{n} brings the blade down for {d}!"],
+    attackLines: ["The {n} swings a rusted sword for {d}!"],
+    intents: [
+      { id: "swing", label: "⚔ Rusted Swing", mult: 1.0, line: "The {n} swings a rusted sword for {d}!" },
+      { id: "lunge", label: "🩸 Lunge", mult: 1.5, line: "{n} winds up — a brutal lunge for {d}!", telegraphable: true },
+    ],
   },
   cultist: {
     id: "cultist", name: "Robed Cultist", image: cultistImg,
     hpBase: 20, atkBase: 6, questItemId: "cult_mask",
     materialDrop: { id: "dark_thread", chance: 0.5 },
-    attackLines: ["The {n} chants and slashes for {d}!", "A jagged dagger bites for {d}!", "The {n} murmurs and strikes for {d}!"],
+    attackLines: ["The {n} chants and slashes for {d}!"],
+    intents: [
+      { id: "stab",     label: "🗡 Stab",     mult: 1.0, line: "A jagged dagger bites for {d}!" },
+      { id: "hellfire", label: "🔥 Hellfire", mult: 1.8, line: "Hellfire roars from the {n} for {d}!", telegraphable: true },
+    ],
   },
   wraith: {
     id: "wraith", name: "Wailing Wraith", image: wraithImg,
     hpBase: 26, atkBase: 7,
     materialDrop: { id: "ghost_essence", chance: 0.4 },
-    attackLines: ["The {n} drains your soul for {d}!", "A spectral wail crushes you for {d}!", "Cold hands phase through you for {d}!"],
+    attackLines: ["The {n} drains your soul for {d}!"],
+    intents: [
+      { id: "drain", label: "👻 Soul Drain",  mult: 1.0, line: "The {n} drains your soul for {d}!" },
+      { id: "wail",  label: "🌀 Wail",        mult: 1.6, line: "A spectral wail crushes you for {d}!", telegraphable: true },
+    ],
   },
   ogre: {
     id: "ogre", name: "Ogre Brute", image: ogreImg,
     hpBase: 38, atkBase: 9,
     materialDrop: { id: "iron_scrap", chance: 0.6 },
-    attackLines: ["The {n} smashes a club down for {d}!", "{n} bellows and clubs you for {d}!", "The {n} stomps for {d}!"],
+    attackLines: ["The {n} smashes a club down for {d}!"],
+    intents: [
+      { id: "club",  label: "🪵 Club",   mult: 1.0, line: "The {n} smashes a club down for {d}!" },
+      { id: "stomp", label: "👣 Stomp",  mult: 1.7, line: "{n} stomps the floor for {d}!", telegraphable: true },
+    ],
   },
   dragon: {
     id: "dragon", name: "Black Dragon", image: dragonImg,
     hpBase: 80, atkBase: 12,
     materialDrop: { id: "dragon_scale", chance: 1.0 },
-    attackLines: ["The {n} breathes searing flame for {d}!", "{n} bites with iron jaws for {d}!", "A wing sweep crushes you for {d}!"],
+    attackLines: ["The {n} bites for {d}!"],
+    intents: [
+      { id: "bite",   label: "🐲 Bite",         mult: 1.0, line: "{n} bites with iron jaws for {d}!" },
+      { id: "wing",   label: "🌪 Wing Sweep",  mult: 1.3, line: "A wing sweep crushes you for {d}!" },
+      { id: "breath", label: "🔥 Dragon Breath",mult: 2.2, line: "The {n} breathes searing flame for {d}!", telegraphable: true },
+    ],
   },
 };
 
