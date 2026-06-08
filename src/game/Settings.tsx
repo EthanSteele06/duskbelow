@@ -21,15 +21,17 @@ export function SettingsButton() {
 function SettingsModal({ onClose }: { onClose: () => void }) {
   const [audio, setAudio] = useState(getAudioSettings());
   const reset = useGame((s) => s.reset);
-  const hardReset = useGame((s) => s.hardReset);
   const [confirmWipe, setConfirmWipe] = useState(0);
 
   useEffect(() => subscribeAudioSettings(setAudio), []);
 
   const onWipe = () => {
     if (confirmWipe < 2) { setConfirmWipe(confirmWipe + 1); return; }
-    hardReset?.();
-    onClose();
+    try {
+      localStorage.removeItem("duskbelow.meta.v1");
+      localStorage.removeItem("dusk.audio");
+    } catch { /* ignore */ }
+    window.location.reload();
   };
 
   return (
