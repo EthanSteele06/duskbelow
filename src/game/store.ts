@@ -3,7 +3,7 @@ import type { ClassId, FactionId, Ability, ProfessionId, GearItem, GearSlot, Tal
 import {
   CLASSES, FACTIONS, VENDOR_ITEMS, QUESTS, TRAINERS, RECIPES, MATERIALS, SPECS, TALENT_TREES, COSMETICS,
   BAG_SIZE_BASE, BAG_SIZE_CHAMPION, RESPEC_GOLD_COST, MAX_ACTIVE_QUESTS, gearSellPrice, profXpForLevel,
-  IDLE_YIELDS, IDLE_SECONDS_PER_UNIT, IDLE_MAX_SECONDS, rollAffixes,
+  IDLE_YIELDS, IDLE_SECONDS_PER_UNIT, IDLE_MAX_SECONDS, rollAffixes, rollGear, rollClassLegendary,
 } from "./data";
 import {
   type MetaState, type EchoNode, emptyMeta, loadMeta, saveMeta,
