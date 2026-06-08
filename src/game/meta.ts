@@ -24,6 +24,8 @@ export interface MetaState {
   echoLearned: string[];
   hasCompletedFirstRun: boolean;
   unlockedClasses: ClassId[];
+  /** Premium classes the player has purchased (or test-unlocked). */
+  ownedClasses: ClassId[];
   journal: JournalState;
   stash: GearItem[];
   /** Did we already show the first-wipe explainer? */
@@ -39,7 +41,8 @@ export const emptyMeta = (): MetaState => ({
   shards: 0,
   echoLearned: [],
   hasCompletedFirstRun: false,
-  unlockedClasses: ["warrior"],
+  unlockedClasses: ["warrior", "rogue"],
+  ownedClasses: [],
   journal: {
     enemyKills: {}, bossesDowned: {}, itemsFound: {},
     deepestFloor: 0, loreFound: [], runsCompleted: 0,
@@ -69,7 +72,6 @@ export interface AccountUnlock {
 }
 
 export const ACCOUNT_UNLOCKS: AccountUnlock[] = [
-  { level: 2, label: "Class — Rogue",              effect: { kind: "class", classId: "rogue" } },
   { level: 3, label: "Heirloom Stash slot 1",      effect: { kind: "stashSlot" } },
   { level: 4, label: "Class — Mage",               effect: { kind: "class", classId: "mage" } },
   { level: 5, label: "Zone — The Bone Halls",      effect: { kind: "zone", name: "The Bone Halls" } },
@@ -186,12 +188,16 @@ export function loadMeta(): MetaState {
     if (!parsed || parsed.version !== META_VERSION) return emptyMeta();
     // Merge in case of new fields
     const base = emptyMeta();
+    // Migration: if save predates rogue-at-start, fold it in.
+    const baseUnlocks = parsed.unlockedClasses ?? base.unlockedClasses;
+    const mergedUnlocks = baseUnlocks.includes("rogue") ? baseUnlocks : [...baseUnlocks, "rogue" as ClassId];
     return {
       ...base, ...parsed,
       account: { ...base.account, ...(parsed.account ?? {}) },
       journal: { ...base.journal, ...(parsed.journal ?? {}) },
       echoLearned: parsed.echoLearned ?? [],
-      unlockedClasses: parsed.unlockedClasses ?? base.unlockedClasses,
+      unlockedClasses: mergedUnlocks,
+      ownedClasses: parsed.ownedClasses ?? [],
       stash: parsed.stash ?? [],
     };
   } catch { return emptyMeta(); }
