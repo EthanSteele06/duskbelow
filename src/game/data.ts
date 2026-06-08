@@ -940,7 +940,7 @@ const LOOT_WEIGHTS: Record<LootSource, Record<Rarity, number>> = {
   chest:      { common: 20, uncommon: 45, rare: 25, epic: 9,  legendary: 1 },
   mini_boss:  { common: 0,  uncommon: 35, rare: 45, epic: 18, legendary: 2 },
   major_boss: { common: 0,  uncommon: 0,  rare: 30, epic: 55, legendary: 15 },
-  final_boss: { common: 0,  uncommon: 0,  rare: 10, epic: 60, legendary: 30 },
+  final_boss: { common: 0,  uncommon: 0,  rare: 10, epic: 90, legendary: 0 },
 };
 
 function rollRarity(source: LootSource): Rarity {
