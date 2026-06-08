@@ -118,6 +118,8 @@ export function DungeonScreen() {
   const [hit, setHit] = useState(false);
   const [combatLog, setCombatLog] = useState<string[]>([]);
   const [hoveredAbility, setHoveredAbility] = useState<Ability | null>(null);
+  const [armedAbility, setArmedAbility] = useState<string | null>(null);
+  const [equippedFlash, setEquippedFlash] = useState<string | null>(null);
   const [floaters, setFloaters] = useState<FloatingNum[]>([]);
   const [attackFx, setAttackFx] = useState<{ kind: "melee" | "spell"; key: number; tint?: string } | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
@@ -253,6 +255,13 @@ export function DungeonScreen() {
   const useAbility = (ab: Ability) => {
     if (enc.kind !== "combat") return;
     if ((enc.cooldowns[ab.id] ?? 0) > 0) return;
+    // Tap-to-confirm on mobile/touch: first tap arms; second confirms.
+    if (armedAbility !== ab.id) {
+      setArmedAbility(ab.id);
+      setHoveredAbility(ab);
+      return;
+    }
+    setArmedAbility(null);
     const e = enc;
     const flavor = ab.effect.flavor.replace("{p}", player.name);
 
@@ -500,11 +509,15 @@ export function DungeonScreen() {
                 <p className={`pixel text-[7px] ${gearDelta > 0 ? "text-divine" : gearDelta < 0 ? "text-blood" : "text-muted-foreground"}`}>
                   {equippedForSlot ? (gearDelta > 0 ? `▲ +${gearDelta} vs equipped` : gearDelta < 0 ? `▼ ${gearDelta} vs equipped` : "= same score") : "▲ slot empty"}
                 </p>
-                <div className="grid grid-cols-3 gap-1 pt-1">
-                  <button onClick={() => equip(lootGear.id)} className="pixel-btn pixel-btn-gold !text-[8px]">Equip</button>
-                  <button onClick={() => sellBag(lootGear.id)} className="pixel-btn !text-[8px]">Sell {gearSellPrice(lootGear)}g</button>
-                  <button onClick={() => discardBag(lootGear.id)} className="pixel-btn !text-[8px]">Discard</button>
-                </div>
+                {equippedFlash === lootGear.id ? (
+                  <p className="pixel text-[8px] text-divine text-center border-2 border-divine py-1">✓ EQUIPPED{equippedForSlot ? ` — replaced ${equippedForSlot.name}` : ""}</p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-1 pt-1">
+                    <button onClick={() => { equip(lootGear.id); setEquippedFlash(lootGear.id); }} className="pixel-btn pixel-btn-gold !text-[8px]">Equip</button>
+                    <button onClick={() => sellBag(lootGear.id)} className="pixel-btn !text-[8px]">Sell {gearSellPrice(lootGear)}g</button>
+                    <button onClick={() => discardBag(lootGear.id)} className="pixel-btn !text-[8px]">Discard</button>
+                  </div>
+                )}
               </div>
             )}
             {!enc.loot.questItem && !enc.loot.material && !enc.loot.gear && (
@@ -533,6 +546,7 @@ export function DungeonScreen() {
             <div className="grid grid-cols-3 gap-2">
               {abilities.map((ab) => {
                 const cd = enc.cooldowns[ab.id] ?? 0;
+                const armed = armedAbility === ab.id;
                 return (
                   <button
                     key={ab.id}
@@ -540,19 +554,21 @@ export function DungeonScreen() {
                     onMouseEnter={() => setHoveredAbility(ab)}
                     onFocus={() => setHoveredAbility(ab)}
                     disabled={cd > 0}
-                    className={`pixel-btn !text-[8px] !p-2 disabled:opacity-40 ${weaponGlow ? "weapon-glow-btn" : ""} ${ab.id === abilities[0].id ? "pixel-btn-primary" : ""}`}
+                    className={`pixel-btn !text-[8px] !p-2 disabled:opacity-40 ${weaponGlow ? "weapon-glow-btn" : ""} ${armed ? "pixel-btn-gold ring-2 ring-gold" : ab.id === abilities[0].id ? "pixel-btn-primary" : ""}`}
                     style={weaponGlow ? ({ ["--weapon-glow" as string]: weaponGlow } as CSSProperties) : undefined}
                   >
                     {ab.name}
                     {cd > 0 && <span className="block pixel text-[7px] mt-1 text-muted-foreground">CD {cd}</span>}
+                    {armed && cd === 0 && <span className="block pixel text-[7px] mt-1 text-divine">TAP TO CONFIRM</span>}
                   </button>
                 );
               })}
             </div>
             {(hoveredAbility ?? abilities[0]) && (
-              <div className="border-2 border-black bg-popover px-2 py-1.5">
-                <p className="pixel text-[8px] text-gold">{(hoveredAbility ?? abilities[0]).name}</p>
+              <div className={`border-2 px-2 py-1.5 ${armedAbility ? "border-gold bg-card" : "border-black bg-popover"}`}>
+                <p className="pixel text-[8px] text-gold">{armedAbility ? "▶ " : ""}{(hoveredAbility ?? abilities[0]).name}</p>
                 <p className="font-body text-sm text-muted-foreground leading-tight">{(hoveredAbility ?? abilities[0]).desc}</p>
+                {armedAbility && <p className="pixel text-[7px] text-divine mt-1">Tap the same ability again to use it.</p>}
               </div>
             )}
             {faction && (
