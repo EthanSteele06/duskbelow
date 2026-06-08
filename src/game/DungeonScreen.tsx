@@ -116,6 +116,12 @@ export function DungeonScreen() {
   const dmgSkin    = eq.damageSkin ? COSMETICS.find((c) => c.id === eq.damageSkin)?.tint : undefined;
 
   const [enc, setEnc] = useState<Encounter>(() => ({ kind: "path", depth: 1 }));
+
+  // Music: swap to boss track when fighting a boss, dungeon ambient otherwise.
+  useEffect(() => {
+    const isBoss = enc.kind === "combat" && enc.enemy.id === "dragon";
+    playMusic(isBoss ? "boss" : "dungeon");
+  }, [enc.kind, enc.kind === "combat" ? enc.enemy.id : null]);
   const playerFaction = player.faction;
   const [hit, setHit] = useState(false);
   const [combatLog, setCombatLog] = useState<string[]>([]);
@@ -270,6 +276,7 @@ export function DungeonScreen() {
 
     switch (ab.effect.kind) {
       case "attack": {
+        playSfx("hit");
         const after = applyAttack(e, ab as Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> });
         if (after.enemyHp <= 0) { finishKill(after); return; }
         const cds = tickCooldowns(after); cds[ab.id] = ab.cooldown;
