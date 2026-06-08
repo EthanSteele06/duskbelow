@@ -2,6 +2,8 @@ import warriorImg from "@/assets/class-warrior.jpg";
 import rogueImg from "@/assets/class-rogue.jpg";
 import mageImg from "@/assets/class-mage.jpg";
 import priestImg from "@/assets/class-priest.jpg";
+import druidImg from "@/assets/class-druid.jpg";
+import deathKnightImg from "@/assets/class-deathknight.jpg";
 import alliesSigil from "@/assets/faction-allies.png";
 import brigadeSigil from "@/assets/faction-brigade.png";
 import skeletonImg from "@/assets/enemy-skeleton.jpg";
@@ -14,8 +16,10 @@ import trainerWarriorImg from "@/assets/trainer-warrior.jpg";
 import trainerRogueImg from "@/assets/trainer-rogue.jpg";
 import trainerMageImg from "@/assets/trainer-mage.jpg";
 import trainerPriestImg from "@/assets/trainer-priest.jpg";
+import trainerDruidImg from "@/assets/trainer-druid.jpg";
+import trainerDeathKnightImg from "@/assets/trainer-deathknight.jpg";
 
-export type ClassId = "warrior" | "rogue" | "mage" | "priest";
+export type ClassId = "warrior" | "rogue" | "mage" | "priest" | "druid" | "deathknight";
 export type FactionId = "allies" | "brigade";
 
 export interface ClassDef {
@@ -27,6 +31,10 @@ export interface ClassDef {
   mag: number;
   portrait: string;
   color: string;
+  /** Premium class — gated behind the Cobalt Vault (paywall). */
+  premium?: boolean;
+  /** Gem price for premium classes. */
+  gemPrice?: number;
 }
 
 export const CLASSES: ClassDef[] = [
@@ -34,6 +42,8 @@ export const CLASSES: ClassDef[] = [
   { id: "rogue",   name: "Rogue",   tagline: "Strike from shadow.", hp: 28, atk: 7, mag: 3, portrait: rogueImg, color: "oklch(0.7 0.18 150)" },
   { id: "mage",    name: "Mage",    tagline: "Bend the arcane.", hp: 22, atk: 3, mag: 10, portrait: mageImg, color: "var(--color-arcane)" },
   { id: "priest",  name: "Priest",  tagline: "Light against the dark.", hp: 32, atk: 5, mag: 7, portrait: priestImg, color: "var(--color-divine)" },
+  { id: "druid",       name: "Druid",        tagline: "Of root and tooth.",        hp: 30, atk: 5, mag: 8, portrait: druidImg,       color: "oklch(0.65 0.17 145)", premium: true, gemPrice: 300 },
+  { id: "deathknight", name: "Death Knight", tagline: "Frost in the marrow.",      hp: 38, atk: 8, mag: 4, portrait: deathKnightImg, color: "oklch(0.6 0.18 230)",  premium: true, gemPrice: 300 },
 ];
 
 export interface FactionPassive {
@@ -92,7 +102,7 @@ export interface StatusEffect {
 }
 
 export type AbilityEffect =
-  | { kind: "attack"; mult: number; useMag?: boolean; flavor: string; applyStatus?: { kind: StatusEffectKind; turns: number; power: number } }
+  | { kind: "attack"; mult: number; useMag?: boolean; flavor: string; applyStatus?: { kind: StatusEffectKind; turns: number; power: number }; lifesteal?: number }
   | { kind: "heal"; amount: number; flavor: string }
   | { kind: "hot"; healPerTurn: number; turns: number; flavor: string }
   | { kind: "flee"; flavor: string }
@@ -127,6 +137,16 @@ export const CLASS_ABILITIES: Record<ClassId, Ability[]> = {
     { id: "smite", name: "Smite",             desc: "Holy MAG damage.",                              cooldown: 0, effect: { kind: "attack", mult: 1.0, useMag: true, flavor: "{p} smites with holy light" } },
     { id: "swp",   name: "Shadow Word: Pain", desc: "1.2× MAG + DoT (4t).",                          cooldown: 2, effect: { kind: "attack", mult: 1.2, useMag: true, flavor: "{p} whispers a word of agony", applyStatus: { kind: "burn", turns: 4, power: 4 } } },
     { id: "renew", name: "Renew",             desc: "Heal over time — MAG/turn for 4 turns.",        cooldown: 3, effect: { kind: "hot", healPerTurn: 0, turns: 4, flavor: "{p} weaves a renewing prayer" } },
+  ],
+  druid: [
+    { id: "wrath",     name: "Wrath",         desc: "Nature MAG damage.",                            cooldown: 0, effect: { kind: "attack", mult: 1.0, useMag: true, flavor: "{p} hurls a bolt of wrath" } },
+    { id: "moonfire",  name: "Moonfire",      desc: "1.2× MAG + Burn (3t).",                         cooldown: 2, effect: { kind: "attack", mult: 1.2, useMag: true, flavor: "{p} sears the foe with moonfire", applyStatus: { kind: "burn", turns: 3, power: 4 } } },
+    { id: "rejuv",     name: "Rejuvenation",  desc: "Heal over time — MAG/turn for 4 turns.",        cooldown: 3, effect: { kind: "hot", healPerTurn: 0, turns: 4, flavor: "{p} weaves vines of renewal" } },
+  ],
+  deathknight: [
+    { id: "deathstrike", name: "Death Strike", desc: "1.3× ATK + heal for 30% damage dealt.",        cooldown: 0, effect: { kind: "attack", mult: 1.3, flavor: "{p} drives a runeblade through the foe", lifesteal: 0.30 } },
+    { id: "froststrike", name: "Frost Strike", desc: "1.0× ATK + Chill (foe takes +30% dmg, 2t).",   cooldown: 2, effect: { kind: "attack", mult: 1.0, flavor: "{p} buries a frost-rimed blade", applyStatus: { kind: "chill", turns: 2, power: 1.3 } } },
+    { id: "bloodboil",   name: "Blood Boil",   desc: "1.7× ATK + Bleed (4t).",                       cooldown: 3, effect: { kind: "attack", mult: 1.7, flavor: "{p} boils the foe's blood", applyStatus: { kind: "bleed", turns: 4, power: 5 } } },
   ],
 };
 
@@ -340,6 +360,8 @@ const CLASS_INTRO: Record<ClassId, string> = {
   rogue:   "You learned the trade in alleys nobody named. The dark below is just another room with thinner walls.",
   mage:    "The colleges burned. You took what you could carry — a staff, a name, and an appetite for ruin.",
   priest:  "Your god is quiet, lately. You suspect they are waiting to see what you do down there.",
+  druid:   "The grove remembers what cities forget. You carry a piece of it down into the stone.",
+  deathknight: "You died once. The cold did not keep you. Something colder gave you a sword and pointed.",
 };
 
 export function buildIntro(faction: FactionId, classId: ClassId, name: string): string[] {
