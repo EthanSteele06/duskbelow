@@ -71,18 +71,21 @@ export function TitleScreen() {
           <div className="grid grid-cols-4 gap-1.5">
             {CLASSES.map((c) => {
               const sel = classId === c.id;
+              const isLocked = !unlocked.has(c.id);
               return (
                 <button
                   key={c.id}
-                  onClick={() => setClassId(c.id)}
-                  className="pixel-btn !p-1 flex flex-col items-center"
+                  onClick={() => !isLocked && setClassId(c.id)}
+                  disabled={isLocked}
+                  className={`pixel-btn !p-1 flex flex-col items-center ${isLocked ? "opacity-40" : ""}`}
                   style={sel ? { boxShadow: `inset 0 0 0 2px ${c.color}, inset -3px -3px 0 0 rgba(0,0,0,0.5)` } : undefined}
                 >
                   <img src={c.portrait} alt={c.name} className="h-14 w-full object-cover border border-black" />
-                  <span className="pixel text-[7px] mt-1">{c.name}</span>
+                  <span className="pixel text-[7px] mt-1">{isLocked ? "🔒" : c.name}</span>
                 </button>
               );
             })}
+
           </div>
           {classId && (
             <div className="mt-2 border-2 border-black bg-card/80 p-2">
