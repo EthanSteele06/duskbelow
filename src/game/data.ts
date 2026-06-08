@@ -1126,3 +1126,37 @@ export const IDLE_SECONDS_PER_UNIT = 300; // 1 material every 5 minutes
 export const IDLE_MAX_SECONDS = 60 * 60 * 12; // cap at 12 hours
 
 
+// ── Dungeon modes & affixes (Cursed Depths) ──────────────────────────────────
+
+export type DungeonMode = "normal" | "cursed";
+
+export type AffixId =
+  | "fortified" | "sapping" | "bloodlust" | "volatile"
+  | "frostbitten" | "starved" | "greedy" | "echoes";
+
+export interface AffixDef {
+  id: AffixId;
+  name: string;
+  desc: string;
+}
+
+export const AFFIXES: AffixDef[] = [
+  { id: "fortified",   name: "Fortified",   desc: "Enemies have +30% Max HP." },
+  { id: "sapping",     name: "Sapping",     desc: "Enemies deal +20% damage." },
+  { id: "bloodlust",   name: "Bloodlust",   desc: "Enemies below 30% HP enrage (+50% damage)." },
+  { id: "volatile",    name: "Volatile",    desc: "On enemy death, you lose 5% Max HP." },
+  { id: "frostbitten", name: "Frostbitten", desc: "Your chills also chill you (+30% dmg taken, 2t)." },
+  { id: "starved",     name: "Starved",     desc: "Between-room healing is halved." },
+  { id: "greedy",      name: "Greedy",      desc: "Enemies drop +50% gold and double materials." },
+  { id: "echoes",      name: "Echoes",      desc: "Every 5th floor, slain enemies re-rise once." },
+];
+
+export function rollAffixes(count = 2): AffixId[] {
+  const pool = [...AFFIXES];
+  const out: AffixId[] = [];
+  for (let i = 0; i < count && pool.length > 0; i++) {
+    const idx = Math.floor(Math.random() * pool.length);
+    out.push(pool.splice(idx, 1)[0].id);
+  }
+  return out;
+}
