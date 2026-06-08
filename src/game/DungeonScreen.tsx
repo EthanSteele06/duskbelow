@@ -115,6 +115,7 @@ export function DungeonScreen() {
   const dmgSkin    = eq.damageSkin ? COSMETICS.find((c) => c.id === eq.damageSkin)?.tint : undefined;
 
   const [enc, setEnc] = useState<Encounter>(() => ({ kind: "path", depth: 1 }));
+  const playerFaction = player.faction;
   const [hit, setHit] = useState(false);
   const [combatLog, setCombatLog] = useState<string[]>([]);
   const [hoveredAbility, setHoveredAbility] = useState<Ability | null>(null);
@@ -157,7 +158,7 @@ export function DungeonScreen() {
     const newDepth = enc.depth + 1;
     if (newDepth > 10) { finishRun("victory"); return; }
     restoreBetweenRooms();
-    const next = rollEncounter(newDepth);
+    const next = rollEncounter(newDepth, playerFaction);
     setEnc(next);
     if (next.kind === "combat") addLog(`A ${next.enemy.name} blocks your path!`);
     else if (next.kind === "chest") addLog(`You spot ${next.preview.label}.`);
