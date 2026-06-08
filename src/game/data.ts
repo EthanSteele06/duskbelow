@@ -12,6 +12,10 @@ import wraithImg from "@/assets/enemy-wraith.jpg";
 import ogreImg from "@/assets/enemy-ogre.jpg";
 import cultistImg from "@/assets/enemy-cultist.jpg";
 import dragonImg from "@/assets/enemy-dragon.jpg";
+import knightImg from "@/assets/enemy-knight.jpg";
+import marauderImg from "@/assets/enemy-marauder.jpg";
+import ghoulImg from "@/assets/enemy-ghoul.jpg";
+import impImg from "@/assets/enemy-imp.jpg";
 import trainerWarriorImg from "@/assets/trainer-warrior.jpg";
 import trainerRogueImg from "@/assets/trainer-rogue.jpg";
 import trainerMageImg from "@/assets/trainer-mage.jpg";
@@ -238,14 +242,59 @@ export const ENEMIES: Record<string, EnemyDef> = {
       { id: "breath", label: "🔥 Dragon Breath",mult: 2.2, line: "The {n} breathes searing flame for {d}!", telegraphable: true },
     ],
   },
+  // Generic additions
+  imp: {
+    id: "imp", name: "Fel Imp", image: impImg,
+    hpBase: 10, atkBase: 3,
+    materialDrop: { id: "arcane_dust", chance: 0.5 },
+    attackLines: ["The {n} flings a cinder for {d}!"],
+    intents: [
+      { id: "cinder", label: "🔥 Cinder",  mult: 1.0, line: "The {n} flings a cinder for {d}!" },
+      { id: "cackle", label: "😈 Cackle Burst", mult: 1.6, line: "{n} cackles — fel sparks erupt for {d}!", telegraphable: true },
+    ],
+  },
+  ghoul: {
+    id: "ghoul", name: "Charnel Ghoul", image: ghoulImg,
+    hpBase: 30, atkBase: 7,
+    materialDrop: { id: "bone_dust", chance: 0.55 },
+    attackLines: ["The {n} rakes you for {d}!"],
+    intents: [
+      { id: "rake",  label: "🪓 Rake",    mult: 1.0, line: "The {n} rakes you for {d}!" },
+      { id: "feast", label: "🦴 Feast",   mult: 1.7, line: "{n} lunges to feast — {d} damage!", telegraphable: true },
+    ],
+  },
+  // Faction-specific: only spawns when the player is on the OPPOSING faction.
+  kingdom_knight: {
+    id: "kingdom_knight", name: "Oathsworn Knight", image: knightImg,
+    hpBase: 34, atkBase: 8,
+    materialDrop: { id: "iron_scrap", chance: 0.6 },
+    attackLines: ["The {n} smites you for {d}!"],
+    intents: [
+      { id: "smite",  label: "⚔ Smite",    mult: 1.0, line: "The {n} smites you for {d}!" },
+      { id: "bash",   label: "⛨ Shield Bash", mult: 1.5, line: "{n} bashes with their tower shield for {d}!", telegraphable: true },
+    ],
+  },
+  brigade_marauder: {
+    id: "brigade_marauder", name: "Brigade Marauder", image: marauderImg,
+    hpBase: 32, atkBase: 9,
+    materialDrop: { id: "iron_scrap", chance: 0.55 },
+    attackLines: ["The {n} hacks you for {d}!"],
+    intents: [
+      { id: "hack",   label: "🪓 Hack",    mult: 1.0, line: "The {n} hacks you for {d}!" },
+      { id: "execute",label: "💀 Execute", mult: 1.9, line: "{n} winds up an execution swing — {d} damage!", telegraphable: true },
+    ],
+  },
 };
 
-export function enemyForDepth(depth: number): EnemyDef {
+export function enemyForDepth(depth: number, faction?: FactionId | null): EnemyDef {
   if (depth >= 10) return ENEMIES.dragon;
-  const pool =
-    depth <= 3 ? ["rat", "skeleton"] :
-    depth <= 6 ? ["skeleton", "cultist", "wraith"] :
-                 ["wraith", "ogre", "cultist"];
+  // Faction-specific enemies — appear when player belongs to the OPPOSING side.
+  const factionFoe = faction === "allies" ? "brigade_marauder" : faction === "brigade" ? "kingdom_knight" : null;
+  const pool: string[] =
+    depth <= 3 ? ["rat", "skeleton", "imp"] :
+    depth <= 6 ? ["skeleton", "cultist", "wraith", "imp", "ghoul"] :
+                 ["wraith", "ogre", "cultist", "ghoul"];
+  if (factionFoe && depth >= 2) pool.push(factionFoe);
   return ENEMIES[pool[Math.floor(Math.random() * pool.length)]];
 }
 
@@ -795,6 +844,31 @@ export const CHAMPION_PERKS: { icon: string; title: string; desc: string }[] = [
 
 export const CHAMPION_PRICE_USD = 4.99;
 export const RESPEC_GOLD_COST = 100;
-export const BAG_SIZE_BASE = 40;
-export const BAG_SIZE_CHAMPION = 80;
+export const BAG_SIZE_BASE = 12;
+export const BAG_SIZE_CHAMPION = 24;
+
+// ── Damage variance helpers ──────────────────────────────────────────────────
+/** ±20% variance on a base damage figure; clamped to >= 1. */
+export function rollDamage(base: number): number {
+  const lo = Math.max(1, Math.floor(base * 0.8));
+  const hi = Math.max(lo, Math.ceil(base * 1.2));
+  return lo + Math.floor(Math.random() * (hi - lo + 1));
+}
+export function damageRange(base: number): [number, number] {
+  const lo = Math.max(1, Math.floor(base * 0.8));
+  const hi = Math.max(lo, Math.ceil(base * 1.2));
+  return [lo, hi];
+}
+
+// ── Idle profession yields (gained over real elapsed seconds) ────────────────
+/** Material gained per minute of idle time, per profession. */
+export const IDLE_YIELDS: Record<ProfessionId, string> = {
+  blacksmithing: "iron_scrap",
+  tailoring:     "linen_scrap",
+  alchemy:       "herb_bundle",
+  enchanting:    "arcane_dust",
+};
+export const IDLE_SECONDS_PER_UNIT = 300; // 1 material every 5 minutes
+export const IDLE_MAX_SECONDS = 60 * 60 * 12; // cap at 12 hours
+
 

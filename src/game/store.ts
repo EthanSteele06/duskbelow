@@ -3,6 +3,7 @@ import type { ClassId, FactionId, Ability, ProfessionId, GearItem, GearSlot, Tal
 import {
   CLASSES, FACTIONS, VENDOR_ITEMS, QUESTS, TRAINERS, RECIPES, MATERIALS, SPECS, TALENT_TREES, COSMETICS,
   BAG_SIZE_BASE, BAG_SIZE_CHAMPION, RESPEC_GOLD_COST, gearSellPrice, profXpForLevel,
+  IDLE_YIELDS, IDLE_SECONDS_PER_UNIT, IDLE_MAX_SECONDS,
 } from "./data";
 import {
   type MetaState, type EchoNode, emptyMeta, loadMeta, saveMeta,
@@ -58,6 +59,8 @@ interface PlayerState {
   profXp: number;
   materials: Record<string, number>;
   knownRecipes: string[];
+  /** When the active profession started accruing idle materials (Date.now ms). */
+  profIdleSince: number;
   isChampion: boolean;
   ownedCosmetics: string[];
   equippedCosmetics: Partial<Record<string, string>>;
@@ -136,6 +139,8 @@ interface GameState {
   discardBagItem: (itemId: string) => void;
   sellBagItem: (itemId: string) => void;
   pickProfession: (id: ProfessionId) => void;
+  switchProfession: (id: ProfessionId) => void;
+  claimIdleProfession: () => { mat: string; gained: number } | null;
   craft: (recipeId: string) => boolean;
   sellMaterial: (id: string) => void;
   buyRecipe: (id: string) => boolean;
@@ -166,7 +171,7 @@ const emptyPlayer = (): PlayerState => ({
   gold: 50, gems: 0, inventory: [], questItems: {}, dungeonDepth: 0,
   skillPoints: 0, learnedSkills: [], talentPoints: 0, learnedTalents: [], earnedSkillForLevel: 0,
   equipment: {}, bag: [],
-  profession: null, profLevel: 1, profXp: 0, materials: {}, knownRecipes: [],
+  profession: null, profLevel: 1, profXp: 0, materials: {}, knownRecipes: [], profIdleSince: 0,
   isChampion: false, ownedCosmetics: [], equippedCosmetics: {},
   racialUsed: 0, racialMax: 1, nextAttackMult: 1,
   runKills: 0, runGold: 0, runXp: 0, runShards: 0,
@@ -652,8 +657,38 @@ export const useGame = create<GameState>((set, get) => ({
   pickProfession: (id) => {
     const p = get().player;
     if (p.profession) return;
-    set({ player: { ...p, profession: id } });
+    set({ player: { ...p, profession: id, profIdleSince: Date.now() } });
     get().pushLog(`Took up ${id}.`);
+  },
+
+  switchProfession: (id) => {
+    const p = get().player;
+    if (p.profession === id) return;
+    set({ player: {
+      ...p,
+      profession: id,
+      profLevel: 1, profXp: 0,
+      materials: {}, knownRecipes: [],
+      profIdleSince: Date.now(),
+    } });
+    get().pushLog(`Abandoned old craft. Took up ${id} — progress reset.`);
+  },
+
+  claimIdleProfession: () => {
+    const p = get().player;
+    if (!p.profession || !p.profIdleSince) {
+      if (p.profession && !p.profIdleSince) set({ player: { ...p, profIdleSince: Date.now() } });
+      return null;
+    }
+    const elapsed = Math.min(IDLE_MAX_SECONDS, Math.floor((Date.now() - p.profIdleSince) / 1000));
+    const gained = Math.floor(elapsed / IDLE_SECONDS_PER_UNIT);
+    if (gained <= 0) return null;
+    const mat = IDLE_YIELDS[p.profession];
+    const consumed = gained * IDLE_SECONDS_PER_UNIT * 1000;
+    const mats = { ...p.materials, [mat]: (p.materials[mat] ?? 0) + gained };
+    set({ player: { ...p, materials: mats, profIdleSince: p.profIdleSince + consumed } });
+    get().pushLog(`✦ Idle craft: +${gained}× ${MATERIALS[mat]?.name ?? mat}.`);
+    return { mat, gained };
   },
 
   craft: (recipeId) => {
@@ -938,8 +973,11 @@ export const useGame = create<GameState>((set, get) => ({
       xp: p.runXp,
       shards: p.runShards + (outcome === "victory" ? Math.floor(15 * echoStart(meta).shardMult) : 0),
       loreFound: j.loreFound,
-      bag: [...p.bag],
-      equipment: Object.values(p.equipment).filter(Boolean) as GearItem[],
+      // On defeat, gear is lost in the dungeon — only escapees keep loot.
+      bag: outcome === "victory" ? [...p.bag] : [],
+      equipment: outcome === "victory"
+        ? (Object.values(p.equipment).filter(Boolean) as GearItem[])
+        : [],
       date: Date.now(),
       isFirstRun,
     };

@@ -3,9 +3,9 @@ import { useGame } from "@/game/store";
 import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumber";
 import {
   CLASS_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
-  RARITY_CLASS, RARITY_LABEL, gearScore, gearSellPrice,
+  RARITY_CLASS, RARITY_LABEL, gearScore, gearSellPrice, rollDamage, damageRange,
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
-  type StatusEffect, type EnemyIntent,
+  type StatusEffect, type EnemyIntent, type FactionId,
 } from "@/game/data";
 import corridorImg from "@/assets/dungeon-corridor.jpg";
 import chestImg from "@/assets/dungeon-chest.jpg";
@@ -48,8 +48,8 @@ function pickIntent(enemy: EnemyDef): EnemyIntent {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function buildCombat(depth: number): CombatEnc {
-  const e = enemyForDepth(depth);
+function buildCombat(depth: number, faction?: FactionId | null): CombatEnc {
+  const e = enemyForDepth(depth, faction);
   const hp = e.hpBase + (depth >= 10 ? 0 : Math.floor(depth * 1.4));
   return {
     kind: "combat", depth, enemy: e, enemyHp: hp, enemyMaxHp: hp,
@@ -59,10 +59,10 @@ function buildCombat(depth: number): CombatEnc {
   };
 }
 
-function rollEncounter(depth: number): Encounter {
-  if (depth >= 10) return buildCombat(depth);
+function rollEncounter(depth: number, faction?: FactionId | null): Encounter {
+  if (depth >= 10) return buildCombat(depth, faction);
   const r = Math.random();
-  if (r < 0.55) return buildCombat(depth);
+  if (r < 0.55) return buildCombat(depth, faction);
   if (r < 0.85) return { kind: "chest", depth, preview: rollChest(depth) };
   return { kind: "path", depth };
 }
@@ -115,6 +115,7 @@ export function DungeonScreen() {
   const dmgSkin    = eq.damageSkin ? COSMETICS.find((c) => c.id === eq.damageSkin)?.tint : undefined;
 
   const [enc, setEnc] = useState<Encounter>(() => ({ kind: "path", depth: 1 }));
+  const playerFaction = player.faction;
   const [hit, setHit] = useState(false);
   const [combatLog, setCombatLog] = useState<string[]>([]);
   const [hoveredAbility, setHoveredAbility] = useState<Ability | null>(null);
@@ -157,7 +158,7 @@ export function DungeonScreen() {
     const newDepth = enc.depth + 1;
     if (newDepth > 10) { finishRun("victory"); return; }
     restoreBetweenRooms();
-    const next = rollEncounter(newDepth);
+    const next = rollEncounter(newDepth, playerFaction);
     setEnc(next);
     if (next.kind === "combat") addLog(`A ${next.enemy.name} blocks your path!`);
     else if (next.kind === "chest") addLog(`You spot ${next.preview.label}.`);
@@ -199,9 +200,9 @@ export function DungeonScreen() {
       return { ...e, stunnedTurns: e.stunnedTurns - 1, shieldReduce: 0, nextIntent: pickIntent(e.enemy) };
     }
     const intent = e.nextIntent;
-    let dmg = Math.max(1, Math.floor(e.enemy.atkBase + e.depth * 0.6) * intent.mult - Math.floor(Math.random() * 3));
+    const baseDmg = (e.enemy.atkBase + e.depth * 0.6) * intent.mult;
+    let dmg = rollDamage(baseDmg);
     if (e.shieldReduce > 0) dmg = Math.max(1, Math.floor(dmg * (1 - e.shieldReduce)));
-    dmg = Math.max(1, Math.floor(dmg));
     const taken = damage(dmg);
     if (taken > 0) {
       addFloater("enemy", taken);
@@ -213,7 +214,8 @@ export function DungeonScreen() {
 
   const applyAttack = (e: CombatEnc, ab: Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> }): CombatEnc => {
     const base = ab.effect.useMag ? player.mag : player.atk;
-    let dmg = Math.max(1, Math.floor(base * ab.effect.mult));
+    // Roll damage in a ±20% range so hits feel less robotic.
+    let dmg = rollDamage(base * ab.effect.mult);
     // Crit
     const crit = player.crit > 0 && Math.random() * 100 < player.crit;
     if (crit) dmg = Math.floor(dmg * 1.5);
@@ -564,13 +566,22 @@ export function DungeonScreen() {
                 );
               })}
             </div>
-            {(hoveredAbility ?? abilities[0]) && (
-              <div className={`border-2 px-2 py-1.5 ${armedAbility ? "border-gold bg-card" : "border-black bg-popover"}`}>
-                <p className="pixel text-[8px] text-gold">{armedAbility ? "▶ " : ""}{(hoveredAbility ?? abilities[0]).name}</p>
-                <p className="font-body text-sm text-muted-foreground leading-tight">{(hoveredAbility ?? abilities[0]).desc}</p>
-                {armedAbility && <p className="pixel text-[7px] text-divine mt-1">Tap the same ability again to use it.</p>}
-              </div>
-            )}
+            {(hoveredAbility ?? abilities[0]) && (() => {
+              const ab = hoveredAbility ?? abilities[0];
+              let rangeStr = "";
+              if (ab.effect.kind === "attack") {
+                const base = ab.effect.useMag ? player.mag : player.atk;
+                const [lo, hi] = damageRange(base * ab.effect.mult);
+                rangeStr = ` — ${lo}–${hi} dmg`;
+              }
+              return (
+                <div className={`border-2 px-2 py-1.5 ${armedAbility ? "border-gold bg-card" : "border-black bg-popover"}`}>
+                  <p className="pixel text-[8px] text-gold">{armedAbility ? "▶ " : ""}{ab.name}{rangeStr}</p>
+                  <p className="font-body text-sm text-muted-foreground leading-tight">{ab.desc}</p>
+                  {armedAbility && <p className="pixel text-[7px] text-divine mt-1">Tap the same ability again to use it.</p>}
+                </div>
+              );
+            })()}
             {faction && (
               <button
                 onClick={onRacial}
@@ -596,7 +607,13 @@ export function DungeonScreen() {
           {inv.includes("hearth") && <button onClick={useHearth} className="pixel-btn pixel-btn-gold !text-[8px]">⌂ Hearthstone — bail out</button>}
         </div>
 
-        <button onClick={exitDungeon} className="pixel-btn !text-[8px] w-full text-center">⌂ Retreat to City</button>
+        {enc.kind === "combat" ? (
+          <p className="pixel text-[7px] text-blood text-center opacity-80 mt-1">
+            ⚠ Locked in combat — use a Hearthstone Charm to bail out.
+          </p>
+        ) : (
+          <button onClick={exitDungeon} className="pixel-btn !text-[8px] w-full text-center">⌂ Retreat to City</button>
+        )}
       </div>
     </div>
   );

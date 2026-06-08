@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useGame } from "@/game/store";
 import { FACTIONS, TRAINERS, SPECS } from "@/game/data";
 import { nextUnlock } from "@/game/meta";
@@ -12,6 +13,8 @@ export function CityScreen() {
   const player = useGame((s) => s.player);
   const meta = useGame((s) => s.meta);
   const log = useGame((s) => s.log);
+  const claimIdle = useGame((s) => s.claimIdleProfession);
+  useEffect(() => { claimIdle(); }, [claimIdle]);
   const f = FACTIONS.find((x) => x.id === player.faction)!;
   const trainer = player.classId ? TRAINERS[player.classId] : null;
   const spec = player.specId ? SPECS.find((s) => s.id === player.specId) : null;
