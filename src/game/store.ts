@@ -15,7 +15,7 @@ export type Screen =
   | "vendor" | "auction" | "quests"
   | "trainer" | "talents" | "profession"
   | "equipment" | "shop" | "champion"
-  | "dungeon" | "victory" | "defeat"
+  | "dungeon"
   | "run_summary" | "echo" | "journal";
 
 export interface QuestState {
@@ -75,8 +75,6 @@ interface PlayerState {
   runXp: number;
   /** soul shards earned during the current run */
   runShards: number;
-  /** floors cleared this run */
-  runFloors: number;
 }
 
 export interface RunSummary {
@@ -151,6 +149,7 @@ interface GameState {
   wipeCharacter: () => void;
   finishRun: (outcome: "victory" | "defeat") => void;
   markSeenWipeIntro: () => void;
+  hydrateMeta: () => void;
 }
 
 const emptyPlayer = (): PlayerState => ({
@@ -163,7 +162,7 @@ const emptyPlayer = (): PlayerState => ({
   profession: null, profLevel: 1, profXp: 0, materials: {}, knownRecipes: [],
   isChampion: false, ownedCosmetics: [], equippedCosmetics: {},
   racialUsed: 0, racialMax: 1, nextAttackMult: 1,
-  runKills: 0, runGold: 0, runXp: 0, runShards: 0, runFloors: 0,
+  runKills: 0, runGold: 0, runXp: 0, runShards: 0,
 });
 
 const xpForLevel = (lvl: number) => lvl * 25;
@@ -232,7 +231,12 @@ function buildFreshPlayer(
     else bag.push(h);
   }
 
-  const startGold = Math.max(50, Math.floor((prev?.gold ?? 0) * echo.retainGoldPct) || 50);
+  // Default starting purse is 50g for a brand-new character. If this is a
+  // wipe-respawn and Buried Coin is learned, carry a fraction of the prior
+  // gold instead — even if that's less than 50.
+  const startGold = prev
+    ? Math.floor(prev.gold * echo.retainGoldPct)
+    : 50;
 
   const base: PlayerState = {
     ...emptyPlayer(),
