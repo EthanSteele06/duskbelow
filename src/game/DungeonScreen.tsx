@@ -3,7 +3,7 @@ import { useGame } from "@/game/store";
 import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumber";
 import {
   CLASS_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
-  RARITY_CLASS, RARITY_LABEL, gearScore, gearSellPrice, rollDamage, damageRange,
+  RARITY_CLASS, RARITY_LABEL, gearScore, rollDamage, damageRange,
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
   type StatusEffect, type EnemyIntent, type FactionId,
 } from "@/game/data";
