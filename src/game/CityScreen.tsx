@@ -4,6 +4,7 @@ import { FACTIONS, TRAINERS, SPECS } from "@/game/data";
 import { nextUnlock } from "@/game/meta";
 import { playMusic } from "@/game/audio";
 import { SettingsButton } from "@/game/Settings";
+import { TutorialTip } from "@/game/Tutorial";
 import cityImg from "@/assets/city.jpg";
 import cityAlliesImg from "@/assets/city-allies.jpg";
 import cityBrigadeImg from "@/assets/city-brigade.jpg";
@@ -93,6 +94,12 @@ export function CityScreen() {
       </div>
 
       <button onClick={reset} className="m-3 pixel-btn !text-[8px] text-center">← Abandon Run</button>
+
+      <TutorialTip
+        id="city-tour"
+        title="Your Hub"
+        body="Visit the Trainer to spec, Vendors for blessings, Crafter's Row for professions. Echo Tree spends shards between runs. When ready, Descend."
+      />
     </div>
   );
 }
