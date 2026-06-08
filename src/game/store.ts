@@ -61,6 +61,10 @@ interface PlayerState {
   isChampion: boolean;
   ownedCosmetics: string[];
   equippedCosmetics: Partial<Record<string, string>>; // kind -> cosmeticId
+  // faction racial (once per run)
+  racialUsed: boolean;
+  /** multiplier applied to the very next player attack (Frenzy), then consumed */
+  nextAttackMult: number;
 }
 
 interface GameState {
