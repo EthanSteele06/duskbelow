@@ -200,9 +200,9 @@ export function DungeonScreen() {
       return { ...e, stunnedTurns: e.stunnedTurns - 1, shieldReduce: 0, nextIntent: pickIntent(e.enemy) };
     }
     const intent = e.nextIntent;
-    let dmg = Math.max(1, Math.floor(e.enemy.atkBase + e.depth * 0.6) * intent.mult - Math.floor(Math.random() * 3));
+    const baseDmg = (e.enemy.atkBase + e.depth * 0.6) * intent.mult;
+    let dmg = rollDamage(baseDmg);
     if (e.shieldReduce > 0) dmg = Math.max(1, Math.floor(dmg * (1 - e.shieldReduce)));
-    dmg = Math.max(1, Math.floor(dmg));
     const taken = damage(dmg);
     if (taken > 0) {
       addFloater("enemy", taken);
@@ -214,7 +214,8 @@ export function DungeonScreen() {
 
   const applyAttack = (e: CombatEnc, ab: Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> }): CombatEnc => {
     const base = ab.effect.useMag ? player.mag : player.atk;
-    let dmg = Math.max(1, Math.floor(base * ab.effect.mult));
+    // Roll damage in a ±20% range so hits feel less robotic.
+    let dmg = rollDamage(base * ab.effect.mult);
     // Crit
     const crit = player.crit > 0 && Math.random() * 100 < player.crit;
     if (crit) dmg = Math.floor(dmg * 1.5);
