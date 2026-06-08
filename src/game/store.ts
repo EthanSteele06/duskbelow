@@ -123,6 +123,7 @@ const emptyPlayer: PlayerState = {
   equipment: {}, bag: [],
   profession: null, profLevel: 1, profXp: 0, materials: {}, knownRecipes: [],
   isChampion: false, ownedCosmetics: [], equippedCosmetics: {},
+  racialUsed: false, nextAttackMult: 1,
 };
 
 const xpForLevel = (lvl: number) => lvl * 25;
