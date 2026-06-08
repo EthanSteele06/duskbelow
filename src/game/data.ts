@@ -251,26 +251,37 @@ export function enemyForDepth(depth: number): EnemyDef {
 
 // ── Vendor / Auction ─────────────────────────────────────────────────────────
 
+export interface BuffEffect {
+  atk?: number;
+  mag?: number;
+  maxHp?: number;
+  goldMult?: number;
+}
+
 export interface VendorItem {
   id: string;
   name: string;
   desc: string;
   price: number;
-  kind: "weapon" | "potion" | "trinket" | "consumable";
+  kind: "weapon" | "potion" | "trinket" | "consumable" | "buff";
   atk?: number;
   heal?: number;
   /** if set, sold in the Cobalt Vault for gems instead of gold */
   gemPrice?: number;
   /** consumable effect identifier */
   effect?: "hearthstone" | "phoenix";
+  /** For kind === "buff": stat bonuses applied on the next descent, then cleared. */
+  buff?: BuffEffect;
 }
 
 export const VENDOR_ITEMS: VendorItem[] = [
   { id: "p1", name: "Lesser Healing Draught", desc: "Restores 15 HP.", price: 12, kind: "potion", heal: 15 },
   { id: "p2", name: "Greater Healing Draught", desc: "Restores 35 HP.", price: 30, kind: "potion", heal: 35 },
-  { id: "w1", name: "Ironbite Blade", desc: "+2 ATK.", price: 45, kind: "weapon", atk: 2 },
-  { id: "w2", name: "Runed Cleaver", desc: "+4 ATK.", price: 110, kind: "weapon", atk: 4 },
-  { id: "t1", name: "Ember Charm", desc: "Pulses with dungeon heat.", price: 25, kind: "trinket" },
+  // Next-run blessings — bought in town, baked in on Descend, cleared on return.
+  { id: "b_whet",  name: "Whetstone Oil",     desc: "Blessing: +3 ATK on your next descent.",                price: 40,  kind: "buff", buff: { atk: 3 } },
+  { id: "b_ember", name: "Ember Tonic",       desc: "Blessing: +3 MAG on your next descent.",                price: 40,  kind: "buff", buff: { mag: 3 } },
+  { id: "b_iron",  name: "Ironskin Draught",  desc: "Blessing: +15 Max HP on your next descent.",            price: 60,  kind: "buff", buff: { maxHp: 15 } },
+  { id: "b_coin",  name: "Lucky Coin",        desc: "Blessing: +25% gold from kills & chests next descent.", price: 90,  kind: "buff", buff: { goldMult: 0.25 } },
   // Premium revive consumables — sold for gems in the Cobalt Vault.
   { id: "hearth",  name: "Hearthstone Charm", desc: "Bail out of the dungeon at any moment. Keeps your run rewards. One use.", price: 0, gemPrice: 75,  kind: "consumable", effect: "hearthstone" },
   { id: "phoenix", name: "Phoenix Feather",   desc: "On lethal damage, revives at 50% HP. Auto-trigger. One use.",            price: 0, gemPrice: 150, kind: "consumable", effect: "phoenix" },
@@ -543,6 +554,12 @@ export const SPECS: SpecDef[] = [
   { id: "discipline",    classId: "priest",  name: "Discipline",    tagline: "Shield with light.",     color: "var(--color-divine)" },
   { id: "holy",          classId: "priest",  name: "Holy",          tagline: "Restoration mastery.",   color: "var(--color-gold)" },
   { id: "shadow",        classId: "priest",  name: "Shadow",        tagline: "Drain the living.",      color: "var(--color-arcane)" },
+  { id: "balance",       classId: "druid",   name: "Balance",       tagline: "Moon and sun in turn.",  color: "var(--color-arcane)" },
+  { id: "feral",         classId: "druid",   name: "Feral",         tagline: "Tooth and claw.",        color: "oklch(0.6 0.18 50)" },
+  { id: "restoration",   classId: "druid",   name: "Restoration",   tagline: "Heal what the wild took.", color: "oklch(0.7 0.17 145)" },
+  { id: "blood_dk",      classId: "deathknight", name: "Blood",     tagline: "The blade feeds the wound.", color: "var(--color-blood)" },
+  { id: "frost_dk",      classId: "deathknight", name: "Frost",     tagline: "Two blades, one chill.", color: "var(--color-allies)" },
+  { id: "unholy",        classId: "deathknight", name: "Unholy",    tagline: "Pestilence and decay.",  color: "oklch(0.55 0.15 130)" },
 ];
 
 export interface TalentNode {
@@ -582,6 +599,12 @@ export const TALENT_TREES: Record<string, TalentNode[]> = {
   discipline:    tree("disc",       { mag: 2, maxHp: 4 }),
   holy:          tree("holy",       { mag: 3, maxHp: 2 }),
   shadow:        tree("shadow",     { mag: 3, atk: 1 }),
+  balance:       tree("balance",    { mag: 3, maxHp: 1 }),
+  feral:         tree("feral",      { atk: 3 }),
+  restoration:   tree("resto",      { mag: 2, maxHp: 4 }),
+  blood_dk:      tree("blood",      { atk: 2, maxHp: 4 }),
+  frost_dk:      tree("dkfrost",    { atk: 3 }),
+  unholy:        tree("unholy",     { atk: 2, mag: 2 }),
 };
 
 // ── Gear / Equipment ─────────────────────────────────────────────────────────
