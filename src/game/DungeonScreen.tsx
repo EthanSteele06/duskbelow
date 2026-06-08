@@ -239,10 +239,31 @@ export function DungeonScreen() {
 
   const applyAttack = (e: CombatEnc, ab: Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> }): CombatEnc => {
     const base = ab.effect.useMag ? player.mag : player.atk;
+    // Legendary class-signature buff: applies only when using the empowered ability
+    // and the equipped legendary matches the player's class.
+    const legendary = Object.values(player.equipment).find(
+      (g) => g && g.classId === player.classId && g.empowersAbilityId === ab.id,
+    );
+    let dmgMult = 1;
+    let bonusCritPct = 0;
+    let lifestealMult = 1;
+    let extraChillTurns = 0;
+    let postHitHeal = 0;
+    if (legendary) {
+      switch (player.classId) {
+        case "warrior":     dmgMult = 1.6; break;
+        case "rogue":       bonusCritPct = 35; break;
+        case "mage":        dmgMult = 1.5; extraChillTurns = 1; break;
+        case "priest":      postHitHeal = -1; break; // sentinel: heal 40% of dmg
+        case "druid":       dmgMult = 1.4; postHitHeal = 6; break;
+        case "deathknight": dmgMult = 1.35; lifestealMult = 2; break;
+      }
+    }
     // Roll damage in a ±20% range so hits feel less robotic.
-    let dmg = rollDamage(base * ab.effect.mult);
+    let dmg = rollDamage(base * ab.effect.mult * dmgMult);
     // Crit
-    const crit = player.crit > 0 && Math.random() * 100 < player.crit;
+    const critChance = player.crit + bonusCritPct;
+    const crit = critChance > 0 && Math.random() * 100 < critChance;
     if (crit) dmg = Math.floor(dmg * 1.5);
     // Frenzy / Rally next-attack multiplier
     if (player.nextAttackMult !== 1) {
@@ -263,14 +284,22 @@ export function DungeonScreen() {
 
     addFloater("player", dmg, dmgSkin);
     const flavor = ab.effect.flavor.replace("{p}", player.name);
-    addLog(`${flavor} for ${dmg}${crit ? " CRIT" : ""} damage!`);
+    addLog(`${flavor} for ${dmg}${crit ? " CRIT" : ""}${legendary ? " ✦" : ""} damage!`);
 
     // Lifesteal
-    if (ab.effect.lifesteal && ab.effect.lifesteal > 0) {
-      const healed = Math.max(1, Math.floor(dmg * ab.effect.lifesteal));
+    const effectiveLifesteal = (ab.effect.lifesteal ?? 0) * lifestealMult;
+    if (effectiveLifesteal > 0) {
+      const healed = Math.max(1, Math.floor(dmg * effectiveLifesteal));
       heal(healed);
       addFloater("heal", healed);
       addLog(`${player.name} drains ${healed} life.`);
+    }
+    // Legendary post-hit heal
+    if (postHitHeal === -1) {
+      const healed = Math.max(1, Math.floor(dmg * 0.4));
+      heal(healed); addFloater("heal", healed);
+    } else if (postHitHeal > 0) {
+      heal(postHitHeal); addFloater("heal", postHitHeal);
     }
 
     let nextEffects = e.enemyEffects;
