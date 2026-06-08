@@ -96,7 +96,6 @@ export function ShopScreen() {
 
         {tab === "shop" && (
           <div className="space-y-4">
-          <div className="space-y-4">
             <div>
               <h3 className="pixel text-[10px] text-gold mb-1.5">Run Insurance</h3>
               <div className="grid grid-cols-1 gap-2">
