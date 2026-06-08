@@ -522,11 +522,13 @@ export function DungeonScreen() {
             {faction && (
               <button
                 onClick={onRacial}
-                disabled={player.racialUsed}
+                disabled={player.racialUsed >= player.racialMax}
                 className="pixel-btn !text-[8px] w-full disabled:opacity-40"
                 style={{ borderColor: faction.color }}
               >
-                {player.racialUsed ? `✦ ${faction.racial.name} — used` : `✦ ${faction.racial.name} — ${faction.racial.desc}`}
+                {player.racialUsed >= player.racialMax
+                  ? `✦ ${faction.racial.name} — used`
+                  : `✦ ${faction.racial.name} (${player.racialMax - player.racialUsed} left) — ${faction.racial.desc}`}
               </button>
             )}
             {player.nextAttackMult !== 1 && (
