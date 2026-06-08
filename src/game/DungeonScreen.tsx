@@ -2,7 +2,12 @@ import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useGame } from "@/game/store";
 import { StatBar } from "./StatBar";
 import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumber";
-import { CLASS_ABILITIES, COSMETICS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES, RARITY_CLASS, RARITY_LABEL, gearSellPrice, type Ability, type EnemyDef, type ChestPreview, type GearItem } from "@/game/data";
+import {
+  CLASS_ABILITIES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
+  RARITY_CLASS, RARITY_LABEL, gearScore, gearSellPrice,
+  type Ability, type EnemyDef, type ChestPreview, type GearItem,
+  type StatusEffect, type EnemyIntent,
+} from "@/game/data";
 import corridorImg from "@/assets/dungeon-corridor.jpg";
 import chestImg from "@/assets/dungeon-chest.jpg";
 
@@ -18,33 +23,70 @@ interface Loot {
   gear?: GearItem;
 }
 
+type CombatEnc = {
+  kind: "combat"; depth: number;
+  enemy: EnemyDef;
+  enemyHp: number; enemyMaxHp: number;
+  stunnedTurns: number; shieldReduce: number;
+  cooldowns: Record<string, number>;
+  enemyEffects: StatusEffect[];  // bleed / burn on enemy, chill on enemy
+  playerEffects: StatusEffect[]; // renew / burn on player (future)
+  nextIntent: EnemyIntent;       // telegraphed action for the upcoming enemy turn
+};
 
 type Encounter =
   | { kind: "path"; depth: number }
   | { kind: "victory"; depth: number; loot: Loot }
   | { kind: "chest"; depth: number; preview: ChestPreview }
-  | {
-      kind: "combat"; depth: number;
-      enemy: EnemyDef;
-      enemyHp: number; enemyMaxHp: number;
-      stunnedTurns: number; shieldReduce: number;
-      cooldowns: Record<string, number>;
-    };
+  | CombatEnc;
+
+function pickIntent(enemy: EnemyDef): EnemyIntent {
+  // Telegraphable intents fire ~35% of the time; otherwise pick a non-telegraphable
+  const teleg = enemy.intents.filter((i) => i.telegraphable);
+  const normal = enemy.intents.filter((i) => !i.telegraphable);
+  if (teleg.length && Math.random() < 0.35) return teleg[Math.floor(Math.random() * teleg.length)];
+  const pool = normal.length ? normal : enemy.intents;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function buildCombat(depth: number): CombatEnc {
+  const e = enemyForDepth(depth);
+  const hp = e.hpBase + (depth >= 10 ? 0 : Math.floor(depth * 1.4));
+  return {
+    kind: "combat", depth, enemy: e, enemyHp: hp, enemyMaxHp: hp,
+    stunnedTurns: 0, shieldReduce: 0, cooldowns: {},
+    enemyEffects: [], playerEffects: [],
+    nextIntent: pickIntent(e),
+  };
+}
 
 function rollEncounter(depth: number): Encounter {
-  if (depth >= 10) {
-    const e = enemyForDepth(10);
-    const hp = e.hpBase;
-    return { kind: "combat", depth, enemy: e, enemyHp: hp, enemyMaxHp: hp, stunnedTurns: 0, shieldReduce: 0, cooldowns: {} };
-  }
+  if (depth >= 10) return buildCombat(depth);
   const r = Math.random();
-  if (r < 0.55) {
-    const e = enemyForDepth(depth);
-    const hp = e.hpBase + Math.floor(depth * 1.4);
-    return { kind: "combat", depth, enemy: e, enemyHp: hp, enemyMaxHp: hp, stunnedTurns: 0, shieldReduce: 0, cooldowns: {} };
-  }
+  if (r < 0.55) return buildCombat(depth);
   if (r < 0.85) return { kind: "chest", depth, preview: rollChest(depth) };
   return { kind: "path", depth };
+}
+
+function chillMult(effects: StatusEffect[]) {
+  const c = effects.find((e) => e.kind === "chill");
+  return c ? c.power : 1;
+}
+
+function tickEffectsOnEnemy(e: CombatEnc, log: (m: string) => void): CombatEnc {
+  let hp = e.enemyHp;
+  const next: StatusEffect[] = [];
+  for (const ef of e.enemyEffects) {
+    if (ef.kind === "bleed") {
+      hp = Math.max(0, hp - ef.power);
+      log(`${e.enemy.name} bleeds for ${ef.power}.`);
+    } else if (ef.kind === "burn") {
+      hp = Math.max(0, hp - ef.power);
+      log(`${e.enemy.name} burns for ${ef.power}.`);
+    }
+    if (ef.turns - 1 > 0) next.push({ ...ef, turns: ef.turns - 1 });
+  }
+  return { ...e, enemyHp: hp, enemyEffects: next };
 }
 
 export function DungeonScreen() {
@@ -58,9 +100,16 @@ export function DungeonScreen() {
   const setScreen = useGame((s) => s.setScreen);
   const heal = useGame((s) => s.heal);
   const use = useGame((s) => s.use);
+  const restoreBetweenRooms = useGame((s) => s.restoreBetweenRooms);
+  const useRacial = useGame((s) => s.useRacial);
+  const consumeMult = useGame((s) => s.consumeNextAttackMult);
+  const equip = useGame((s) => s.equip);
+  const sellBag = useGame((s) => s.sellBagItem);
+  const discardBag = useGame((s) => s.discardBagItem);
 
   const abilities = player.classId ? CLASS_ABILITIES[player.classId] : [];
   const inv = player.inventory;
+  const faction = player.faction ? FACTIONS.find((f) => f.id === player.faction)! : null;
 
   const eq = player.equippedCosmetics ?? {};
   const weaponGlow = eq.weaponGlow ? COSMETICS.find((c) => c.id === eq.weaponGlow)?.tint : undefined;
@@ -94,6 +143,7 @@ export function DungeonScreen() {
   const advance = () => {
     const newDepth = enc.depth + 1;
     if (newDepth > 10) { setScreen("victory"); return; }
+    restoreBetweenRooms();
     const next = rollEncounter(newDepth);
     setEnc(next);
     if (next.kind === "combat") addLog(`A ${next.enemy.name} blocks your path!`);
@@ -101,26 +151,80 @@ export function DungeonScreen() {
     else addLog("The corridor opens further.");
   };
 
-  const tickCooldowns = (e: Extract<Encounter, { kind: "combat" }>) => {
+  const tickCooldowns = (e: CombatEnc) => {
     const cds: Record<string, number> = {};
     for (const [k, v] of Object.entries(e.cooldowns)) if (v > 1) cds[k] = v - 1;
     return cds;
   };
 
-  const enemyTurn = (e: Extract<Encounter, { kind: "combat" }>) => {
+  // Apply Renew (player HoT) — called at end of every player action turn
+  const tickPlayerEffects = (e: CombatEnc): CombatEnc => {
+    const next: StatusEffect[] = [];
+    for (const ef of e.playerEffects) {
+      if (ef.kind === "renew") {
+        heal(ef.power);
+        addFloater("heal", ef.power);
+        addLog(`Renew restores ${ef.power} HP.`);
+      }
+      if (ef.turns - 1 > 0) next.push({ ...ef, turns: ef.turns - 1 });
+    }
+    return { ...e, playerEffects: next };
+  };
+
+  const enemyTurn = (eIn: CombatEnc): CombatEnc => {
+    let e = eIn;
+    // Tick enemy DoTs first; check for kill
+    e = tickEffectsOnEnemy(e, addLog);
+    if (e.enemyHp <= 0) {
+      // Schedule kill in a microtask via finishKill replacement
+      setTimeout(() => finishKill(e), 0);
+      return e;
+    }
     if (e.stunnedTurns > 0) {
       addLog(`${e.enemy.name} is frozen and cannot act.`);
-      return { ...e, stunnedTurns: e.stunnedTurns - 1, shieldReduce: 0 };
+      // re-telegraph for next round
+      return { ...e, stunnedTurns: e.stunnedTurns - 1, shieldReduce: 0, nextIntent: pickIntent(e.enemy) };
     }
-    let dmg = Math.max(1, e.enemy.atkBase + Math.floor(e.depth * 0.6) - Math.floor(Math.random() * 3));
+    const intent = e.nextIntent;
+    let dmg = Math.max(1, Math.floor(e.enemy.atkBase + e.depth * 0.6) * intent.mult - Math.floor(Math.random() * 3));
     if (e.shieldReduce > 0) dmg = Math.max(1, Math.floor(dmg * (1 - e.shieldReduce)));
-    damage(dmg);
-    addFloater("enemy", dmg);
-    setHit(true); setTimeout(() => setHit(false), 350);
-    const line = e.enemy.attackLines[Math.floor(Math.random() * e.enemy.attackLines.length)]
-      .replace("{n}", e.enemy.name).replace("{d}", String(dmg));
-    addLog(line + (e.shieldReduce > 0 ? " (shielded!)" : ""));
-    return { ...e, shieldReduce: 0 };
+    dmg = Math.max(1, Math.floor(dmg));
+    const taken = damage(dmg);
+    if (taken > 0) {
+      addFloater("enemy", taken);
+      setHit(true); setTimeout(() => setHit(false), 350);
+    }
+    addLog(intent.line.replace("{n}", e.enemy.name).replace("{d}", String(taken)) + (e.shieldReduce > 0 ? " (shielded!)" : ""));
+    return { ...e, shieldReduce: 0, nextIntent: pickIntent(e.enemy) };
+  };
+
+  const applyAttack = (e: CombatEnc, ab: Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> }): CombatEnc => {
+    const base = ab.effect.useMag ? player.mag : player.atk;
+    let dmg = Math.max(1, Math.floor(base * ab.effect.mult));
+    // Crit
+    const crit = player.crit > 0 && Math.random() * 100 < player.crit;
+    if (crit) dmg = Math.floor(dmg * 1.5);
+    // Frenzy / Rally next-attack multiplier
+    if (player.nextAttackMult !== 1) {
+      dmg = Math.floor(dmg * player.nextAttackMult);
+      consumeMult();
+    }
+    // Chill on enemy increases damage taken
+    const cMult = chillMult(e.enemyEffects);
+    if (cMult !== 1) dmg = Math.floor(dmg * cMult);
+
+    addFloater("player", dmg, dmgSkin);
+    const flavor = ab.effect.flavor.replace("{p}", player.name);
+    addLog(`${flavor} for ${dmg}${crit ? " CRIT" : ""} damage!`);
+
+    let nextEffects = e.enemyEffects;
+    if (ab.effect.applyStatus) {
+      const s = ab.effect.applyStatus;
+      // refresh or add
+      nextEffects = nextEffects.filter((x) => x.kind !== s.kind).concat({ kind: s.kind, turns: s.turns, power: s.power });
+      addLog(`${e.enemy.name} is afflicted with ${s.kind}.`);
+    }
+    return { ...e, enemyHp: e.enemyHp - dmg, enemyEffects: nextEffects };
   };
 
   const useAbility = (ab: Ability) => {
@@ -131,15 +235,11 @@ export function DungeonScreen() {
 
     switch (ab.effect.kind) {
       case "attack": {
-        const base = ab.effect.useMag ? player.mag : player.atk;
-        const dmg = Math.max(1, Math.floor(base * ab.effect.mult));
-        addFloater("player", dmg, dmgSkin);
-        addLog(`${flavor} for ${dmg} damage!`);
-        const newHp = e.enemyHp - dmg;
-        if (newHp <= 0) return finishKill(e);
-        const cds = tickCooldowns(e);
-        cds[ab.id] = ab.cooldown;
-        const stepped = { ...e, enemyHp: newHp, cooldowns: cds };
+        const after = applyAttack(e, ab as Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> });
+        if (after.enemyHp <= 0) { finishKill(after); return; }
+        const cds = tickCooldowns(after); cds[ab.id] = ab.cooldown;
+        let stepped: CombatEnc = { ...after, cooldowns: cds };
+        stepped = tickPlayerEffects(stepped);
         setEnc(enemyTurn(stepped));
         return;
       }
@@ -149,19 +249,38 @@ export function DungeonScreen() {
         addFloater("heal", amt);
         addLog(`${flavor} — restored ${amt} HP.`);
         const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
-        setEnc(enemyTurn({ ...e, cooldowns: cds }));
+        let stepped: CombatEnc = { ...e, cooldowns: cds };
+        stepped = tickPlayerEffects(stepped);
+        setEnc(enemyTurn(stepped));
+        return;
+      }
+      case "hot": {
+        const power = Math.max(2, Math.floor(player.mag * 0.8));
+        addLog(`${flavor}.`);
+        const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
+        const fresh = e.playerEffects.filter((x) => x.kind !== "renew").concat({ kind: "renew", turns: ab.effect.turns, power });
+        let stepped: CombatEnc = { ...e, cooldowns: cds, playerEffects: fresh };
+        stepped = tickPlayerEffects(stepped);
+        setEnc(enemyTurn(stepped));
         return;
       }
       case "stun": {
         addLog(`${flavor}. ${e.enemy.name} is frozen!`);
         const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
-        setEnc({ ...e, cooldowns: cds, stunnedTurns: 1 });
+        let stepped: CombatEnc = { ...e, cooldowns: cds, stunnedTurns: 1 };
+        // Tick player effects but skip enemy turn (frozen)
+        stepped = tickPlayerEffects(stepped);
+        stepped = tickEffectsOnEnemy(stepped, addLog);
+        if (stepped.enemyHp <= 0) { finishKill(stepped); return; }
+        setEnc({ ...stepped, stunnedTurns: stepped.stunnedTurns - 1, nextIntent: pickIntent(stepped.enemy) });
         return;
       }
       case "shield": {
         addLog(`${flavor}.`);
         const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
-        setEnc(enemyTurn({ ...e, shieldReduce: ab.effect.reduce, cooldowns: cds }));
+        let stepped: CombatEnc = { ...e, shieldReduce: ab.effect.reduce, cooldowns: cds };
+        stepped = tickPlayerEffects(stepped);
+        setEnc(enemyTurn(stepped));
         return;
       }
       case "flee": {
@@ -173,11 +292,17 @@ export function DungeonScreen() {
     }
   };
 
+  const onRacial = () => {
+    if (enc.kind !== "combat" || !faction || player.racialUsed) return;
+    useRacial();
+    // Racial doesn't consume a turn — it's a free instant.
+  };
+
   const addMaterial = useGame((s) => s.addMaterial);
   const learnRecipe = useGame((s) => s.learnRecipe);
   const addToBag = useGame((s) => s.addToBag);
 
-  const finishKill = (e: Extract<Encounter, { kind: "combat" }>) => {
+  const finishKill = (e: CombatEnc) => {
     const goldDrop = 4 + e.depth * 3;
     const xpDrop = 6 + e.depth * 4;
     rewardGold(goldDrop); rewardXp(xpDrop);
@@ -188,7 +313,6 @@ export function DungeonScreen() {
     let gear: GearItem | undefined;
     if (e.enemy.questItemId && Math.random() < 0.6) { addQuestItem(e.enemy.questItemId); questItem = e.enemy.questItemId; }
     if (e.enemy.materialDrop && Math.random() < e.enemy.materialDrop.chance) { addMaterial(e.enemy.materialDrop.id); material = e.enemy.materialDrop.id; }
-    // Gear drop chance scales with depth; boss guarantees rare+
     const gearChance = e.enemy.id === "dragon" ? 1 : 0.35 + e.depth * 0.04;
     if (Math.random() < gearChance) {
       const rolled = e.enemy.id === "dragon" ? rollGear(e.depth, { minRarity: "rare" }) : rollGear(e.depth);
@@ -198,10 +322,10 @@ export function DungeonScreen() {
     setEnc({ kind: "victory", depth: e.depth, loot: { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material, gear } });
   };
 
-
   const closeVictory = () => {
     if (enc.kind !== "victory") return;
     if (enc.loot.enemy.id === "dragon") { setScreen("victory"); return; }
+    restoreBetweenRooms();
     setEnc({ kind: "path", depth: enc.depth });
   };
 
@@ -211,14 +335,8 @@ export function DungeonScreen() {
     const x = enc.preview.xpRange[0] + Math.floor(Math.random() * (enc.preview.xpRange[1] - enc.preview.xpRange[0] + 1));
     rewardGold(g); rewardXp(x);
     addLog(`The chest yields ${g}g and ${x}xp.`);
-    if (enc.preview.questItemId) {
-      addQuestItem(enc.preview.questItemId);
-      addLog(`Inside: a ${enc.preview.questItemId.replace("_", " ")}!`);
-    }
-    if (enc.preview.materialId) {
-      addMaterial(enc.preview.materialId);
-      addLog(`Inside: ${MATERIALS[enc.preview.materialId]?.name ?? enc.preview.materialId}.`);
-    }
+    if (enc.preview.questItemId) { addQuestItem(enc.preview.questItemId); addLog(`Inside: a ${enc.preview.questItemId.replace("_"," ")}!`); }
+    if (enc.preview.materialId)  { addMaterial(enc.preview.materialId);  addLog(`Inside: ${MATERIALS[enc.preview.materialId]?.name ?? enc.preview.materialId}.`); }
     if (enc.preview.recipeId) {
       learnRecipe(enc.preview.recipeId);
       const rec = RECIPES.find((r) => r.id === enc.preview!.recipeId);
@@ -232,6 +350,11 @@ export function DungeonScreen() {
     enc.kind === "victory" ? enc.loot.enemy.image :
     enc.kind === "chest" ? chestImg :
     corridorImg;
+
+  // Equipped gear delta for inline equip
+  const lootGear = enc.kind === "victory" ? enc.loot.gear : undefined;
+  const equippedForSlot = lootGear ? player.equipment[lootGear.slot] : undefined;
+  const gearDelta = lootGear ? gearScore(lootGear) - (equippedForSlot ? gearScore(equippedForSlot) : 0) : 0;
 
   return (
     <div className="flex min-h-full flex-col">
@@ -250,22 +373,26 @@ export function DungeonScreen() {
             {enc.enemy.name} {enc.enemyHp}/{enc.enemyMaxHp}
           </div>
         )}
+        {enc.kind === "combat" && (
+          <div className="absolute left-2 right-2 bottom-2 flex justify-center">
+            <div className={`pixel text-[8px] px-2 py-1 border-2 border-black text-shadow-pixel ${enc.nextIntent.telegraphable ? "bg-blood text-background animate-pulse" : "bg-card text-foreground"}`}>
+              {enc.nextIntent.telegraphable ? "⚠ " : ""}{enc.enemy.name}: {enc.nextIntent.label}
+            </div>
+          </div>
+        )}
         {enc.kind === "victory" && (
           <div className="absolute inset-0 flex items-center justify-center">
             <p className="pixel text-2xl text-gold text-shadow-pixel">VICTORY</p>
           </div>
         )}
-        {/* Floating damage numbers overlay */}
         <div className="absolute inset-0 pointer-events-none">
           {floaters.map((f) => <FloatingNumber key={f.id} num={f} onDone={removeFloater} />)}
         </div>
       </div>
 
-
       <div className="p-3 space-y-3">
         <StatBar />
 
-        {/* Combat / event log */}
         <div ref={logRef} className="border-2 border-black bg-card/80 p-2 h-24 overflow-y-auto font-body text-sm leading-tight">
           {combatLog.length === 0 && <p className="text-muted-foreground italic">The dungeon is silent.</p>}
           {combatLog.map((l, i) => (
@@ -285,10 +412,20 @@ export function DungeonScreen() {
               <span className="font-body text-sm">{enc.enemyHp}/{enc.enemyMaxHp}</span>
             </div>
             <div className="mt-1 h-2 w-full bg-stone border border-black">
-              <div className="h-full bg-blood transition-all" style={{ width: `${(enc.enemyHp / enc.enemyMaxHp) * 100}%` }} />
+              <div className="h-full bg-blood transition-all" style={{ width: `${Math.max(0, (enc.enemyHp / enc.enemyMaxHp) * 100)}%` }} />
             </div>
-            {enc.stunnedTurns > 0 && <p className="pixel text-[8px] text-arcane mt-1">❄ FROZEN</p>}
-            {enc.shieldReduce > 0 && <p className="pixel text-[8px] text-gold mt-1">⛨ BRACED</p>}
+            <div className="mt-1 flex flex-wrap gap-1">
+              {enc.stunnedTurns > 0 && <span className="pixel text-[7px] text-arcane border border-arcane px-1">❄ FROZEN</span>}
+              {enc.shieldReduce > 0 && <span className="pixel text-[7px] text-gold border border-gold px-1">⛨ BRACED</span>}
+              {enc.enemyEffects.map((ef) => (
+                <span key={ef.kind} className="pixel text-[7px] border border-blood text-blood px-1 uppercase">
+                  {ef.kind === "burn" ? "🔥" : ef.kind === "bleed" ? "🩸" : ef.kind === "chill" ? "❄" : "✦"} {ef.kind} {ef.turns}t
+                </span>
+              ))}
+              {enc.playerEffects.filter((e) => e.kind === "renew").map((ef) => (
+                <span key={ef.kind} className="pixel text-[7px] border border-divine text-divine px-1 uppercase">✦ Renew {ef.turns}t</span>
+              ))}
+            </div>
           </div>
         )}
 
@@ -311,24 +448,27 @@ export function DungeonScreen() {
           <div className="border-2 border-black bg-card p-3 fade-in-up space-y-2">
             <p className="pixel text-[10px] text-gold">☠ {enc.loot.enemy.name} slain</p>
             <p className="font-body text-sm">+<span className="text-gold">{enc.loot.gold}g</span> · +<span className="text-divine">{enc.loot.xp}xp</span></p>
-            {enc.loot.questItem && (
-              <p className="font-body text-sm">› Quest item: <span className="text-divine">{enc.loot.questItem.replace("_", " ")}</span></p>
-            )}
-            {enc.loot.material && (
-              <p className="font-body text-sm">› Material: <span className="text-allies">{MATERIALS[enc.loot.material]?.name ?? enc.loot.material}</span></p>
-            )}
-            {enc.loot.gear && (
-              <div className={`border-2 border-black p-2 rarity-frame-${enc.loot.gear.rarity}`}>
-                <p className={`pixel text-[9px] ${RARITY_CLASS[enc.loot.gear.rarity]}`}>★ {enc.loot.gear.name}</p>
-                <p className="font-body text-xs text-muted-foreground">{RARITY_LABEL[enc.loot.gear.rarity]} · iLvl {enc.loot.gear.ilvl}</p>
-                <p className="font-body text-sm mt-1">
-                  {enc.loot.gear.stats.atk ? `+${enc.loot.gear.stats.atk} ATK ` : ""}
-                  {enc.loot.gear.stats.mag ? `+${enc.loot.gear.stats.mag} MAG ` : ""}
-                  {enc.loot.gear.stats.maxHp ? `+${enc.loot.gear.stats.maxHp} HP ` : ""}
-                  {enc.loot.gear.stats.crit ? `+${enc.loot.gear.stats.crit}% crit ` : ""}
-                  {enc.loot.gear.stats.dodge ? `+${enc.loot.gear.stats.dodge}% dodge` : ""}
+            {enc.loot.questItem && <p className="font-body text-sm">› Quest item: <span className="text-divine">{enc.loot.questItem.replace("_", " ")}</span></p>}
+            {enc.loot.material && <p className="font-body text-sm">› Material: <span className="text-allies">{MATERIALS[enc.loot.material]?.name ?? enc.loot.material}</span></p>}
+            {lootGear && (
+              <div className={`border-2 border-black p-2 rarity-frame-${lootGear.rarity} space-y-1`}>
+                <p className={`pixel text-[9px] ${RARITY_CLASS[lootGear.rarity]}`}>★ {lootGear.name}</p>
+                <p className="font-body text-xs text-muted-foreground">{RARITY_LABEL[lootGear.rarity]} · iLvl {lootGear.ilvl}</p>
+                <p className="font-body text-sm">
+                  {lootGear.stats.atk ? `+${lootGear.stats.atk} ATK ` : ""}
+                  {lootGear.stats.mag ? `+${lootGear.stats.mag} MAG ` : ""}
+                  {lootGear.stats.maxHp ? `+${lootGear.stats.maxHp} HP ` : ""}
+                  {lootGear.stats.crit ? `+${lootGear.stats.crit}% crit ` : ""}
+                  {lootGear.stats.dodge ? `+${lootGear.stats.dodge}% dodge` : ""}
                 </p>
-                <p className="font-body text-xs text-muted-foreground">Auto-added to bag · sells for {gearSellPrice(enc.loot.gear)}g</p>
+                <p className={`pixel text-[7px] ${gearDelta > 0 ? "text-divine" : gearDelta < 0 ? "text-blood" : "text-muted-foreground"}`}>
+                  {equippedForSlot ? (gearDelta > 0 ? `▲ +${gearDelta} vs equipped` : gearDelta < 0 ? `▼ ${gearDelta} vs equipped` : "= same score") : "▲ slot empty"}
+                </p>
+                <div className="grid grid-cols-3 gap-1 pt-1">
+                  <button onClick={() => equip(lootGear.id)} className="pixel-btn pixel-btn-gold !text-[8px]">Equip</button>
+                  <button onClick={() => sellBag(lootGear.id)} className="pixel-btn !text-[8px]">Sell {gearSellPrice(lootGear)}g</button>
+                  <button onClick={() => discardBag(lootGear.id)} className="pixel-btn !text-[8px]">Discard</button>
+                </div>
               </div>
             )}
             {!enc.loot.questItem && !enc.loot.material && !enc.loot.gear && (
@@ -339,7 +479,6 @@ export function DungeonScreen() {
             </button>
           </div>
         )}
-
 
         {enc.kind === "path" && (
           <div className="border-2 border-black bg-card p-3 fade-in-up">
@@ -353,7 +492,6 @@ export function DungeonScreen() {
           </div>
         )}
 
-        {/* Class abilities */}
         {enc.kind === "combat" && (
           <div className="space-y-2">
             <div className="grid grid-cols-3 gap-2">
@@ -380,6 +518,19 @@ export function DungeonScreen() {
                 <p className="pixel text-[8px] text-gold">{(hoveredAbility ?? abilities[0]).name}</p>
                 <p className="font-body text-sm text-muted-foreground leading-tight">{(hoveredAbility ?? abilities[0]).desc}</p>
               </div>
+            )}
+            {faction && (
+              <button
+                onClick={onRacial}
+                disabled={player.racialUsed}
+                className="pixel-btn !text-[8px] w-full disabled:opacity-40"
+                style={{ borderColor: faction.color }}
+              >
+                {player.racialUsed ? `✦ ${faction.racial.name} — used` : `✦ ${faction.racial.name} — ${faction.racial.desc}`}
+              </button>
+            )}
+            {player.nextAttackMult !== 1 && (
+              <p className="pixel text-[8px] text-blood text-center">FRENZY — next hit ×{player.nextAttackMult}</p>
             )}
           </div>
         )}
