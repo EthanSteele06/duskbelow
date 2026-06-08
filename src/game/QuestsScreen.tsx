@@ -40,7 +40,7 @@ export function QuestsScreen() {
               </p>
               <div className="mt-2">
                 {done && <span className="pixel text-[8px] text-divine">✓ Completed</span>}
-                {!q && <button onClick={() => accept(def.id)} className="pixel-btn !text-[8px]">Accept</button>}
+                {!q && <button onClick={() => accept(def.id)} disabled={atCap} className="pixel-btn !text-[8px] disabled:opacity-40">{atCap ? "Log full" : "Accept"}</button>}
                 {q && !q.turnedIn && ready && (
                   <button onClick={() => turnIn(def.id)} className="pixel-btn pixel-btn-gold !text-[8px]">Turn In</button>
                 )}
