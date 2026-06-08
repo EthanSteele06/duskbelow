@@ -18,7 +18,7 @@ export function TalentTreeScreen() {
   const classQuests = QUESTS.filter((q) => q.classId === player.classId);
   const locked = player.level < 3;
   const tree = player.specId ? TALENT_TREES[player.specId] : null;
-  const tiers: (1 | 2 | 3 | 4)[] = [1, 2, 3, 4];
+  const tiers: (1 | 2 | 3 | 4 | 5)[] = [1, 2, 3, 4, 5];
 
   return (
     <div className="flex min-h-full flex-col">
