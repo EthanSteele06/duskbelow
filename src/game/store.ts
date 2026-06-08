@@ -973,8 +973,11 @@ export const useGame = create<GameState>((set, get) => ({
       xp: p.runXp,
       shards: p.runShards + (outcome === "victory" ? Math.floor(15 * echoStart(meta).shardMult) : 0),
       loreFound: j.loreFound,
-      bag: [...p.bag],
-      equipment: Object.values(p.equipment).filter(Boolean) as GearItem[],
+      // On defeat, gear is lost in the dungeon — only escapees keep loot.
+      bag: outcome === "victory" ? [...p.bag] : [],
+      equipment: outcome === "victory"
+        ? (Object.values(p.equipment).filter(Boolean) as GearItem[])
+        : [],
       date: Date.now(),
       isFirstRun,
     };
