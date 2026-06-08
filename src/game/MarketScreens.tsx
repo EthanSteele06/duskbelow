@@ -11,7 +11,7 @@ export function VendorScreen() {
   const activeBuffs = useGame((s) => s.player.activeBuffs);
 
   const buffSummary = activeBuffs.length
-    ? activeBuffs.reduce(
+    ? activeBuffs.reduce<{ atk: number; mag: number; maxHp: number; goldMult: number }>(
         (acc, b) => ({
           atk: acc.atk + (b.atk ?? 0),
           mag: acc.mag + (b.mag ?? 0),
