@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ClassId, FactionId, Ability, ProfessionId, GearItem, GearSlot, TalentNode } from "./data";
+import type { ClassId, FactionId, Ability, ProfessionId, GearItem, GearSlot, TalentNode, BuffEffect } from "./data";
 import {
   CLASSES, FACTIONS, VENDOR_ITEMS, QUESTS, TRAINERS, RECIPES, MATERIALS, SPECS, TALENT_TREES, COSMETICS,
   BAG_SIZE_BASE, BAG_SIZE_CHAMPION, RESPEC_GOLD_COST, gearSellPrice, profXpForLevel,
