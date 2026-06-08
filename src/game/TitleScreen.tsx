@@ -35,7 +35,11 @@ export function TitleScreen() {
           <p className="font-body mt-2 text-base text-muted-foreground">
             Choose your banner. Carve your fate.
           </p>
+          <p className="pixel mt-3 text-[8px] text-gold">
+            ✦ Wanderer Lv {meta.account.level}{up ? ` · next: ${up.label}` : " · MAX"}
+          </p>
         </header>
+
 
         <section className="mt-6 fade-in-up">
           <h2 className="pixel text-[10px] text-foreground mb-2">▣ Faction</h2>
