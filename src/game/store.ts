@@ -489,7 +489,7 @@ export const useGame = create<GameState>((set, get) => ({
         racialUsed: 0,
         racialMax: racialChargesForLevel(s.meta.account.level),
         nextAttackMult: 1,
-        runKills: 0, runGold: 0, runXp: 0, runShards: 0, runFloors: 0,
+        runKills: 0, runGold: 0, runXp: 0, runShards: 0,
       },
     }));
     get().pushLog("You descend into darkness...");
@@ -700,10 +700,8 @@ export const useGame = create<GameState>((set, get) => ({
     const amt = Math.max(2, Math.floor(p.maxHp * 0.10));
     const hp = Math.min(p.maxHp, p.hp + amt);
     if (hp > p.hp) {
-      set({ player: { ...p, hp, runFloors: p.runFloors + 1 } });
+      set({ player: { ...p, hp } });
       get().pushLog(`You catch your breath. +${hp - p.hp} HP.`);
-    } else {
-      set({ player: { ...p, runFloors: p.runFloors + 1 } });
     }
   },
 
