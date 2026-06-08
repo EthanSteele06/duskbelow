@@ -23,6 +23,11 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   const reset = useGame((s) => s.reset);
   const isChampion = useGame((s) => s.player?.isChampion ?? false);
   const [confirmWipe, setConfirmWipe] = useState(0);
+  const devGrantClassLegendary = useGame((s) => s.devGrantClassLegendary);
+  const devGrantRandomEpic = useGame((s) => s.devGrantRandomEpic);
+  const devGrantGold = useGame((s) => s.devGrantGold);
+  const devGrantAllMaterials = useGame((s) => s.devGrantAllMaterials);
+  const [devOpen, setDevOpen] = useState(false);
 
   useEffect(() => subscribeAudioSettings(setAudio), []);
 
