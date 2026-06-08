@@ -179,7 +179,7 @@ export function DungeonScreen() {
     const newDepth = enc.depth + 1;
     if (newDepth > MAX_DEPTH) { finishRun("victory"); return; }
     restoreBetweenRooms();
-    const next = rollEncounter(newDepth, playerFaction);
+    const next = rollEncounter(newDepth, playerFaction, player.affixes ?? []);
     setEnc(next);
     if (next.kind === "combat") addLog(`A ${next.enemy.name} blocks your path!`);
     else if (next.kind === "chest") addLog(`You spot ${next.preview.label}.`);
@@ -221,7 +221,11 @@ export function DungeonScreen() {
       return { ...e, stunnedTurns: e.stunnedTurns - 1, shieldReduce: 0, nextIntent: pickIntent(e.enemy) };
     }
     const intent = e.nextIntent;
-    const baseDmg = (e.enemy.atkBase + e.depth * 0.6) * intent.mult;
+    const affixes = player.affixes ?? [];
+    let mult = intent.mult;
+    if (affixes.includes("sapping")) mult *= 1.2;
+    if (affixes.includes("bloodlust") && e.enemyHp / e.enemyMaxHp < 0.3) mult *= 1.5;
+    const baseDmg = (e.enemy.atkBase + e.depth * 0.6) * mult;
     let dmg = rollDamage(baseDmg);
     if (e.shieldReduce > 0) dmg = Math.max(1, Math.floor(dmg * (1 - e.shieldReduce)));
     const taken = damage(dmg);
