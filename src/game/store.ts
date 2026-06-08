@@ -112,6 +112,10 @@ interface GameState {
   toggleChampion: () => void;
   buyCosmetic: (id: string) => boolean;
   equipCosmetic: (id: string) => void;
+  // combat / run helpers
+  restoreBetweenRooms: () => void;
+  useRacial: () => boolean;
+  consumeNextAttackMult: () => void;
 }
 
 const emptyPlayer: PlayerState = {
