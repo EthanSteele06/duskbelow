@@ -1,15 +1,20 @@
 import { useState } from "react";
 import { useGame } from "@/game/store";
 import { CLASSES, FACTIONS, type ClassId, type FactionId } from "@/game/data";
+import { nextUnlock, unlockedClassesFor } from "@/game/meta";
 import titleBg from "@/assets/title-bg.jpg";
 
 export function TitleScreen() {
   const start = useGame((s) => s.startGame);
+  const meta = useGame((s) => s.meta);
   const [faction, setFaction] = useState<FactionId | null>(null);
   const [classId, setClassId] = useState<ClassId | null>(null);
   const [name, setName] = useState("");
 
-  const ready = faction && classId;
+  const unlocked = new Set(unlockedClassesFor(meta.account.level, meta.unlockedClasses));
+  const up = nextUnlock(meta.account.level);
+  const ready = faction && classId && unlocked.has(classId);
+
 
   return (
     <div className="relative min-h-full overflow-hidden">
