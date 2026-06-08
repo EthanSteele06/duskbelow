@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useGame } from "@/game/store";
-import { StatBar } from "./StatBar";
 import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumber";
 import {
-  CLASS_ABILITIES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
+  CLASS_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
   RARITY_CLASS, RARITY_LABEL, gearScore, gearSellPrice,
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
   type StatusEffect, type EnemyIntent,
@@ -120,7 +119,15 @@ export function DungeonScreen() {
   const [combatLog, setCombatLog] = useState<string[]>([]);
   const [hoveredAbility, setHoveredAbility] = useState<Ability | null>(null);
   const [floaters, setFloaters] = useState<FloatingNum[]>([]);
+  const [attackFx, setAttackFx] = useState<{ kind: "melee" | "spell"; key: number; tint?: string } | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
+
+  const classColor = player.classId ? CLASSES.find((c) => c.id === player.classId)?.color : undefined;
+
+  const triggerFx = (kind: "melee" | "spell") => {
+    setAttackFx({ kind, key: Date.now() + Math.random(), tint: kind === "spell" ? classColor : undefined });
+    setTimeout(() => setAttackFx(null), 500);
+  };
 
   const addFloater = (kind: FloatingNum["kind"], value: number, color?: string) => {
     setFloaters((f) => [...f, { id: nextFloatingId(), kind, value, color, x: 40 + Math.random() * 20 }]);
@@ -217,9 +224,21 @@ export function DungeonScreen() {
     const cMult = chillMult(e.enemyEffects);
     if (cMult !== 1) dmg = Math.floor(dmg * cMult);
 
+    // Trigger combat animation
+    triggerFx(ab.effect.useMag ? "spell" : "melee");
+    setHit(true); setTimeout(() => setHit(false), 350);
+
     addFloater("player", dmg, dmgSkin);
     const flavor = ab.effect.flavor.replace("{p}", player.name);
     addLog(`${flavor} for ${dmg}${crit ? " CRIT" : ""} damage!`);
+
+    // Lifesteal
+    if (ab.effect.lifesteal && ab.effect.lifesteal > 0) {
+      const healed = Math.max(1, Math.floor(dmg * ab.effect.lifesteal));
+      heal(healed);
+      addFloater("heal", healed);
+      addLog(`${player.name} drains ${healed} life.`);
+    }
 
     let nextEffects = e.enemyEffects;
     if (ab.effect.applyStatus) {
