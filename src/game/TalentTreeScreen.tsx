@@ -1,5 +1,5 @@
 import { useGame } from "@/game/store";
-import { SPECS, TALENT_TREES, TRAINERS, QUESTS, RESPEC_GOLD_COST } from "@/game/data";
+import { SPECS, SPEC_ABILITIES, TALENT_TREES, TRAINERS, QUESTS, RESPEC_GOLD_COST } from "@/game/data";
 import { StatBar } from "./StatBar";
 
 export function TalentTreeScreen() {
