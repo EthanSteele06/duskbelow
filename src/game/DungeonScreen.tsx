@@ -247,6 +247,10 @@ export function DungeonScreen() {
     // Chill on enemy increases damage taken
     const cMult = chillMult(e.enemyEffects);
     if (cMult !== 1) dmg = Math.floor(dmg * cMult);
+    // Bonus damage vs chilled targets (e.g. Ice Lance)
+    if (ab.effect.bonusVsChill && e.enemyEffects.some((x) => x.kind === "chill")) {
+      dmg = Math.floor(dmg * ab.effect.bonusVsChill);
+    }
 
     // Trigger combat animation
     triggerFx(ab.effect.useMag ? "spell" : "melee");
@@ -657,7 +661,7 @@ export function DungeonScreen() {
 
         {enc.kind === "combat" && (
           <div className="space-y-2">
-            <div className="grid grid-cols-3 gap-2">
+            <div className={`grid gap-2 ${abilities.length >= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
               {abilities.map((ab) => {
                 const cd = enc.cooldowns[ab.id] ?? 0;
                 const armed = armedAbility === ab.id;

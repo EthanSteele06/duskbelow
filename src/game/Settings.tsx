@@ -21,11 +21,13 @@ export function SettingsButton() {
 function SettingsModal({ onClose }: { onClose: () => void }) {
   const [audio, setAudio] = useState(getAudioSettings());
   const reset = useGame((s) => s.reset);
+  const isChampion = useGame((s) => s.player?.isChampion ?? false);
   const [confirmWipe, setConfirmWipe] = useState(0);
 
   useEffect(() => subscribeAudioSettings(setAudio), []);
 
   const onWipe = () => {
+    if (isChampion) return;
     if (confirmWipe < 2) { setConfirmWipe(confirmWipe + 1); return; }
     try {
       localStorage.removeItem("duskbelow.meta.v1");
@@ -33,6 +35,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
     } catch { /* ignore */ }
     window.location.reload();
   };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
@@ -78,23 +81,33 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
 
         <section>
           <h3 className="pixel text-[10px] text-gold mb-2">▣ Account</h3>
-          <div className="space-y-2">
-            <button onClick={() => { reset(); onClose(); }} className="pixel-btn w-full !text-[9px]">
-              ↻ Abandon Current Run
-            </button>
-            <button
-              onClick={onWipe}
-              className={`pixel-btn w-full !text-[9px] ${confirmWipe > 0 ? "pixel-btn-danger" : ""}`}
-            >
-              {confirmWipe === 0 && "✗ Hard Reset (Wipe All)"}
-              {confirmWipe === 1 && "⚠ Are you sure? Tap again to confirm."}
-              {confirmWipe >= 2 && "‼ FINAL WARNING — Tap to wipe everything"}
-            </button>
-            <p className="font-body text-xs text-muted-foreground">
-              Hard reset deletes all progress: classes, shards, gear, professions. Cannot be undone.
-            </p>
-          </div>
+          {isChampion ? (
+            <div className="border-2 border-gold/40 bg-gold/10 p-2">
+              <p className="pixel text-[9px] text-gold">★ Champion's Pass Active</p>
+              <p className="font-body text-xs text-muted-foreground mt-1">
+                Account actions are locked while your Champion's Pass is active. Your progress is protected.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <button onClick={() => { reset(); onClose(); }} className="pixel-btn w-full !text-[9px]">
+                ↻ Abandon Current Run
+              </button>
+              <button
+                onClick={onWipe}
+                className={`pixel-btn w-full !text-[9px] ${confirmWipe > 0 ? "pixel-btn-danger" : ""}`}
+              >
+                {confirmWipe === 0 && "✗ Hard Reset (Wipe All)"}
+                {confirmWipe === 1 && "⚠ Are you sure? Tap again to confirm."}
+                {confirmWipe >= 2 && "‼ FINAL WARNING — Tap to wipe everything"}
+              </button>
+              <p className="font-body text-xs text-muted-foreground">
+                Hard reset deletes all progress: classes, shards, gear, professions. Cannot be undone.
+              </p>
+            </div>
+          )}
         </section>
+
 
         <section>
           <h3 className="pixel text-[10px] text-gold mb-2">▣ About</h3>
