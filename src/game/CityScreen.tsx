@@ -2,6 +2,8 @@ import { useGame } from "@/game/store";
 import { FACTIONS, TRAINERS, SPECS } from "@/game/data";
 import { nextUnlock } from "@/game/meta";
 import cityImg from "@/assets/city.jpg";
+import cityAlliesImg from "@/assets/city-allies.jpg";
+import cityBrigadeImg from "@/assets/city-brigade.jpg";
 
 export function CityScreen() {
   const setScreen = useGame((s) => s.setScreen);
@@ -20,7 +22,7 @@ export function CityScreen() {
   return (
     <div className="relative flex min-h-full flex-col">
       <div className="relative h-40 overflow-hidden border-b-2 border-black">
-        <img src={cityImg} alt="City" className="h-full w-full object-cover" />
+        <img src={player.faction === "allies" ? cityAlliesImg : player.faction === "brigade" ? cityBrigadeImg : cityImg} alt={f.name} className="h-full w-full object-cover" />
         <div className="absolute inset-0 vignette" />
         <div className="absolute inset-0 scanlines" />
         <div className="absolute left-2 top-2 flex items-center gap-2">
