@@ -1,5 +1,5 @@
 import { useGame } from "@/game/store";
-import { QUESTS } from "@/game/data";
+import { QUESTS, MAX_ACTIVE_QUESTS } from "@/game/data";
 import { StatBar } from "./StatBar";
 
 export function QuestsScreen() {
@@ -8,13 +8,17 @@ export function QuestsScreen() {
   const accept = useGame((s) => s.acceptQuest);
   const turnIn = useGame((s) => s.turnInQuest);
   const items = useGame((s) => s.player.questItems);
+  const activeCount = quests.filter((q) => !q.turnedIn).length;
+  const atCap = activeCount >= MAX_ACTIVE_QUESTS;
 
   return (
     <div className="flex min-h-full flex-col p-3 gap-3">
       <StatBar />
       <button onClick={() => setScreen("city")} className="pixel-btn !text-[8px] w-fit">← Back to City</button>
       <h2 className="pixel text-[12px] text-gold">✦ Quest Board</h2>
-      <p className="font-body text-sm text-muted-foreground -mt-2">Posted requests from the city's desperate.</p>
+      <p className="font-body text-sm text-muted-foreground -mt-2">
+        Posted requests from the city's desperate. <span className={atCap ? "text-blood" : "text-gold"}>Active {activeCount}/{MAX_ACTIVE_QUESTS}</span>
+      </p>
 
       <div className="space-y-2">
         {QUESTS.map((def) => {
@@ -36,7 +40,7 @@ export function QuestsScreen() {
               </p>
               <div className="mt-2">
                 {done && <span className="pixel text-[8px] text-divine">✓ Completed</span>}
-                {!q && <button onClick={() => accept(def.id)} className="pixel-btn !text-[8px]">Accept</button>}
+                {!q && <button onClick={() => accept(def.id)} disabled={atCap} className="pixel-btn !text-[8px] disabled:opacity-40">{atCap ? "Log full" : "Accept"}</button>}
                 {q && !q.turnedIn && ready && (
                   <button onClick={() => turnIn(def.id)} className="pixel-btn pixel-btn-gold !text-[8px]">Turn In</button>
                 )}

@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { ClassId, FactionId, Ability, ProfessionId, GearItem, GearSlot, TalentNode, BuffEffect } from "./data";
 import {
   CLASSES, FACTIONS, VENDOR_ITEMS, QUESTS, TRAINERS, RECIPES, MATERIALS, SPECS, TALENT_TREES, COSMETICS,
-  BAG_SIZE_BASE, BAG_SIZE_CHAMPION, RESPEC_GOLD_COST, gearSellPrice, profXpForLevel,
+  BAG_SIZE_BASE, BAG_SIZE_CHAMPION, RESPEC_GOLD_COST, MAX_ACTIVE_QUESTS, gearSellPrice, profXpForLevel,
   IDLE_YIELDS, IDLE_SECONDS_PER_UNIT, IDLE_MAX_SECONDS,
 } from "./data";
 import {
@@ -441,6 +441,11 @@ export const useGame = create<GameState>((set, get) => ({
   acceptQuest: (id) => {
     const exists = get().quests.find((q) => q.id === id);
     if (exists) return;
+    const activeCount = get().quests.filter((q) => !q.turnedIn).length;
+    if (activeCount >= MAX_ACTIVE_QUESTS) {
+      get().pushLog(`Quest log full (${MAX_ACTIVE_QUESTS}/${MAX_ACTIVE_QUESTS}). Turn one in first.`);
+      return;
+    }
     set((s) => ({ quests: [...s.quests, { id, progress: 0, completed: false, turnedIn: false }] }));
     const def = QUESTS.find((d) => d.id === id)!;
     get().pushLog(`Quest accepted: ${def.name}`);
@@ -585,6 +590,12 @@ export const useGame = create<GameState>((set, get) => ({
     if (p.learnedTalents.includes(node.id)) return false;
     if (node.requires && !p.learnedTalents.includes(node.requires)) return false;
     if (p.talentPoints < 1) return false;
+    // Capstones are mutually exclusive — only one per spec.
+    if (node.capstone) {
+      const tree = TALENT_TREES[p.specId];
+      const hasCapstone = tree.some((n) => n.capstone && p.learnedTalents.includes(n.id));
+      if (hasCapstone) { get().pushLog("Only one capstone may be chosen. Respec to change."); return false; }
+    }
     const next = recompute({ ...p, talentPoints: p.talentPoints - 1, learnedTalents: [...p.learnedTalents, node.id] });
     set({ player: next });
     get().pushLog(`Learned talent: ${node.name}.`);
@@ -936,11 +947,23 @@ export const useGame = create<GameState>((set, get) => ({
   },
 
   wipeCharacter: () => {
-    const p = get().player;
-    if (!p.faction || !p.classId) { get().reset(); return; }
-    const meta = get().meta;
-    const fresh = buildFreshPlayer(p.faction, p.classId, p.name, meta, p);
-    set({ player: fresh, screen: "city", log: [`${p.name} wakes in the city — bones intact, memory shorter.`] , quests: [], lastRun: null });
+    // Called from RunSummaryScreen's Continue button.
+    //   Victory → keep the character, return to the city. Bag/equipment persist.
+    //   Defeat  → character is lost; clear and bounce back to character select (title).
+    const last = get().lastRun;
+    if (last?.outcome === "victory") {
+      set({ screen: "city", lastRun: null });
+      get().pushLog("You return to the city, victorious.");
+      return;
+    }
+    // Defeat path (or unknown): full reset.
+    set({
+      player: emptyPlayer(),
+      screen: "title",
+      log: ["A new wanderer steps forward — the last did not return."],
+      quests: [],
+      lastRun: null,
+    });
   },
 
   finishRun: (outcome) => {

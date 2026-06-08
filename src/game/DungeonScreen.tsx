@@ -3,7 +3,7 @@ import { useGame } from "@/game/store";
 import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumber";
 import {
   CLASS_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
-  RARITY_CLASS, RARITY_LABEL, gearScore, gearSellPrice, rollDamage, damageRange,
+  RARITY_CLASS, RARITY_LABEL, gearScore, rollDamage, damageRange,
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
   type StatusEffect, type EnemyIntent, type FactionId,
 } from "@/game/data";
@@ -30,19 +30,23 @@ type CombatEnc = {
   enemyHp: number; enemyMaxHp: number;
   stunnedTurns: number; shieldReduce: number;
   cooldowns: Record<string, number>;
-  enemyEffects: StatusEffect[];  // bleed / burn on enemy, chill on enemy
-  playerEffects: StatusEffect[]; // renew / burn on player (future)
-  nextIntent: EnemyIntent;       // telegraphed action for the upcoming enemy turn
+  enemyEffects: StatusEffect[];
+  playerEffects: StatusEffect[];
+  nextIntent: EnemyIntent;
 };
+
+type ShrineKind = "heal" | "blessing";
+type TrapKind = "spikes" | "gas";
 
 type Encounter =
   | { kind: "path"; depth: number }
   | { kind: "victory"; depth: number; loot: Loot }
   | { kind: "chest"; depth: number; preview: ChestPreview }
+  | { kind: "shrine"; depth: number; shrine: ShrineKind }
+  | { kind: "trap"; depth: number; trap: TrapKind; sprung: boolean }
   | CombatEnc;
 
 function pickIntent(enemy: EnemyDef): EnemyIntent {
-  // Telegraphable intents fire ~35% of the time; otherwise pick a non-telegraphable
   const teleg = enemy.intents.filter((i) => i.telegraphable);
   const normal = enemy.intents.filter((i) => !i.telegraphable);
   if (teleg.length && Math.random() < 0.35) return teleg[Math.floor(Math.random() * teleg.length)];
@@ -64,8 +68,10 @@ function buildCombat(depth: number, faction?: FactionId | null): CombatEnc {
 function rollEncounter(depth: number, faction?: FactionId | null): Encounter {
   if (depth >= 10) return buildCombat(depth, faction);
   const r = Math.random();
-  if (r < 0.55) return buildCombat(depth, faction);
-  if (r < 0.85) return { kind: "chest", depth, preview: rollChest(depth) };
+  if (r < 0.50) return buildCombat(depth, faction);
+  if (r < 0.72) return { kind: "chest", depth, preview: rollChest(depth) };
+  if (r < 0.84) return { kind: "shrine", depth, shrine: Math.random() < 0.6 ? "heal" : "blessing" };
+  if (r < 0.94) return { kind: "trap", depth, trap: Math.random() < 0.5 ? "spikes" : "gas", sprung: false };
   return { kind: "path", depth };
 }
 
@@ -105,8 +111,6 @@ export function DungeonScreen() {
   const useRacial = useGame((s) => s.useRacial);
   const consumeMult = useGame((s) => s.consumeNextAttackMult);
   const equip = useGame((s) => s.equip);
-  const sellBag = useGame((s) => s.sellBagItem);
-  const discardBag = useGame((s) => s.discardBagItem);
 
   const abilities = player.classId ? CLASS_ABILITIES[player.classId] : [];
   const inv = player.inventory;
@@ -399,11 +403,11 @@ export function DungeonScreen() {
     setEnc({ kind: "path", depth: enc.depth });
   };
 
-  const heroImg =
-    enc.kind === "combat" ? enc.enemy.image :
-    enc.kind === "victory" ? enc.loot.enemy.image :
-    enc.kind === "chest" ? chestImg :
-    corridorImg;
+  // Always show the dungeon corridor as the background — enemy/chest sprites
+  // overlay on top so the player can read where they are at a glance.
+  const showEnemyOverlay = enc.kind === "combat" || enc.kind === "victory";
+  const enemyOverlay = enc.kind === "combat" ? enc.enemy.image : enc.kind === "victory" ? enc.loot.enemy.image : null;
+  const showChestOverlay = enc.kind === "chest";
 
   // Equipped gear delta for inline equip
   const lootGear = enc.kind === "victory" ? enc.loot.gear : undefined;
@@ -413,12 +417,18 @@ export function DungeonScreen() {
   return (
     <div className="flex min-h-full flex-col">
       <div className={`relative h-64 overflow-hidden border-b-2 border-black ${hit ? "shake" : ""}`}>
-        <img
-          key={(enc.kind === "combat" ? enc.enemy.id : enc.kind === "victory" ? "v_" + enc.loot.enemy.id : enc.kind) + enc.depth}
-          src={heroImg}
-          alt=""
-          className={`h-full w-full object-cover fade-in-up ${enc.kind === "victory" ? "grayscale opacity-60" : ""} ${hit && enc.kind === "combat" ? "fx-recoil" : ""}`}
-        />
+        <img src={corridorImg} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        {showEnemyOverlay && enemyOverlay && (
+          <img
+            key={(enc.kind === "combat" ? enc.enemy.id : "v_" + enc.loot.enemy.id) + enc.depth}
+            src={enemyOverlay}
+            alt=""
+            className={`absolute inset-0 m-auto h-[88%] w-auto max-w-[88%] object-contain fade-in-up drop-shadow-[0_8px_0_rgba(0,0,0,0.7)] ${enc.kind === "victory" ? "grayscale opacity-60" : ""} ${hit && enc.kind === "combat" ? "fx-recoil" : ""}`}
+          />
+        )}
+        {showChestOverlay && (
+          <img src={chestImg} alt="" className="absolute inset-0 m-auto h-[80%] w-auto max-w-[80%] object-contain fade-in-up drop-shadow-[0_8px_0_rgba(0,0,0,0.7)]" />
+        )}
         {attackFx && enc.kind === "combat" && (
           attackFx.kind === "melee"
             ? <div key={attackFx.key} className="fx-slash" />
@@ -426,16 +436,16 @@ export function DungeonScreen() {
         )}
         <div className="absolute inset-0 vignette" />
         <div className="absolute inset-0 scanlines" />
-        <div className="absolute left-2 top-2 pixel text-[8px] text-gold text-shadow-pixel">Depth {enc.depth}/10</div>
+        <div className="absolute left-2 top-2 pixel text-[8px] text-gold text-shadow-pixel bg-background/70 px-1.5 py-0.5 border border-black">Depth {enc.depth}/10</div>
         {enc.kind === "combat" && (
-          <div className="absolute right-2 top-2 pixel text-[8px] text-blood text-shadow-pixel">
+          <div className="absolute right-2 top-2 pixel text-[8px] text-blood text-shadow-pixel bg-background/80 px-1.5 py-0.5 border border-black">
             {enc.enemy.name} {enc.enemyHp}/{enc.enemyMaxHp}
           </div>
         )}
         {enc.kind === "combat" && (
           <div className="absolute left-2 right-2 bottom-2 flex justify-center">
-            <div className={`pixel text-[8px] px-2 py-1 border-2 border-black text-shadow-pixel ${enc.nextIntent.telegraphable ? "bg-blood text-background animate-pulse" : "bg-card text-foreground"}`}>
-              {enc.nextIntent.telegraphable ? "⚠ " : ""}{enc.enemy.name}: {enc.nextIntent.label}
+            <div className={`pixel text-[10px] font-bold px-3 py-1.5 border-2 border-black text-shadow-pixel ${enc.nextIntent.telegraphable ? "bg-blood text-white animate-pulse" : "bg-background/95 text-gold"}`}>
+              {enc.nextIntent.telegraphable ? "⚠ INCOMING — " : "» "}{enc.enemy.name}: {enc.nextIntent.label}
             </div>
           </div>
         )}
@@ -444,10 +454,21 @@ export function DungeonScreen() {
             <p className="pixel text-2xl text-gold text-shadow-pixel">VICTORY</p>
           </div>
         )}
+        {enc.kind === "shrine" && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <p className="pixel text-2xl text-divine text-shadow-pixel">✦ SHRINE ✦</p>
+          </div>
+        )}
+        {enc.kind === "trap" && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <p className="pixel text-2xl text-blood text-shadow-pixel">⚠ TRAP ⚠</p>
+          </div>
+        )}
         <div className="absolute inset-0 pointer-events-none">
           {floaters.map((f) => <FloatingNumber key={f.id} num={f} onDone={removeFloater} />)}
         </div>
       </div>
+
 
       <div className="p-3 space-y-3">
         <div ref={logRef} className="border-2 border-black bg-card/80 p-2 h-24 overflow-y-auto font-body text-sm leading-tight">
@@ -524,10 +545,8 @@ export function DungeonScreen() {
                 {equippedFlash === lootGear.id ? (
                   <p className="pixel text-[8px] text-divine text-center border-2 border-divine py-1">✓ EQUIPPED{equippedForSlot ? ` — replaced ${equippedForSlot.name}` : ""}</p>
                 ) : (
-                  <div className="grid grid-cols-3 gap-1 pt-1">
-                    <button onClick={() => { playSfx("loot"); equip(lootGear.id); setEquippedFlash(lootGear.id); }} className="pixel-btn pixel-btn-gold !text-[8px]">Equip</button>
-                    <button onClick={() => sellBag(lootGear.id)} className="pixel-btn !text-[8px]">Sell {gearSellPrice(lootGear)}g</button>
-                    <button onClick={() => discardBag(lootGear.id)} className="pixel-btn !text-[8px]">Discard</button>
+                  <div className="pt-1">
+                    <button onClick={() => { playSfx("loot"); equip(lootGear.id); setEquippedFlash(lootGear.id); }} className="pixel-btn pixel-btn-gold !text-[8px] w-full">Equip</button>
                   </div>
                 )}
               </div>
@@ -536,8 +555,63 @@ export function DungeonScreen() {
               <p className="font-body text-sm text-muted-foreground">No drops this time.</p>
             )}
             <button onClick={closeVictory} className="pixel-btn pixel-btn-gold !text-[8px] w-full text-center">
-              {enc.loot.enemy.id === "dragon" ? "Claim the Heart →" : "Continue ▸"}
+              {enc.loot.enemy.id === "dragon" ? "Claim the Heart →" : lootGear ? "Move on ▸" : "Continue ▸"}
             </button>
+          </div>
+        )}
+
+        {enc.kind === "shrine" && (
+          <div className="border-2 border-divine bg-card p-3 fade-in-up">
+            <p className="pixel text-[10px] text-divine">✦ A forgotten shrine</p>
+            <p className="font-body text-sm text-muted-foreground mt-1">
+              {enc.shrine === "heal" ? "Cool water trickles from the stone. Drink and be mended." : "Embers swirl above the altar — kneel and be quickened."}
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button className="pixel-btn pixel-btn-gold !text-[8px]" onClick={() => {
+                if (enc.shrine === "heal") {
+                  const amt = Math.max(10, Math.floor(player.maxHp * 0.5));
+                  heal(amt); addFloater("heal", amt); addLog(`The shrine restores ${amt} HP.`); playSfx("ui-confirm");
+                } else {
+                  rewardXp(20 + enc.depth * 6); addLog("The shrine fills you with insight."); playSfx("ui-confirm");
+                }
+                setEnc({ kind: "path", depth: enc.depth });
+              }}>Pray</button>
+              <button className="pixel-btn !text-[8px]" onClick={() => setEnc({ kind: "path", depth: enc.depth })}>Move on</button>
+            </div>
+          </div>
+        )}
+
+        {enc.kind === "trap" && (
+          <div className="border-2 border-blood bg-card p-3 fade-in-up">
+            <p className="pixel text-[10px] text-blood">⚠ {enc.trap === "spikes" ? "Spiked floor plates" : "Hissing gas vents"}</p>
+            <p className="font-body text-sm text-muted-foreground mt-1">
+              {enc.sprung
+                ? "The corridor is quiet again."
+                : enc.trap === "spikes"
+                  ? "Pressure plates click as you near. You can try to dart through, or search for a safer route."
+                  : "Sickly green gas pools ahead. Hold your breath and rush — or take the long way around."}
+            </p>
+            {!enc.sprung && (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button className="pixel-btn !text-[8px]" onClick={() => {
+                  const dodged = player.dodge > 0 && Math.random() * 100 < (player.dodge + 30);
+                  if (dodged) { addLog("You weave through the trap unscathed."); }
+                  else {
+                    const dmg = Math.max(3, Math.floor(player.maxHp * (enc.trap === "spikes" ? 0.18 : 0.12)));
+                    const taken = damage(dmg);
+                    addFloater("enemy", taken);
+                    setHit(true); setTimeout(() => setHit(false), 350);
+                    addLog(`The ${enc.trap === "spikes" ? "spikes bite" : "gas burns"} for ${taken}.`);
+                    playSfx("hit");
+                  }
+                  setEnc({ ...enc, sprung: true });
+                }}>Rush through</button>
+                <button className="pixel-btn !text-[8px]" onClick={() => { addLog("You take the long way around."); setEnc({ kind: "path", depth: enc.depth }); }}>Detour</button>
+              </div>
+            )}
+            {enc.sprung && (
+              <button className="pixel-btn pixel-btn-gold !text-[8px] w-full mt-3" onClick={() => setEnc({ kind: "path", depth: enc.depth })}>Press on ▸</button>
+            )}
           </div>
         )}
 
@@ -552,6 +626,7 @@ export function DungeonScreen() {
             </div>
           </div>
         )}
+
 
         {enc.kind === "combat" && (
           <div className="space-y-2">
