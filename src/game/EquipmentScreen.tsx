@@ -46,6 +46,9 @@ export function EquipmentScreen() {
                 <>
                   <p className={`pixel text-[8px] mt-1 ${RARITY_CLASS[it.rarity]}`}>{it.name}</p>
                   <p className="font-body text-xs opacity-80 leading-tight mt-1">{statsLine(it)}</p>
+                  {it.legendaryDesc && (
+                    <p className="pixel text-[6px] text-rarity-legendary mt-1 leading-tight">✦ {it.legendaryDesc}</p>
+                  )}
                   <p className="pixel text-[7px] text-muted-foreground mt-1">iLvl {it.ilvl}</p>
                 </>
               ) : (
