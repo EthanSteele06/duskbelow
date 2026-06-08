@@ -185,14 +185,23 @@ export const useGame = create<GameState>((set, get) => ({
 
   startGame: (faction, classId, name) => {
     const c = CLASSES.find((x) => x.id === classId)!;
+    const f = FACTIONS.find((x) => x.id === faction)!;
+    const fp = f.passives;
     const base: PlayerState = {
       ...emptyPlayer,
       name: name || "Wanderer",
       faction, classId,
-      baseMaxHp: c.hp, baseAtk: c.atk, baseMag: c.mag,
-      hp: c.hp, maxHp: c.hp, atk: c.atk, mag: c.mag,
+      baseMaxHp: c.hp + (fp.maxHp ?? 0),
+      baseAtk:   c.atk + (fp.atk ?? 0),
+      baseMag:   c.mag + (fp.mag ?? 0),
+      hp:        c.hp + (fp.maxHp ?? 0),
+      maxHp:     c.hp + (fp.maxHp ?? 0),
+      atk:       c.atk + (fp.atk ?? 0),
+      mag:       c.mag + (fp.mag ?? 0),
+      crit:      fp.crit ?? 0,
+      dodge:     fp.dodge ?? 0,
     };
-    set({ screen: "intro", player: recompute(base), log: [`${name || "Wanderer"} arrives in the city.`], quests: [] });
+    set({ screen: "intro", player: recompute(base), log: [`${name || "Wanderer"} arrives in the city. ${f.passiveLabel}`], quests: [] });
   },
 
   pushLog: (msg) => set((s) => ({ log: [...s.log.slice(-40), msg] })),
