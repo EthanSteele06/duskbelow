@@ -405,11 +405,11 @@ export function DungeonScreen() {
     setEnc({ kind: "path", depth: enc.depth });
   };
 
-  const heroImg =
-    enc.kind === "combat" ? enc.enemy.image :
-    enc.kind === "victory" ? enc.loot.enemy.image :
-    enc.kind === "chest" ? chestImg :
-    corridorImg;
+  // Always show the dungeon corridor as the background — enemy/chest sprites
+  // overlay on top so the player can read where they are at a glance.
+  const showEnemyOverlay = enc.kind === "combat" || enc.kind === "victory";
+  const enemyOverlay = enc.kind === "combat" ? enc.enemy.image : enc.kind === "victory" ? enc.loot.enemy.image : null;
+  const showChestOverlay = enc.kind === "chest";
 
   // Equipped gear delta for inline equip
   const lootGear = enc.kind === "victory" ? enc.loot.gear : undefined;
@@ -419,12 +419,18 @@ export function DungeonScreen() {
   return (
     <div className="flex min-h-full flex-col">
       <div className={`relative h-64 overflow-hidden border-b-2 border-black ${hit ? "shake" : ""}`}>
-        <img
-          key={(enc.kind === "combat" ? enc.enemy.id : enc.kind === "victory" ? "v_" + enc.loot.enemy.id : enc.kind) + enc.depth}
-          src={heroImg}
-          alt=""
-          className={`h-full w-full object-cover fade-in-up ${enc.kind === "victory" ? "grayscale opacity-60" : ""} ${hit && enc.kind === "combat" ? "fx-recoil" : ""}`}
-        />
+        <img src={corridorImg} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        {showEnemyOverlay && enemyOverlay && (
+          <img
+            key={(enc.kind === "combat" ? enc.enemy.id : "v_" + enc.loot.enemy.id) + enc.depth}
+            src={enemyOverlay}
+            alt=""
+            className={`absolute inset-0 m-auto h-[88%] w-auto max-w-[88%] object-contain fade-in-up drop-shadow-[0_8px_0_rgba(0,0,0,0.7)] ${enc.kind === "victory" ? "grayscale opacity-60" : ""} ${hit && enc.kind === "combat" ? "fx-recoil" : ""}`}
+          />
+        )}
+        {showChestOverlay && (
+          <img src={chestImg} alt="" className="absolute inset-0 m-auto h-[80%] w-auto max-w-[80%] object-contain fade-in-up drop-shadow-[0_8px_0_rgba(0,0,0,0.7)]" />
+        )}
         {attackFx && enc.kind === "combat" && (
           attackFx.kind === "melee"
             ? <div key={attackFx.key} className="fx-slash" />
@@ -432,16 +438,16 @@ export function DungeonScreen() {
         )}
         <div className="absolute inset-0 vignette" />
         <div className="absolute inset-0 scanlines" />
-        <div className="absolute left-2 top-2 pixel text-[8px] text-gold text-shadow-pixel">Depth {enc.depth}/10</div>
+        <div className="absolute left-2 top-2 pixel text-[8px] text-gold text-shadow-pixel bg-background/70 px-1.5 py-0.5 border border-black">Depth {enc.depth}/10</div>
         {enc.kind === "combat" && (
-          <div className="absolute right-2 top-2 pixel text-[8px] text-blood text-shadow-pixel">
+          <div className="absolute right-2 top-2 pixel text-[8px] text-blood text-shadow-pixel bg-background/80 px-1.5 py-0.5 border border-black">
             {enc.enemy.name} {enc.enemyHp}/{enc.enemyMaxHp}
           </div>
         )}
         {enc.kind === "combat" && (
           <div className="absolute left-2 right-2 bottom-2 flex justify-center">
-            <div className={`pixel text-[8px] px-2 py-1 border-2 border-black text-shadow-pixel ${enc.nextIntent.telegraphable ? "bg-blood text-background animate-pulse" : "bg-card text-foreground"}`}>
-              {enc.nextIntent.telegraphable ? "⚠ " : ""}{enc.enemy.name}: {enc.nextIntent.label}
+            <div className={`pixel text-[10px] font-bold px-3 py-1.5 border-2 border-black text-shadow-pixel ${enc.nextIntent.telegraphable ? "bg-blood text-white animate-pulse" : "bg-background/95 text-gold"}`}>
+              {enc.nextIntent.telegraphable ? "⚠ INCOMING — " : "» "}{enc.enemy.name}: {enc.nextIntent.label}
             </div>
           </div>
         )}
@@ -450,10 +456,21 @@ export function DungeonScreen() {
             <p className="pixel text-2xl text-gold text-shadow-pixel">VICTORY</p>
           </div>
         )}
+        {enc.kind === "shrine" && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <p className="pixel text-2xl text-divine text-shadow-pixel">✦ SHRINE ✦</p>
+          </div>
+        )}
+        {enc.kind === "trap" && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <p className="pixel text-2xl text-blood text-shadow-pixel">⚠ TRAP ⚠</p>
+          </div>
+        )}
         <div className="absolute inset-0 pointer-events-none">
           {floaters.map((f) => <FloatingNumber key={f.id} num={f} onDone={removeFloater} />)}
         </div>
       </div>
+
 
       <div className="p-3 space-y-3">
         <div ref={logRef} className="border-2 border-black bg-card/80 p-2 h-24 overflow-y-auto font-body text-sm leading-tight">
