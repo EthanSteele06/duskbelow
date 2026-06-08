@@ -590,6 +590,12 @@ export const useGame = create<GameState>((set, get) => ({
     if (p.learnedTalents.includes(node.id)) return false;
     if (node.requires && !p.learnedTalents.includes(node.requires)) return false;
     if (p.talentPoints < 1) return false;
+    // Capstones are mutually exclusive — only one per spec.
+    if (node.capstone) {
+      const tree = TALENT_TREES[p.specId];
+      const hasCapstone = tree.some((n) => n.capstone && p.learnedTalents.includes(n.id));
+      if (hasCapstone) { get().pushLog("Only one capstone may be chosen. Respec to change."); return false; }
+    }
     const next = recompute({ ...p, talentPoints: p.talentPoints - 1, learnedTalents: [...p.learnedTalents, node.id] });
     set({ player: next });
     get().pushLog(`Learned talent: ${node.name}.`);
