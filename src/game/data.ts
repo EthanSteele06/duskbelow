@@ -36,24 +36,65 @@ export const CLASSES: ClassDef[] = [
   { id: "priest",  name: "Priest",  tagline: "Light against the dark.", hp: 32, atk: 5, mag: 7, portrait: priestImg, color: "var(--color-divine)" },
 ];
 
+export interface FactionPassive {
+  maxHp?: number;
+  atk?: number;
+  mag?: number;
+  crit?: number;
+  dodge?: number;
+}
+
+export interface FactionRacial {
+  id: string;
+  name: string;
+  desc: string;
+  kind: "heal_pct" | "buff_dmg";
+  /** for heal_pct: fraction of maxHp; for buff_dmg: damage multiplier next attack */
+  amount: number;
+  flavor: string;
+}
+
 export interface FactionDef {
   id: FactionId;
   name: string;
   motto: string;
   sigil: string;
   color: string;
+  passives: FactionPassive;
+  passiveLabel: string;
+  racial: FactionRacial;
 }
 
 export const FACTIONS: FactionDef[] = [
-  { id: "allies",  name: "Kingdom of Allies", motto: "Bound by oath. Forged in light.", sigil: alliesSigil,  color: "var(--color-allies)" },
-  { id: "brigade", name: "Endless Brigade",   motto: "We march. We do not stop.",       sigil: brigadeSigil, color: "var(--color-brigade)" },
+  {
+    id: "allies", name: "Kingdom of Allies", motto: "Bound by oath. Forged in light.", sigil: alliesSigil, color: "var(--color-allies)",
+    passives: { maxHp: 6, dodge: 2 },
+    passiveLabel: "Bulwark Oath — +6 Max HP, +2% dodge.",
+    racial: { id: "rally", name: "Rally", kind: "heal_pct", amount: 0.25, desc: "Heal 25% Max HP. Once per run.", flavor: "{p} rallies — light blooms in their chest" },
+  },
+  {
+    id: "brigade", name: "Endless Brigade", motto: "We march. We do not stop.", sigil: brigadeSigil, color: "var(--color-brigade)",
+    passives: { atk: 1, crit: 3 },
+    passiveLabel: "Bloodlust — +1 ATK, +3% crit.",
+    racial: { id: "frenzy", name: "Frenzy", kind: "buff_dmg", amount: 2.0, desc: "Next attack deals 2× damage. Once per run.", flavor: "{p} bares teeth — eyes go red" },
+  },
 ];
 
 // ── Abilities ────────────────────────────────────────────────────────────────
 
+export type StatusEffectKind = "burn" | "bleed" | "chill" | "renew";
+
+export interface StatusEffect {
+  kind: StatusEffectKind;
+  turns: number;
+  /** dmg/heal per tick; for chill this stores the damage-taken multiplier */
+  power: number;
+}
+
 export type AbilityEffect =
-  | { kind: "attack"; mult: number; useMag?: boolean; flavor: string }
+  | { kind: "attack"; mult: number; useMag?: boolean; flavor: string; applyStatus?: { kind: StatusEffectKind; turns: number; power: number } }
   | { kind: "heal"; amount: number; flavor: string }
+  | { kind: "hot"; healPerTurn: number; turns: number; flavor: string }
   | { kind: "flee"; flavor: string }
   | { kind: "stun"; flavor: string }
   | { kind: "shield"; reduce: number; flavor: string };
@@ -68,24 +109,24 @@ export interface Ability {
 
 export const CLASS_ABILITIES: Record<ClassId, Ability[]> = {
   warrior: [
-    { id: "strike", name: "Strike",     desc: "A clean swing. ATK damage.",            cooldown: 0, effect: { kind: "attack", mult: 1.0, flavor: "{p} cleaves with their blade" } },
-    { id: "cleave", name: "Cleave",     desc: "A heavy two-hander. 1.7× ATK.",        cooldown: 2, effect: { kind: "attack", mult: 1.7, flavor: "{p} swings a wide cleave" } },
-    { id: "wall",   name: "Shield Wall", desc: "Brace. Cut next hit by 70%.",          cooldown: 3, effect: { kind: "shield", reduce: 0.7, flavor: "{p} raises a shield wall" } },
+    { id: "strike", name: "Strike",      desc: "A clean swing. ATK damage.",                        cooldown: 0, effect: { kind: "attack", mult: 1.0, flavor: "{p} strikes with their blade" } },
+    { id: "cleave", name: "Cleave",      desc: "Heavy two-hander. 1.6× ATK, applies Bleed (3t).",   cooldown: 2, effect: { kind: "attack", mult: 1.6, flavor: "{p} swings a wide cleave", applyStatus: { kind: "bleed", turns: 3, power: 3 } } },
+    { id: "wall",   name: "Shield Wall", desc: "Brace. Cut next hit by 70%.",                       cooldown: 3, effect: { kind: "shield", reduce: 0.7, flavor: "{p} raises a shield wall" } },
   ],
   rogue: [
-    { id: "slash",   name: "Slash",     desc: "Twin daggers. ATK damage.",             cooldown: 0, effect: { kind: "attack", mult: 1.0, flavor: "{p} slashes with twin daggers" } },
-    { id: "backstab",name: "Backstab",  desc: "Surgical kill. 2.5× ATK.",              cooldown: 3, effect: { kind: "attack", mult: 2.5, flavor: "{p} drives a dagger through a weak point" } },
-    { id: "smoke",   name: "Smoke Bomb",desc: "Vanish. Guaranteed flee.",              cooldown: 4, effect: { kind: "flee", flavor: "{p} disappears in a curl of smoke" } },
+    { id: "slash",      name: "Slash",      desc: "Twin daggers. ATK damage.",                      cooldown: 0, effect: { kind: "attack", mult: 1.0, flavor: "{p} slashes with twin daggers" } },
+    { id: "eviscerate", name: "Eviscerate", desc: "Vicious cut. 1.8× ATK + Bleed (4t).",            cooldown: 2, effect: { kind: "attack", mult: 1.8, flavor: "{p} carves a deep wound", applyStatus: { kind: "bleed", turns: 4, power: 4 } } },
+    { id: "backstab",   name: "Backstab",   desc: "Surgical kill. 2.5× ATK.",                       cooldown: 4, effect: { kind: "attack", mult: 2.5, flavor: "{p} drives a dagger through a weak point" } },
   ],
   mage: [
-    { id: "bolt",    name: "Arcane Bolt",desc: "MAG damage at range.",                 cooldown: 0, effect: { kind: "attack", mult: 1.0, useMag: true, flavor: "{p} hurls an arcane bolt" } },
-    { id: "fireball",name: "Fireball",   desc: "Roaring flame. 1.8× MAG.",             cooldown: 2, effect: { kind: "attack", mult: 1.8, useMag: true, flavor: "{p} casts a roaring fireball" } },
-    { id: "nova",    name: "Frost Nova", desc: "Freeze the foe. Skip its turn.",       cooldown: 3, effect: { kind: "stun", flavor: "{p} unleashes a frost nova" } },
+    { id: "frostbolt", name: "Frostbolt",  desc: "1.0× MAG + Chill (foe takes +30% dmg, 2t).",      cooldown: 0, effect: { kind: "attack", mult: 1.0, useMag: true, flavor: "{p} hurls a frostbolt", applyStatus: { kind: "chill", turns: 2, power: 1.3 } } },
+    { id: "fireball",  name: "Fireball",   desc: "1.5× MAG + Burn (3t).",                           cooldown: 2, effect: { kind: "attack", mult: 1.5, useMag: true, flavor: "{p} casts a roaring fireball", applyStatus: { kind: "burn", turns: 3, power: 5 } } },
+    { id: "nova",      name: "Frost Nova", desc: "Freeze the foe. Skip its turn.",                  cooldown: 3, effect: { kind: "stun", flavor: "{p} unleashes a frost nova" } },
   ],
   priest: [
-    { id: "smite",   name: "Smite",      desc: "Holy MAG damage.",                     cooldown: 0, effect: { kind: "attack", mult: 1.0, useMag: true, flavor: "{p} smites the foe with holy light" } },
-    { id: "heal",    name: "Lay on Hands",desc: "Restore HP equal to 2× MAG.",         cooldown: 2, effect: { kind: "heal", amount: 0, flavor: "{p} lays on hands, wreathed in light" } },
-    { id: "wrath",   name: "Wrath",      desc: "MAG damage and a small heal.",         cooldown: 3, effect: { kind: "attack", mult: 1.4, useMag: true, flavor: "{p} calls down righteous wrath" } },
+    { id: "smite", name: "Smite",             desc: "Holy MAG damage.",                              cooldown: 0, effect: { kind: "attack", mult: 1.0, useMag: true, flavor: "{p} smites with holy light" } },
+    { id: "swp",   name: "Shadow Word: Pain", desc: "1.2× MAG + DoT (4t).",                          cooldown: 2, effect: { kind: "attack", mult: 1.2, useMag: true, flavor: "{p} whispers a word of agony", applyStatus: { kind: "burn", turns: 4, power: 4 } } },
+    { id: "renew", name: "Renew",             desc: "Heal over time — MAG/turn for 4 turns.",        cooldown: 3, effect: { kind: "hot", healPerTurn: 0, turns: 4, flavor: "{p} weaves a renewing prayer" } },
   ],
 };
 
