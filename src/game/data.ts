@@ -388,6 +388,69 @@ export const ENEMIES: Record<string, EnemyDef> = {
       { id: "ruin",     label: "💀 Worldending Ruin", mult: 2.8, line: "{n} speaks a word of ruin — {d} damage!", telegraphable: true },
     ],
   },
+  // ── Phase 1 additions ──
+  spider_swarm: {
+    id: "spider_swarm", name: "Spider Swarm", image: spiderSwarmImg,
+    hpBase: 12, atkBase: 3,
+    materialDrop: { id: "spider_silk", chance: 0.6 },
+    attackLines: ["The {n} skitters and bites for {d}!"],
+    intents: [
+      { id: "skitter", label: "🕷 Skitter Bite", mult: 1.0, line: "The {n} bites for {d}!" },
+      { id: "web",     label: "🕸 Web Snare",    mult: 0.6, line: "{n} flings webs — chilled and bitten for {d}!", telegraphable: true },
+    ],
+  },
+  goblin_sapper: {
+    id: "goblin_sapper", name: "Goblin Sapper", image: goblinSapperImg,
+    hpBase: 18, atkBase: 5,
+    materialDrop: { id: "iron_scrap", chance: 0.55 },
+    attackLines: ["The {n} hurls a sputtering canister for {d}!"],
+    intents: [
+      { id: "wrench", label: "🔧 Wrench Swing", mult: 1.0, line: "The {n} swings a heavy wrench for {d}!" },
+      { id: "bomb",   label: "💥 Throw Bomb",   mult: 2.0, line: "{n} lobs a bomb — it bursts for {d}!", telegraphable: true },
+    ],
+  },
+  mire_shambler: {
+    id: "mire_shambler", name: "Mire Shambler", image: mireShamblerImg,
+    hpBase: 60, atkBase: 6,
+    materialDrop: { id: "herb_bundle", chance: 0.7 },
+    attackLines: ["The {n} swings a moss-clad limb for {d}!"],
+    intents: [
+      { id: "slam",  label: "🌿 Mossy Slam", mult: 1.0, line: "The {n} slams down for {d}!" },
+      { id: "regen", label: "💚 Regrow",      mult: 0.0, line: "{n} knits itself back together.", telegraphable: true },
+      { id: "spew",  label: "🤢 Spore Spew",  mult: 1.4, line: "{n} spews spores for {d}!", telegraphable: true },
+    ],
+  },
+  cinder_drake: {
+    id: "cinder_drake", name: "Cinder Drake", image: cinderDrakeImg,
+    hpBase: 36, atkBase: 9,
+    materialDrop: { id: "dragon_scale", chance: 0.15 },
+    attackLines: ["The {n} claws you for {d}!"],
+    intents: [
+      { id: "claw",      label: "🐲 Talon Slash",  mult: 1.0, line: "Talons rake for {d}!" },
+      { id: "wingbeat",  label: "🌪 Wingbeat",     mult: 1.3, line: "A wingbeat hurls you for {d}!" },
+      { id: "firebreath",label: "🔥 Firebreath",   mult: 2.0, line: "{n} breathes fire — searing burn for {d}!", telegraphable: true },
+    ],
+  },
+  soulbinder: {
+    id: "soulbinder", name: "Soulbinder", image: soulbinderImg,
+    hpBase: 44, atkBase: 8,
+    materialDrop: { id: "ghost_essence", chance: 0.6 },
+    attackLines: ["The {n} drains essence for {d}!"],
+    intents: [
+      { id: "leech",  label: "🩸 Soul Leech",   mult: 1.0, line: "Soul leech rips {d} from you!" },
+      { id: "bind",   label: "⛓ Bind Weakness", mult: 0.5, line: "{n} binds your strength — weakened, and struck for {d}!", telegraphable: true },
+    ],
+  },
+  stone_golem: {
+    id: "stone_golem", name: "Stone Golem", image: stoneGolemImg,
+    hpBase: 90, atkBase: 11,
+    materialDrop: { id: "iron_scrap", chance: 0.8 },
+    attackLines: ["The {n} brings a fist down for {d}!"],
+    intents: [
+      { id: "fist",  label: "🪨 Stone Fist", mult: 1.0, line: "A stone fist crashes for {d}!" },
+      { id: "quake", label: "💢 Quake",      mult: 1.9, line: "{n} unleashes a quake for {d}!", telegraphable: true },
+    ],
+  },
 };
 
 /** Final dungeon depth. Mini-bosses on 5/15/25, major bosses on 10/20/30. */
