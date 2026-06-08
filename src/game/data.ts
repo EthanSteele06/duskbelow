@@ -985,15 +985,19 @@ export interface ClassLegendaryDef {
   name: string;
   flavor: string;
   stats: GearItem["stats"];
+  /** Basic attack ability id this legendary empowers. */
+  empowersAbilityId: string;
+  /** Short description of the unique on-hit buff. */
+  effectDesc: string;
 }
 
 export const CLASS_LEGENDARIES: Record<ClassId, ClassLegendaryDef> = {
-  warrior:     { baseId: "sword",  slot: "weapon",  name: "Worldcleaver",          flavor: "The blade that ended a god.",        stats: { atk: 22, crit: 12, maxHp: 20 } },
-  rogue:       { baseId: "dagger", slot: "weapon",  name: "Whisper of the Vanished", flavor: "It was never here. Neither were you.", stats: { atk: 18, crit: 8, dodge: 6 } },
-  mage:        { baseId: "staff",  slot: "weapon",  name: "Aetheric Scepter",      flavor: "Cracks reality on contact.",         stats: { mag: 24, crit: 14 } },
-  priest:      { baseId: "tome",   slot: "offhand", name: "Reliquary of Dawn",     flavor: "Holds a sunrise that never set.",    stats: { mag: 20, maxHp: 36 } },
-  druid:       { baseId: "staff",  slot: "weapon",  name: "Heartwood Branch",      flavor: "Still living. Still listening.",     stats: { mag: 22, maxHp: 28 } },
-  deathknight: { baseId: "sword",  slot: "weapon",  name: "Frostmourne Shard",     flavor: "Asks every kill for a little more.", stats: { atk: 20, maxHp: 24, crit: 8 } },
+  warrior:     { baseId: "sword",  slot: "weapon",  name: "Worldcleaver",            flavor: "The blade that ended a god.",          stats: { atk: 22, crit: 12, maxHp: 20 }, empowersAbilityId: "strike",      effectDesc: "Strike deals +60% damage." },
+  rogue:       { baseId: "dagger", slot: "weapon",  name: "Whisper of the Vanished", flavor: "It was never here. Neither were you.", stats: { atk: 18, crit: 8,  dodge: 6 },  empowersAbilityId: "slash",       effectDesc: "Slash gains +35% crit chance." },
+  mage:        { baseId: "staff",  slot: "weapon",  name: "Aetheric Scepter",        flavor: "Cracks reality on contact.",           stats: { mag: 24, crit: 14 },             empowersAbilityId: "frostbolt",   effectDesc: "Frostbolt deals +50% damage and refreshes Chill for 1 extra turn." },
+  priest:      { baseId: "tome",   slot: "offhand", name: "Reliquary of Dawn",       flavor: "Holds a sunrise that never set.",      stats: { mag: 20, maxHp: 36 },            empowersAbilityId: "smite",       effectDesc: "Smite heals you for 40% of damage dealt." },
+  druid:       { baseId: "staff",  slot: "weapon",  name: "Heartwood Branch",        flavor: "Still living. Still listening.",       stats: { mag: 22, maxHp: 28 },            empowersAbilityId: "wrath",       effectDesc: "Wrath deals +40% damage and restores 6 HP." },
+  deathknight: { baseId: "sword",  slot: "weapon",  name: "Frostmourne Shard",       flavor: "Asks every kill for a little more.",   stats: { atk: 20, maxHp: 24, crit: 8 },   empowersAbilityId: "deathstrike", effectDesc: "Death Strike deals +35% damage and lifesteal is doubled." },
 };
 
 export function rollClassLegendary(classId: ClassId, depth: number): GearItem {
@@ -1006,6 +1010,9 @@ export function rollClassLegendary(classId: ClassId, depth: number): GearItem {
     rarity: "legendary",
     ilvl: Math.max(15, depth),
     stats: { ...def.stats },
+    classId,
+    empowersAbilityId: def.empowersAbilityId,
+    legendaryDesc: def.effectDesc,
   };
 }
 
