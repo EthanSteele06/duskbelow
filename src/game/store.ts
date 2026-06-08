@@ -780,7 +780,8 @@ export const useGame = create<GameState>((set, get) => ({
   recordKill: (enemyId, opts) => {
     const meta = get().meta;
     const echo = echoStart(meta);
-    const baseShards = opts?.shardValue ?? (opts?.boss ? 8 : 1);
+    // Slower shard economy: trash 0 (25% chance of 1), bosses 3.
+    const baseShards = opts?.shardValue ?? (opts?.boss ? 3 : (Math.random() < 0.25 ? 1 : 0));
     const shards = Math.max(0, Math.floor(baseShards * echo.shardMult));
     const j = meta.journal;
     const enemyKills = { ...j.enemyKills, [enemyId]: (j.enemyKills[enemyId] ?? 0) + 1 };
@@ -866,9 +867,24 @@ export const useGame = create<GameState>((set, get) => ({
     if (!node) return false;
     if (node.requires && !hasEcho(meta, node.requires)) return false;
     if (meta.shards < node.cost) return false;
-    const nextMeta: MetaState = { ...meta, shards: meta.shards - node.cost, echoLearned: [...meta.echoLearned, nodeId] };
+    // Class unlock nodes also add to unlockedClasses so they appear on the title screen.
+    const unlocksClass: Partial<Record<string, ClassId>> = {
+      unlock_mage: "mage",
+      unlock_priest: "priest",
+    };
+    const grantClass = unlocksClass[nodeId];
+    const nextUnlocked = grantClass && !meta.unlockedClasses.includes(grantClass)
+      ? [...meta.unlockedClasses, grantClass]
+      : meta.unlockedClasses;
+    const nextMeta: MetaState = {
+      ...meta,
+      shards: meta.shards - node.cost,
+      echoLearned: [...meta.echoLearned, nodeId],
+      unlockedClasses: nextUnlocked,
+    };
     persistMeta(nextMeta);
     set({ meta: nextMeta });
+    if (grantClass) get().pushLog(`✦ ${grantClass.charAt(0).toUpperCase() + grantClass.slice(1)} class permanently unlocked.`);
     return true;
   },
 
@@ -927,7 +943,21 @@ export const useGame = create<GameState>((set, get) => ({
       date: Date.now(),
       isFirstRun,
     };
-    set({ meta: nextMeta, lastRun: summary, screen: "run_summary" });
+    // Strip buffs so they don't linger after the run summary returns to town.
+    const buffs = p.activeBuffs ?? [];
+    const bAtk = buffs.reduce((a, b) => a + (b.atk ?? 0), 0);
+    const bMag = buffs.reduce((a, b) => a + (b.mag ?? 0), 0);
+    const bHp  = buffs.reduce((a, b) => a + (b.maxHp ?? 0), 0);
+    const cleanedPlayer = recompute({
+      ...p,
+      baseMaxHp: p.baseMaxHp - bHp,
+      baseAtk:   p.baseAtk - bAtk,
+      baseMag:   p.baseMag - bMag,
+      hp:        Math.max(1, p.hp - bHp),
+      activeBuffs: [],
+      buffGoldMult: 1,
+    });
+    set({ meta: nextMeta, lastRun: summary, screen: "run_summary", player: cleanedPlayer });
   },
 
   markSeenWipeIntro: () => {
