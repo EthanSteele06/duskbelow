@@ -1,15 +1,20 @@
 import { useState } from "react";
 import { useGame } from "@/game/store";
 import { CLASSES, FACTIONS, type ClassId, type FactionId } from "@/game/data";
+import { nextUnlock, unlockedClassesFor } from "@/game/meta";
 import titleBg from "@/assets/title-bg.jpg";
 
 export function TitleScreen() {
   const start = useGame((s) => s.startGame);
+  const meta = useGame((s) => s.meta);
   const [faction, setFaction] = useState<FactionId | null>(null);
   const [classId, setClassId] = useState<ClassId | null>(null);
   const [name, setName] = useState("");
 
-  const ready = faction && classId;
+  const unlocked = new Set(unlockedClassesFor(meta.account.level, meta.unlockedClasses));
+  const up = nextUnlock(meta.account.level);
+  const ready = faction && classId && unlocked.has(classId);
+
 
   return (
     <div className="relative min-h-full overflow-hidden">
@@ -30,7 +35,11 @@ export function TitleScreen() {
           <p className="font-body mt-2 text-base text-muted-foreground">
             Choose your banner. Carve your fate.
           </p>
+          <p className="pixel mt-3 text-[8px] text-gold">
+            ✦ Wanderer Lv {meta.account.level}{up ? ` · next: ${up.label}` : " · MAX"}
+          </p>
         </header>
+
 
         <section className="mt-6 fade-in-up">
           <h2 className="pixel text-[10px] text-foreground mb-2">▣ Faction</h2>
@@ -62,18 +71,21 @@ export function TitleScreen() {
           <div className="grid grid-cols-4 gap-1.5">
             {CLASSES.map((c) => {
               const sel = classId === c.id;
+              const isLocked = !unlocked.has(c.id);
               return (
                 <button
                   key={c.id}
-                  onClick={() => setClassId(c.id)}
-                  className="pixel-btn !p-1 flex flex-col items-center"
+                  onClick={() => !isLocked && setClassId(c.id)}
+                  disabled={isLocked}
+                  className={`pixel-btn !p-1 flex flex-col items-center ${isLocked ? "opacity-40" : ""}`}
                   style={sel ? { boxShadow: `inset 0 0 0 2px ${c.color}, inset -3px -3px 0 0 rgba(0,0,0,0.5)` } : undefined}
                 >
                   <img src={c.portrait} alt={c.name} className="h-14 w-full object-cover border border-black" />
-                  <span className="pixel text-[7px] mt-1">{c.name}</span>
+                  <span className="pixel text-[7px] mt-1">{isLocked ? "🔒" : c.name}</span>
                 </button>
               );
             })}
+
           </div>
           {classId && (
             <div className="mt-2 border-2 border-black bg-card/80 p-2">
