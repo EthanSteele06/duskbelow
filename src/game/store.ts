@@ -657,8 +657,38 @@ export const useGame = create<GameState>((set, get) => ({
   pickProfession: (id) => {
     const p = get().player;
     if (p.profession) return;
-    set({ player: { ...p, profession: id } });
+    set({ player: { ...p, profession: id, profIdleSince: Date.now() } });
     get().pushLog(`Took up ${id}.`);
+  },
+
+  switchProfession: (id) => {
+    const p = get().player;
+    if (p.profession === id) return;
+    set({ player: {
+      ...p,
+      profession: id,
+      profLevel: 1, profXp: 0,
+      materials: {}, knownRecipes: [],
+      profIdleSince: Date.now(),
+    } });
+    get().pushLog(`Abandoned old craft. Took up ${id} — progress reset.`);
+  },
+
+  claimIdleProfession: () => {
+    const p = get().player;
+    if (!p.profession || !p.profIdleSince) {
+      if (p.profession && !p.profIdleSince) set({ player: { ...p, profIdleSince: Date.now() } });
+      return null;
+    }
+    const elapsed = Math.min(IDLE_MAX_SECONDS, Math.floor((Date.now() - p.profIdleSince) / 1000));
+    const gained = Math.floor(elapsed / IDLE_SECONDS_PER_UNIT);
+    if (gained <= 0) return null;
+    const mat = IDLE_YIELDS[p.profession];
+    const consumed = gained * IDLE_SECONDS_PER_UNIT * 1000;
+    const mats = { ...p.materials, [mat]: (p.materials[mat] ?? 0) + gained };
+    set({ player: { ...p, materials: mats, profIdleSince: p.profIdleSince + consumed } });
+    get().pushLog(`✦ Idle craft: +${gained}× ${MATERIALS[mat]?.name ?? mat}.`);
+    return { mat, gained };
   },
 
   craft: (recipeId) => {
