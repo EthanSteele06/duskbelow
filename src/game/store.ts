@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { ClassId, FactionId, Ability, ProfessionId, GearItem, GearSlot, TalentNode } from "./data";
 import {
-  CLASSES, VENDOR_ITEMS, QUESTS, TRAINERS, RECIPES, MATERIALS, SPECS, TALENT_TREES, COSMETICS,
+  CLASSES, FACTIONS, VENDOR_ITEMS, QUESTS, TRAINERS, RECIPES, MATERIALS, SPECS, TALENT_TREES, COSMETICS,
   BAG_SIZE_BASE, BAG_SIZE_CHAMPION, RESPEC_GOLD_COST, gearSellPrice, profXpForLevel,
 } from "./data";
 
@@ -61,6 +61,10 @@ interface PlayerState {
   isChampion: boolean;
   ownedCosmetics: string[];
   equippedCosmetics: Partial<Record<string, string>>; // kind -> cosmeticId
+  // faction racial (once per run)
+  racialUsed: boolean;
+  /** multiplier applied to the very next player attack (Frenzy), then consumed */
+  nextAttackMult: number;
 }
 
 interface GameState {
@@ -108,6 +112,10 @@ interface GameState {
   toggleChampion: () => void;
   buyCosmetic: (id: string) => boolean;
   equipCosmetic: (id: string) => void;
+  // combat / run helpers
+  restoreBetweenRooms: () => void;
+  useRacial: () => boolean;
+  consumeNextAttackMult: () => void;
 }
 
 const emptyPlayer: PlayerState = {
@@ -119,6 +127,7 @@ const emptyPlayer: PlayerState = {
   equipment: {}, bag: [],
   profession: null, profLevel: 1, profXp: 0, materials: {}, knownRecipes: [],
   isChampion: false, ownedCosmetics: [], equippedCosmetics: {},
+  racialUsed: false, nextAttackMult: 1,
 };
 
 const xpForLevel = (lvl: number) => lvl * 25;
@@ -176,14 +185,23 @@ export const useGame = create<GameState>((set, get) => ({
 
   startGame: (faction, classId, name) => {
     const c = CLASSES.find((x) => x.id === classId)!;
+    const f = FACTIONS.find((x) => x.id === faction)!;
+    const fp = f.passives;
     const base: PlayerState = {
       ...emptyPlayer,
       name: name || "Wanderer",
       faction, classId,
-      baseMaxHp: c.hp, baseAtk: c.atk, baseMag: c.mag,
-      hp: c.hp, maxHp: c.hp, atk: c.atk, mag: c.mag,
+      baseMaxHp: c.hp + (fp.maxHp ?? 0),
+      baseAtk:   c.atk + (fp.atk ?? 0),
+      baseMag:   c.mag + (fp.mag ?? 0),
+      hp:        c.hp + (fp.maxHp ?? 0),
+      maxHp:     c.hp + (fp.maxHp ?? 0),
+      atk:       c.atk + (fp.atk ?? 0),
+      mag:       c.mag + (fp.mag ?? 0),
+      crit:      fp.crit ?? 0,
+      dodge:     fp.dodge ?? 0,
     };
-    set({ screen: "intro", player: recompute(base), log: [`${name || "Wanderer"} arrives in the city.`], quests: [] });
+    set({ screen: "intro", player: recompute(base), log: [`${name || "Wanderer"} arrives in the city. ${f.passiveLabel}`], quests: [] });
   },
 
   pushLog: (msg) => set((s) => ({ log: [...s.log.slice(-40), msg] })),
@@ -328,7 +346,7 @@ export const useGame = create<GameState>((set, get) => ({
   },
 
   enterDungeon: () => {
-    set((s) => ({ screen: "dungeon", player: { ...s.player, dungeonDepth: 1 } }));
+    set((s) => ({ screen: "dungeon", player: { ...s.player, dungeonDepth: 1, racialUsed: false, nextAttackMult: 1 } }));
     get().pushLog("You descend into darkness...");
   },
   exitDungeon: () => {
@@ -548,6 +566,39 @@ export const useGame = create<GameState>((set, get) => ({
     if (current === id) delete nextEquipped[def.kind]; // toggle off
     else nextEquipped[def.kind] = id;
     set({ player: { ...p, equippedCosmetics: nextEquipped } });
+  },
+
+  // ── Combat / run helpers ───────────────────────────────────────────────
+  restoreBetweenRooms: () => {
+    const p = get().player;
+    const amt = Math.max(2, Math.floor(p.maxHp * 0.10));
+    const hp = Math.min(p.maxHp, p.hp + amt);
+    if (hp > p.hp) {
+      set({ player: { ...p, hp } });
+      get().pushLog(`You catch your breath. +${hp - p.hp} HP.`);
+    }
+  },
+
+  useRacial: () => {
+    const p = get().player;
+    if (p.racialUsed || !p.faction) return false;
+    const f = FACTIONS.find((x) => x.id === p.faction)!;
+    const r = f.racial;
+    if (r.kind === "heal_pct") {
+      const amt = Math.floor(p.maxHp * r.amount);
+      const hp = Math.min(p.maxHp, p.hp + amt);
+      set({ player: { ...p, hp, racialUsed: true } });
+      get().pushLog(`${r.flavor.replace("{p}", p.name)} — +${hp - p.hp} HP.`);
+    } else if (r.kind === "buff_dmg") {
+      set({ player: { ...p, racialUsed: true, nextAttackMult: r.amount } });
+      get().pushLog(`${r.flavor.replace("{p}", p.name)} — next attack hits harder.`);
+    }
+    return true;
+  },
+
+  consumeNextAttackMult: () => {
+    const p = get().player;
+    if (p.nextAttackMult !== 1) set({ player: { ...p, nextAttackMult: 1 } });
   },
 }));
 
