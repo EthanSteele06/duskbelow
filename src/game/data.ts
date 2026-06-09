@@ -783,6 +783,7 @@ export const MATERIALS: Record<string, MaterialDef> = {
   linen_scrap:   { id: "linen_scrap",   name: "Linen Scrap",   sellPrice: 3 },
   herb_bundle:   { id: "herb_bundle",   name: "Herb Bundle",   sellPrice: 4 },
   spider_silk:   { id: "spider_silk",   name: "Spider Silk",   sellPrice: 9 },
+  fel_residue:   { id: "fel_residue",   name: "Fel Residue",   sellPrice: 14 },
 };
 
 export interface RecipeDef {
