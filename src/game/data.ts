@@ -210,6 +210,9 @@ export const SPEC_ABILITIES: Record<string, Ability> = {
   blood_dk:    { id: "spec_blood_dk",   name: "Death Coil",       desc: "1.4× ATK and heal for 50% damage dealt.",      cooldown: 3, effect: { kind: "attack", mult: 1.4, flavor: "{p} lashes a coil of unholy power", lifesteal: 0.50 } },
   frost_dk:    { id: "spec_frost_dk",   name: "Obliterate",       desc: "2.0× ATK (×2 if foe is Chilled).",             cooldown: 3, effect: { kind: "attack", mult: 2.0, flavor: "{p} obliterates the foe", bonusVsChill: 2.0 } },
   unholy:      { id: "spec_unholy",     name: "Festering Strike", desc: "1.4× ATK + festering Bleed (4t).",             cooldown: 2, effect: { kind: "attack", mult: 1.4, flavor: "{p} drives a festering blade in", applyStatus: { kind: "bleed", turns: 4, power: 4 } } },
+  // Demon Hunter
+  havoc:       { id: "spec_havoc",      name: "Blade Dance",      desc: "Whirlwind glaives. 2.2× ATK, +20% crit chance.",cooldown: 3, effect: { kind: "attack", mult: 2.2, flavor: "{p} dances between strikes — glaives sing" } },
+  vengeance:   { id: "spec_veng",       name: "Soul Cleave",      desc: "1.6× ATK and heal for 60% damage dealt.",      cooldown: 3, effect: { kind: "attack", mult: 1.6, flavor: "{p} drinks the wound", lifesteal: 0.60 } },
 };
 
 // ── Enemies ──────────────────────────────────────────────────────────────────
