@@ -500,12 +500,12 @@ export function dungeonBgForDepth(depth: number): string {
   return DUNGEON_BGS[idx];
 }
 
-export function enemyForDepth(depth: number, faction?: FactionId | null, opts?: { huntingShacklewarden?: boolean }): EnemyDef {
+export function enemyForDepth(depth: number, faction?: FactionId | null): EnemyDef {
   // Boss floors are deterministic.
   const boss = BOSS_FLOORS[depth];
   if (boss) return ENEMIES[boss];
-  // Demon Hunter unlock arc — rare mini-boss spawn at mid-depth while the storyline is active.
-  if (opts?.huntingShacklewarden && depth >= 8 && depth <= 22 && Math.random() < 0.18) {
+  // Rare mini-boss: the Shacklewarden Demon stalks mid floors (DH unlock arc target).
+  if (depth >= 8 && depth <= 22 && Math.random() < 0.05) {
     return ENEMIES.shacklewarden;
   }
   // Faction-specific enemies — appear when player belongs to the OPPOSING side.
