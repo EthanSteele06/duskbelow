@@ -619,7 +619,29 @@ export interface QuestDef {
   rewardGold: number;
   rewardXp: number;
   classId?: ClassId; // class-only quest
+  /** Story arc this quest belongs to (Chronicles tab on the board). */
+  storyId?: string;
+  /** Order within a story arc (1, 2, 3…). */
+  storyStep?: number;
+  /** Quest id that must be turned in before this one is available. */
+  chainFrom?: string;
+  /** On turn-in, unlock this class permanently (Demon Hunter etc). */
+  unlocksClass?: ClassId;
 }
+
+/** Story arcs shown as Chronicles, separate from one-off bounties. */
+export interface StorylineDef {
+  id: string;
+  name: string;
+  lore: string;
+}
+
+export const STORYLINES: StorylineDef[] = [
+  { id: "story_dh",      name: "Path of the Demon Hunter", lore: "A blind veteran offers a pact: bind a demon's hunger to your spine, and walk the dark on equal footing." },
+  { id: "story_sealed",  name: "The Sealed Heart",         lore: "Beneath the throne, something old beats slow. Find the wards that hold it. Find what they cost." },
+  { id: "story_marrow",  name: "The Marrow March",         lore: "Bones march in formation in the deep. They remember orders no living captain ever gave." },
+  { id: "story_moss",    name: "The Mossfather's Toll",    lore: "The grove sent you to bring back what the stone took. The stone has been keeping a list." },
+];
 
 export const QUESTS: QuestDef[] = [
   { id: "q1", name: "Pest Control",      desc: "The smith hates rats. Bring proof.",                       target: { itemId: "rat_tail",     count: 3, label: "Rat Tail" },     rewardGold: 40,  rewardXp: 25 },
@@ -631,6 +653,17 @@ export const QUESTS: QuestDef[] = [
   { id: "cq_rogue",   name: "Silken Threads", desc: "Cut thread from cultist robes, unseen.",              target: { itemId: "dark_thread", count: 3, label: "Dark Thread" },  rewardGold: 60, rewardXp: 60, classId: "rogue" },
   { id: "cq_mage",    name: "Arcane Pulse",   desc: "Gather arcane dust from chests for study.",           target: { itemId: "arcane_dust", count: 3, label: "Arcane Dust" },  rewardGold: 60, rewardXp: 60, classId: "mage" },
   { id: "cq_priest",  name: "Restless Souls", desc: "Bring wraith essence to be put to rest.",             target: { itemId: "ghost_essence",count: 2,label: "Ghost Essence" },rewardGold: 60, rewardXp: 60, classId: "priest" },
+
+  // ── Chronicles: Path of the Demon Hunter (3-step unlock chain) ─────────────
+  { id: "dh_1", storyId: "story_dh", storyStep: 1, name: "Whispers from the Wards",
+    desc: "Kael'thar wants proof the seals are leaking. Gather fel residue from imps in the deep.",
+    target: { itemId: "fel_residue", count: 5, label: "Fel Residue" }, rewardGold: 80, rewardXp: 50 },
+  { id: "dh_2", storyId: "story_dh", storyStep: 2, chainFrom: "dh_1", name: "Hunt the Shacklewarden",
+    desc: "A chained demon stalks the middle floors. Slay it and bring back a piece of its chain.",
+    target: { itemId: "fel_residue", count: 3, label: "Warden's Chain (drops from the Shacklewarden — rare spawn, floors 8-22)" }, rewardGold: 220, rewardXp: 140 },
+  { id: "dh_3", storyId: "story_dh", storyStep: 3, chainFrom: "dh_2", name: "Bind the Pact",
+    desc: "Return to Kael'thar. Survive the ritual. Walk out a Demon Hunter.",
+    target: { itemId: "fel_residue", count: 1, label: "One last drop of fel residue for the ritual" }, rewardGold: 0, rewardXp: 200, unlocksClass: "demonhunter" },
 ];
 
 // ── Intro flavor text ────────────────────────────────────────────────────────
