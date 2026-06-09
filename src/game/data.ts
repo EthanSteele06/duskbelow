@@ -174,6 +174,11 @@ export const CLASS_ABILITIES: Record<ClassId, Ability[]> = {
     { id: "froststrike", name: "Frost Strike", desc: "1.0× ATK + Chill (foe takes +30% dmg, 2t).",   cooldown: 2, effect: { kind: "attack", mult: 1.0, flavor: "{p} buries a frost-rimed blade", applyStatus: { kind: "chill", turns: 2, power: 1.3 } } },
     { id: "bloodboil",   name: "Blood Boil",   desc: "1.7× ATK + Bleed (4t).",                       cooldown: 3, effect: { kind: "attack", mult: 1.7, flavor: "{p} boils the foe's blood", applyStatus: { kind: "bleed", turns: 4, power: 5 } } },
   ],
+  demonhunter: [
+    { id: "chaosstrike", name: "Chaos Strike", desc: "Twin glaives. 1.1× ATK, lifesteal 20%.",       cooldown: 0, effect: { kind: "attack", mult: 1.1, flavor: "{p} flickers — twin glaives bite", lifesteal: 0.20 } },
+    { id: "felrush",     name: "Fel Rush",     desc: "Charge through. 1.6× MAG + Burn (3t).",        cooldown: 2, effect: { kind: "attack", mult: 1.6, useMag: true, flavor: "{p} fel-rushes through the foe", applyStatus: { kind: "burn", turns: 3, power: 5 } } },
+    { id: "eyebeam",     name: "Eye Beam",     desc: "Green torrent. 2.2× MAG.",                     cooldown: 3, effect: { kind: "attack", mult: 2.2, useMag: true, flavor: "{p}'s eyes blaze — fel-light pours forth" } },
+  ],
 };
 
 // ── Spec Abilities (WoW-inspired signature ability per specialization) ───────
