@@ -1035,6 +1035,7 @@ export const CLASS_LEGENDARIES: Record<ClassId, ClassLegendaryDef> = {
   priest:      { baseId: "tome",   slot: "offhand", name: "Reliquary of Dawn",       flavor: "Holds a sunrise that never set.",      stats: { mag: 20, maxHp: 36 },            empowersAbilityId: "smite",       effectDesc: "Smite heals you for 40% of damage dealt." },
   druid:       { baseId: "staff",  slot: "weapon",  name: "Heartwood Branch",        flavor: "Still living. Still listening.",       stats: { mag: 22, maxHp: 28 },            empowersAbilityId: "wrath",       effectDesc: "Wrath deals +40% damage and restores 6 HP." },
   deathknight: { baseId: "sword",  slot: "weapon",  name: "Frostmourne Shard",       flavor: "Asks every kill for a little more.",   stats: { atk: 20, maxHp: 24, crit: 8 },   empowersAbilityId: "deathstrike", effectDesc: "Death Strike deals +35% damage and lifesteal is doubled." },
+  demonhunter: { baseId: "dagger", slot: "weapon",  name: "Twinblades of the Betrayer", flavor: "Two glaives. One hunger.",          stats: { atk: 20, crit: 14, mag: 8 },    empowersAbilityId: "chaosstrike", effectDesc: "Chaos Strike deals +45% damage and lifesteal is tripled." },
 };
 
 export function rollClassLegendary(classId: ClassId, depth: number): GearItem {
