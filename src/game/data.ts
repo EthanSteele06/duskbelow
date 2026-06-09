@@ -309,7 +309,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
   imp: {
     id: "imp", name: "Fel Imp", image: impImg,
     hpBase: 10, atkBase: 3,
-    materialDrop: { id: "arcane_dust", chance: 0.5 },
+    materialDrop: { id: "fel_residue", chance: 0.4 },
     attackLines: ["The {n} flings a cinder for {d}!"],
     intents: [
       { id: "cinder", label: "🔥 Cinder",  mult: 1.0, line: "The {n} flings a cinder for {d}!" },
