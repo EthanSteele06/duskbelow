@@ -647,6 +647,7 @@ const CLASS_INTRO: Record<ClassId, string> = {
   priest:  "Your god is quiet, lately. You suspect they are waiting to see what you do down there.",
   druid:   "The grove remembers what cities forget. You carry a piece of it down into the stone.",
   deathknight: "You died once. The cold did not keep you. Something colder gave you a sword and pointed.",
+  demonhunter: "You bound a demon to your spine. Now its hunger is yours — and the dark below smells of cousins.",
 };
 
 export function buildIntro(faction: FactionId, classId: ClassId, name: string): string[] {
