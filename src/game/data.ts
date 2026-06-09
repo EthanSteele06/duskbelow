@@ -737,6 +737,15 @@ export const TRAINERS: Record<ClassId, TrainerDef> = {
       { id: "dk_unholy",name: "Unholy Vigor",    desc: "+3 ATK, +6 Max HP.",        cost: 2, requires: "dk_rune", effect: { kind: "stat", atk: 3, maxHp: 6 } },
     ],
   },
+  demonhunter: {
+    classId: "demonhunter", name: "Kael'thar the Unblind", title: "First of the Bound", portrait: trainerDemonHunterImg,
+    greeting: "You smell of fel-smoke and unfinished oaths. Good. Pick something to sharpen.",
+    skills: [
+      { id: "dh_fury",  name: "Fury Within",    desc: "+2 ATK, +1 MAG.",            cost: 1, effect: { kind: "stat", atk: 2, mag: 1 } },
+      { id: "dh_hide",  name: "Demonhide",      desc: "+8 Max HP.",                 cost: 1, effect: { kind: "stat", maxHp: 8 } },
+      { id: "dh_sight", name: "Spectral Sight", desc: "+3 MAG, +6 Max HP.",         cost: 2, requires: "dh_fury", effect: { kind: "stat", mag: 3, maxHp: 6 } },
+    ],
+  },
 };
 
 // ── Professions ──────────────────────────────────────────────────────────────
