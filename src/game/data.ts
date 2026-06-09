@@ -846,6 +846,8 @@ export const SPECS: SpecDef[] = [
   { id: "blood_dk",      classId: "deathknight", name: "Blood",     tagline: "The blade feeds the wound.", color: "var(--color-blood)" },
   { id: "frost_dk",      classId: "deathknight", name: "Frost",     tagline: "Two blades, one chill.", color: "var(--color-allies)" },
   { id: "unholy",        classId: "deathknight", name: "Unholy",    tagline: "Pestilence and decay.",  color: "oklch(0.55 0.15 130)" },
+  { id: "havoc",         classId: "demonhunter", name: "Havoc",     tagline: "Reckless, agile, fel.",  color: "oklch(0.7 0.2 145)" },
+  { id: "vengeance",     classId: "demonhunter", name: "Vengeance", tagline: "Bind the wound to feed.",color: "var(--color-blood)" },
 ];
 
 export interface TalentNode {
