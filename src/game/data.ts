@@ -4,6 +4,7 @@ import mageImg from "@/assets/class-mage.jpg";
 import priestImg from "@/assets/class-priest.jpg";
 import druidImg from "@/assets/class-druid.jpg";
 import deathKnightImg from "@/assets/class-deathknight.jpg";
+import demonHunterImg from "@/assets/class-demonhunter.jpg";
 import alliesSigil from "@/assets/faction-allies.png";
 import brigadeSigil from "@/assets/faction-brigade.png";
 import skeletonImg from "@/assets/enemy-skeleton.jpg";
@@ -27,12 +28,14 @@ import mireShamblerImg from "@/assets/enemy-mire-shambler.jpg";
 import cinderDrakeImg from "@/assets/enemy-cinder-drake.jpg";
 import soulbinderImg from "@/assets/enemy-soulbinder.jpg";
 import stoneGolemImg from "@/assets/enemy-stone-golem.jpg";
+import shacklewardenImg from "@/assets/enemy-shacklewarden.jpg";
 import trainerWarriorImg from "@/assets/trainer-warrior.jpg";
 import trainerRogueImg from "@/assets/trainer-rogue.jpg";
 import trainerMageImg from "@/assets/trainer-mage.jpg";
 import trainerPriestImg from "@/assets/trainer-priest.jpg";
 import trainerDruidImg from "@/assets/trainer-druid.jpg";
 import trainerDeathKnightImg from "@/assets/trainer-deathknight.jpg";
+import trainerDemonHunterImg from "@/assets/trainer-demonhunter.jpg";
 import corridorImg from "@/assets/dungeon-corridor.jpg";
 import cryptImg from "@/assets/dungeon-crypt.jpg";
 import barracksImg from "@/assets/dungeon-barracks.jpg";
@@ -40,7 +43,7 @@ import sanctumImg from "@/assets/dungeon-sanctum.jpg";
 import vaultImg from "@/assets/dungeon-vault.jpg";
 import throneImg from "@/assets/dungeon-throne.jpg";
 
-export type ClassId = "warrior" | "rogue" | "mage" | "priest" | "druid" | "deathknight";
+export type ClassId = "warrior" | "rogue" | "mage" | "priest" | "druid" | "deathknight" | "demonhunter";
 export type FactionId = "allies" | "brigade";
 
 export interface ClassDef {
@@ -65,6 +68,7 @@ export const CLASSES: ClassDef[] = [
   { id: "priest",  name: "Priest",  tagline: "Light against the dark.", hp: 32, atk: 5, mag: 7, portrait: priestImg, color: "var(--color-divine)" },
   { id: "druid",       name: "Druid",        tagline: "Of root and tooth.",        hp: 30, atk: 5, mag: 8, portrait: druidImg,       color: "oklch(0.65 0.17 145)", premium: true, gemPrice: 300 },
   { id: "deathknight", name: "Death Knight", tagline: "Frost in the marrow.",      hp: 38, atk: 8, mag: 4, portrait: deathKnightImg, color: "oklch(0.6 0.18 230)",  premium: true, gemPrice: 300 },
+  { id: "demonhunter", name: "Demon Hunter", tagline: "Hunt with their own fire.", hp: 30, atk: 8, mag: 5, portrait: demonHunterImg, color: "oklch(0.65 0.2 145)" },
 ];
 
 export interface FactionPassive {
@@ -170,6 +174,11 @@ export const CLASS_ABILITIES: Record<ClassId, Ability[]> = {
     { id: "froststrike", name: "Frost Strike", desc: "1.0× ATK + Chill (foe takes +30% dmg, 2t).",   cooldown: 2, effect: { kind: "attack", mult: 1.0, flavor: "{p} buries a frost-rimed blade", applyStatus: { kind: "chill", turns: 2, power: 1.3 } } },
     { id: "bloodboil",   name: "Blood Boil",   desc: "1.7× ATK + Bleed (4t).",                       cooldown: 3, effect: { kind: "attack", mult: 1.7, flavor: "{p} boils the foe's blood", applyStatus: { kind: "bleed", turns: 4, power: 5 } } },
   ],
+  demonhunter: [
+    { id: "chaosstrike", name: "Chaos Strike", desc: "Twin glaives. 1.1× ATK, lifesteal 20%.",       cooldown: 0, effect: { kind: "attack", mult: 1.1, flavor: "{p} flickers — twin glaives bite", lifesteal: 0.20 } },
+    { id: "felrush",     name: "Fel Rush",     desc: "Charge through. 1.6× MAG + Burn (3t).",        cooldown: 2, effect: { kind: "attack", mult: 1.6, useMag: true, flavor: "{p} fel-rushes through the foe", applyStatus: { kind: "burn", turns: 3, power: 5 } } },
+    { id: "eyebeam",     name: "Eye Beam",     desc: "Green torrent. 2.2× MAG.",                     cooldown: 3, effect: { kind: "attack", mult: 2.2, useMag: true, flavor: "{p}'s eyes blaze — fel-light pours forth" } },
+  ],
 };
 
 // ── Spec Abilities (WoW-inspired signature ability per specialization) ───────
@@ -201,6 +210,9 @@ export const SPEC_ABILITIES: Record<string, Ability> = {
   blood_dk:    { id: "spec_blood_dk",   name: "Death Coil",       desc: "1.4× ATK and heal for 50% damage dealt.",      cooldown: 3, effect: { kind: "attack", mult: 1.4, flavor: "{p} lashes a coil of unholy power", lifesteal: 0.50 } },
   frost_dk:    { id: "spec_frost_dk",   name: "Obliterate",       desc: "2.0× ATK (×2 if foe is Chilled).",             cooldown: 3, effect: { kind: "attack", mult: 2.0, flavor: "{p} obliterates the foe", bonusVsChill: 2.0 } },
   unholy:      { id: "spec_unholy",     name: "Festering Strike", desc: "1.4× ATK + festering Bleed (4t).",             cooldown: 2, effect: { kind: "attack", mult: 1.4, flavor: "{p} drives a festering blade in", applyStatus: { kind: "bleed", turns: 4, power: 4 } } },
+  // Demon Hunter
+  havoc:       { id: "spec_havoc",      name: "Blade Dance",      desc: "Whirlwind glaives. 2.2× ATK, +20% crit chance.",cooldown: 3, effect: { kind: "attack", mult: 2.2, flavor: "{p} dances between strikes — glaives sing" } },
+  vengeance:   { id: "spec_veng",       name: "Soul Cleave",      desc: "1.6× ATK and heal for 60% damage dealt.",      cooldown: 3, effect: { kind: "attack", mult: 1.6, flavor: "{p} drinks the wound", lifesteal: 0.60 } },
 };
 
 // ── Enemies ──────────────────────────────────────────────────────────────────
@@ -297,7 +309,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
   imp: {
     id: "imp", name: "Fel Imp", image: impImg,
     hpBase: 10, atkBase: 3,
-    materialDrop: { id: "arcane_dust", chance: 0.5 },
+    materialDrop: { id: "fel_residue", chance: 0.4 },
     attackLines: ["The {n} flings a cinder for {d}!"],
     intents: [
       { id: "cinder", label: "🔥 Cinder",  mult: 1.0, line: "The {n} flings a cinder for {d}!" },
@@ -451,6 +463,17 @@ export const ENEMIES: Record<string, EnemyDef> = {
       { id: "quake", label: "💢 Quake",      mult: 1.9, line: "{n} unleashes a quake for {d}!", telegraphable: true },
     ],
   },
+  // Demon Hunter unlock arc — rare mini-boss demon, drops fel residue.
+  shacklewarden: {
+    id: "shacklewarden", name: "Shacklewarden Demon", image: shacklewardenImg,
+    hpBase: 110, atkBase: 12,
+    materialDrop: { id: "fel_residue", chance: 1.0 },
+    attackLines: ["The {n} hurls a fel-iron chain for {d}!"],
+    intents: [
+      { id: "chain", label: "⛓ Fel Chain",  mult: 1.1, line: "A burning chain whips for {d}!" },
+      { id: "rage",  label: "🔥 Demon Rage", mult: 1.9, line: "{n} bellows — fel-fire erupts for {d}!", telegraphable: true },
+    ],
+  },
 };
 
 /** Final dungeon depth. Mini-bosses on 5/15/25, major bosses on 10/20/30. */
@@ -481,6 +504,10 @@ export function enemyForDepth(depth: number, faction?: FactionId | null): EnemyD
   // Boss floors are deterministic.
   const boss = BOSS_FLOORS[depth];
   if (boss) return ENEMIES[boss];
+  // Rare mini-boss: the Shacklewarden Demon stalks mid floors (DH unlock arc target).
+  if (depth >= 8 && depth <= 22 && Math.random() < 0.05) {
+    return ENEMIES.shacklewarden;
+  }
   // Faction-specific enemies — appear when player belongs to the OPPOSING side.
   const factionFoe = faction === "allies" ? "brigade_marauder" : faction === "brigade" ? "kingdom_knight" : null;
   const pool: string[] =
@@ -592,7 +619,29 @@ export interface QuestDef {
   rewardGold: number;
   rewardXp: number;
   classId?: ClassId; // class-only quest
+  /** Story arc this quest belongs to (Chronicles tab on the board). */
+  storyId?: string;
+  /** Order within a story arc (1, 2, 3…). */
+  storyStep?: number;
+  /** Quest id that must be turned in before this one is available. */
+  chainFrom?: string;
+  /** On turn-in, unlock this class permanently (Demon Hunter etc). */
+  unlocksClass?: ClassId;
 }
+
+/** Story arcs shown as Chronicles, separate from one-off bounties. */
+export interface StorylineDef {
+  id: string;
+  name: string;
+  lore: string;
+}
+
+export const STORYLINES: StorylineDef[] = [
+  { id: "story_dh",      name: "Path of the Demon Hunter", lore: "A blind veteran offers a pact: bind a demon's hunger to your spine, and walk the dark on equal footing." },
+  { id: "story_sealed",  name: "The Sealed Heart",         lore: "Beneath the throne, something old beats slow. Find the wards that hold it. Find what they cost." },
+  { id: "story_marrow",  name: "The Marrow March",         lore: "Bones march in formation in the deep. They remember orders no living captain ever gave." },
+  { id: "story_moss",    name: "The Mossfather's Toll",    lore: "The grove sent you to bring back what the stone took. The stone has been keeping a list." },
+];
 
 export const QUESTS: QuestDef[] = [
   { id: "q1", name: "Pest Control",      desc: "The smith hates rats. Bring proof.",                       target: { itemId: "rat_tail",     count: 3, label: "Rat Tail" },     rewardGold: 40,  rewardXp: 25 },
@@ -604,6 +653,17 @@ export const QUESTS: QuestDef[] = [
   { id: "cq_rogue",   name: "Silken Threads", desc: "Cut thread from cultist robes, unseen.",              target: { itemId: "dark_thread", count: 3, label: "Dark Thread" },  rewardGold: 60, rewardXp: 60, classId: "rogue" },
   { id: "cq_mage",    name: "Arcane Pulse",   desc: "Gather arcane dust from chests for study.",           target: { itemId: "arcane_dust", count: 3, label: "Arcane Dust" },  rewardGold: 60, rewardXp: 60, classId: "mage" },
   { id: "cq_priest",  name: "Restless Souls", desc: "Bring wraith essence to be put to rest.",             target: { itemId: "ghost_essence",count: 2,label: "Ghost Essence" },rewardGold: 60, rewardXp: 60, classId: "priest" },
+
+  // ── Chronicles: Path of the Demon Hunter (3-step unlock chain) ─────────────
+  { id: "dh_1", storyId: "story_dh", storyStep: 1, name: "Whispers from the Wards",
+    desc: "Kael'thar wants proof the seals are leaking. Gather fel residue from imps in the deep.",
+    target: { itemId: "fel_residue", count: 5, label: "Fel Residue" }, rewardGold: 80, rewardXp: 50 },
+  { id: "dh_2", storyId: "story_dh", storyStep: 2, chainFrom: "dh_1", name: "Hunt the Shacklewarden",
+    desc: "A chained demon stalks the middle floors. Slay it and bring back a piece of its chain.",
+    target: { itemId: "fel_residue", count: 3, label: "Warden's Chain (drops from the Shacklewarden — rare spawn, floors 8-22)" }, rewardGold: 220, rewardXp: 140 },
+  { id: "dh_3", storyId: "story_dh", storyStep: 3, chainFrom: "dh_2", name: "Bind the Pact",
+    desc: "Return to Kael'thar. Survive the ritual. Walk out a Demon Hunter.",
+    target: { itemId: "fel_residue", count: 1, label: "One last drop of fel residue for the ritual" }, rewardGold: 0, rewardXp: 200, unlocksClass: "demonhunter" },
 ];
 
 // ── Intro flavor text ────────────────────────────────────────────────────────
@@ -620,6 +680,7 @@ const CLASS_INTRO: Record<ClassId, string> = {
   priest:  "Your god is quiet, lately. You suspect they are waiting to see what you do down there.",
   druid:   "The grove remembers what cities forget. You carry a piece of it down into the stone.",
   deathknight: "You died once. The cold did not keep you. Something colder gave you a sword and pointed.",
+  demonhunter: "You bound a demon to your spine. Now its hunger is yours — and the dark below smells of cousins.",
 };
 
 export function buildIntro(faction: FactionId, classId: ClassId, name: string): string[] {
@@ -709,6 +770,15 @@ export const TRAINERS: Record<ClassId, TrainerDef> = {
       { id: "dk_unholy",name: "Unholy Vigor",    desc: "+3 ATK, +6 Max HP.",        cost: 2, requires: "dk_rune", effect: { kind: "stat", atk: 3, maxHp: 6 } },
     ],
   },
+  demonhunter: {
+    classId: "demonhunter", name: "Kael'thar the Unblind", title: "First of the Bound", portrait: trainerDemonHunterImg,
+    greeting: "You smell of fel-smoke and unfinished oaths. Good. Pick something to sharpen.",
+    skills: [
+      { id: "dh_fury",  name: "Fury Within",    desc: "+2 ATK, +1 MAG.",            cost: 1, effect: { kind: "stat", atk: 2, mag: 1 } },
+      { id: "dh_hide",  name: "Demonhide",      desc: "+8 Max HP.",                 cost: 1, effect: { kind: "stat", maxHp: 8 } },
+      { id: "dh_sight", name: "Spectral Sight", desc: "+3 MAG, +6 Max HP.",         cost: 2, requires: "dh_fury", effect: { kind: "stat", mag: 3, maxHp: 6 } },
+    ],
+  },
 };
 
 // ── Professions ──────────────────────────────────────────────────────────────
@@ -746,6 +816,7 @@ export const MATERIALS: Record<string, MaterialDef> = {
   linen_scrap:   { id: "linen_scrap",   name: "Linen Scrap",   sellPrice: 3 },
   herb_bundle:   { id: "herb_bundle",   name: "Herb Bundle",   sellPrice: 4 },
   spider_silk:   { id: "spider_silk",   name: "Spider Silk",   sellPrice: 9 },
+  fel_residue:   { id: "fel_residue",   name: "Fel Residue",   sellPrice: 14 },
 };
 
 export interface RecipeDef {
@@ -808,6 +879,8 @@ export const SPECS: SpecDef[] = [
   { id: "blood_dk",      classId: "deathknight", name: "Blood",     tagline: "The blade feeds the wound.", color: "var(--color-blood)" },
   { id: "frost_dk",      classId: "deathknight", name: "Frost",     tagline: "Two blades, one chill.", color: "var(--color-allies)" },
   { id: "unholy",        classId: "deathknight", name: "Unholy",    tagline: "Pestilence and decay.",  color: "oklch(0.55 0.15 130)" },
+  { id: "havoc",         classId: "demonhunter", name: "Havoc",     tagline: "Reckless, agile, fel.",  color: "oklch(0.7 0.2 145)" },
+  { id: "vengeance",     classId: "demonhunter", name: "Vengeance", tagline: "Bind the wound to feed.",color: "var(--color-blood)" },
 ];
 
 export interface TalentNode {
@@ -862,6 +935,8 @@ export const TALENT_TREES: Record<string, TalentNode[]> = {
   blood_dk:      tree("blood",      { atk: 2, maxHp: 4 }),
   frost_dk:      tree("dkfrost",    { atk: 3 }),
   unholy:        tree("unholy",     { atk: 2, mag: 2 }),
+  havoc:         tree("havoc",      { atk: 3, mag: 1 }),
+  vengeance:     tree("veng",       { atk: 2, maxHp: 4 }),
 };
 
 // ── Gear / Equipment ─────────────────────────────────────────────────────────
@@ -998,6 +1073,7 @@ export const CLASS_LEGENDARIES: Record<ClassId, ClassLegendaryDef> = {
   priest:      { baseId: "tome",   slot: "offhand", name: "Reliquary of Dawn",       flavor: "Holds a sunrise that never set.",      stats: { mag: 20, maxHp: 36 },            empowersAbilityId: "smite",       effectDesc: "Smite heals you for 40% of damage dealt." },
   druid:       { baseId: "staff",  slot: "weapon",  name: "Heartwood Branch",        flavor: "Still living. Still listening.",       stats: { mag: 22, maxHp: 28 },            empowersAbilityId: "wrath",       effectDesc: "Wrath deals +40% damage and restores 6 HP." },
   deathknight: { baseId: "sword",  slot: "weapon",  name: "Frostmourne Shard",       flavor: "Asks every kill for a little more.",   stats: { atk: 20, maxHp: 24, crit: 8 },   empowersAbilityId: "deathstrike", effectDesc: "Death Strike deals +35% damage and lifesteal is doubled." },
+  demonhunter: { baseId: "dagger", slot: "weapon",  name: "Twinblades of the Betrayer", flavor: "Two glaives. One hunger.",          stats: { atk: 20, crit: 14, mag: 8 },    empowersAbilityId: "chaosstrike", effectDesc: "Chaos Strike deals +45% damage and lifesteal is tripled." },
 };
 
 export function rollClassLegendary(classId: ClassId, depth: number): GearItem {

@@ -483,6 +483,14 @@ export const useGame = create<GameState>((set, get) => ({
       quests: get().quests.map((x) => x.id === id ? { ...x, turnedIn: true } : x),
     });
     get().pushLog(`Turned in ${def.name}. +${def.rewardGold}g +${def.rewardXp}xp`);
+    // Class unlock on story completion (e.g. Demon Hunter).
+    if (def.unlocksClass) {
+      const meta = get().meta;
+      if (!meta.ownedClasses.includes(def.unlocksClass) && !meta.unlockedClasses.includes(def.unlocksClass)) {
+        get().unlockClass(def.unlocksClass, { devFree: true });
+        get().pushLog(`✦ A new path opens — return to the title screen to play the ${def.unlocksClass.toUpperCase()}.`);
+      }
+    }
   },
 
   buy: (itemId) => {
