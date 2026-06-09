@@ -4,6 +4,7 @@ import mageImg from "@/assets/class-mage.jpg";
 import priestImg from "@/assets/class-priest.jpg";
 import druidImg from "@/assets/class-druid.jpg";
 import deathKnightImg from "@/assets/class-deathknight.jpg";
+import demonHunterImg from "@/assets/class-demonhunter.jpg";
 import alliesSigil from "@/assets/faction-allies.png";
 import brigadeSigil from "@/assets/faction-brigade.png";
 import skeletonImg from "@/assets/enemy-skeleton.jpg";
@@ -27,12 +28,14 @@ import mireShamblerImg from "@/assets/enemy-mire-shambler.jpg";
 import cinderDrakeImg from "@/assets/enemy-cinder-drake.jpg";
 import soulbinderImg from "@/assets/enemy-soulbinder.jpg";
 import stoneGolemImg from "@/assets/enemy-stone-golem.jpg";
+import shacklewardenImg from "@/assets/enemy-shacklewarden.jpg";
 import trainerWarriorImg from "@/assets/trainer-warrior.jpg";
 import trainerRogueImg from "@/assets/trainer-rogue.jpg";
 import trainerMageImg from "@/assets/trainer-mage.jpg";
 import trainerPriestImg from "@/assets/trainer-priest.jpg";
 import trainerDruidImg from "@/assets/trainer-druid.jpg";
 import trainerDeathKnightImg from "@/assets/trainer-deathknight.jpg";
+import trainerDemonHunterImg from "@/assets/trainer-demonhunter.jpg";
 import corridorImg from "@/assets/dungeon-corridor.jpg";
 import cryptImg from "@/assets/dungeon-crypt.jpg";
 import barracksImg from "@/assets/dungeon-barracks.jpg";
@@ -40,7 +43,7 @@ import sanctumImg from "@/assets/dungeon-sanctum.jpg";
 import vaultImg from "@/assets/dungeon-vault.jpg";
 import throneImg from "@/assets/dungeon-throne.jpg";
 
-export type ClassId = "warrior" | "rogue" | "mage" | "priest" | "druid" | "deathknight";
+export type ClassId = "warrior" | "rogue" | "mage" | "priest" | "druid" | "deathknight" | "demonhunter";
 export type FactionId = "allies" | "brigade";
 
 export interface ClassDef {
@@ -65,6 +68,7 @@ export const CLASSES: ClassDef[] = [
   { id: "priest",  name: "Priest",  tagline: "Light against the dark.", hp: 32, atk: 5, mag: 7, portrait: priestImg, color: "var(--color-divine)" },
   { id: "druid",       name: "Druid",        tagline: "Of root and tooth.",        hp: 30, atk: 5, mag: 8, portrait: druidImg,       color: "oklch(0.65 0.17 145)", premium: true, gemPrice: 300 },
   { id: "deathknight", name: "Death Knight", tagline: "Frost in the marrow.",      hp: 38, atk: 8, mag: 4, portrait: deathKnightImg, color: "oklch(0.6 0.18 230)",  premium: true, gemPrice: 300 },
+  { id: "demonhunter", name: "Demon Hunter", tagline: "Hunt with their own fire.", hp: 30, atk: 8, mag: 5, portrait: demonHunterImg, color: "oklch(0.65 0.2 145)" },
 ];
 
 export interface FactionPassive {
