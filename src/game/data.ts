@@ -500,10 +500,14 @@ export function dungeonBgForDepth(depth: number): string {
   return DUNGEON_BGS[idx];
 }
 
-export function enemyForDepth(depth: number, faction?: FactionId | null): EnemyDef {
+export function enemyForDepth(depth: number, faction?: FactionId | null, opts?: { huntingShacklewarden?: boolean }): EnemyDef {
   // Boss floors are deterministic.
   const boss = BOSS_FLOORS[depth];
   if (boss) return ENEMIES[boss];
+  // Demon Hunter unlock arc — rare mini-boss spawn at mid-depth while the storyline is active.
+  if (opts?.huntingShacklewarden && depth >= 8 && depth <= 22 && Math.random() < 0.18) {
+    return ENEMIES.shacklewarden;
+  }
   // Faction-specific enemies — appear when player belongs to the OPPOSING side.
   const factionFoe = faction === "allies" ? "brigade_marauder" : faction === "brigade" ? "kingdom_knight" : null;
   const pool: string[] =
