@@ -902,6 +902,8 @@ export const TALENT_TREES: Record<string, TalentNode[]> = {
   blood_dk:      tree("blood",      { atk: 2, maxHp: 4 }),
   frost_dk:      tree("dkfrost",    { atk: 3 }),
   unholy:        tree("unholy",     { atk: 2, mag: 2 }),
+  havoc:         tree("havoc",      { atk: 3, mag: 1 }),
+  vengeance:     tree("veng",       { atk: 2, maxHp: 4 }),
 };
 
 // ── Gear / Equipment ─────────────────────────────────────────────────────────
