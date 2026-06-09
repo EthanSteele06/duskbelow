@@ -463,6 +463,17 @@ export const ENEMIES: Record<string, EnemyDef> = {
       { id: "quake", label: "💢 Quake",      mult: 1.9, line: "{n} unleashes a quake for {d}!", telegraphable: true },
     ],
   },
+  // Demon Hunter unlock arc — rare mini-boss demon, drops fel residue.
+  shacklewarden: {
+    id: "shacklewarden", name: "Shacklewarden Demon", image: shacklewardenImg,
+    hpBase: 110, atkBase: 12,
+    materialDrop: { id: "fel_residue", chance: 1.0 },
+    attackLines: ["The {n} hurls a fel-iron chain for {d}!"],
+    intents: [
+      { id: "chain", label: "⛓ Fel Chain",  mult: 1.1, line: "A burning chain whips for {d}!" },
+      { id: "rage",  label: "🔥 Demon Rage", mult: 1.9, line: "{n} bellows — fel-fire erupts for {d}!", telegraphable: true },
+    ],
+  },
 };
 
 /** Final dungeon depth. Mini-bosses on 5/15/25, major bosses on 10/20/30. */
