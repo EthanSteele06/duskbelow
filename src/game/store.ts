@@ -249,6 +249,20 @@ function bagCap(p: PlayerState, meta: MetaState) {
   return (p.isChampion ? BAG_SIZE_CHAMPION : BAG_SIZE_BASE) + echo.bonusBag;
 }
 
+/** Count how many bag slots are currently in use — gear + material stacks (every
+ *  MATERIAL_STACK_SIZE units of a given material id occupies one slot). */
+function bagSlotsUsed(p: PlayerState) {
+  let used = p.bag.length;
+  for (const n of Object.values(p.materials)) {
+    if (n > 0) used += Math.ceil(n / MATERIAL_STACK_SIZE);
+  }
+  return used;
+}
+
+function bagFreeSlots(p: PlayerState, meta: MetaState) {
+  return Math.max(0, bagCap(p, meta) - bagSlotsUsed(p));
+}
+
 /** Builds a fresh PlayerState for a given identity, applying faction passives,
  *  Echo Tree starting bonuses, and auto-equipping/bagging the heirloom stash. */
 function buildFreshPlayer(
