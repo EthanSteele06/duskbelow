@@ -1121,11 +1121,25 @@ export const useGame = create<GameState>((set, get) => ({
     const bestRun = !j.bestRun || p.dungeonDepth > j.bestRun.floors
       ? { floors: p.dungeonDepth, kills: p.runKills, gold: p.runGold, date: Date.now() }
       : j.bestRun;
+    // Lifetime totals (separate from per-run journal stats — survive across characters).
+    const lt = meta.lifetime;
+    const lifetime = {
+      ...lt,
+      runs: lt.runs + 1,
+      deepest: Math.max(lt.deepest, p.dungeonDepth),
+      deepestCursed: p.dungeonMode === "cursed" ? Math.max(lt.deepestCursed, p.dungeonDepth) : lt.deepestCursed,
+    };
+    // Codex: track which classes have cleared a full run (any mode).
+    const classesCleared = outcome === "victory" && p.classId && !meta.collection.classesCleared.includes(p.classId)
+      ? [...meta.collection.classesCleared, p.classId]
+      : meta.collection.classesCleared;
     let nextMeta: MetaState = {
       ...meta,
       hasCompletedFirstRun: true,
       hasClearedNormal: meta.hasClearedNormal || (outcome === "victory" && p.dungeonMode === "normal"),
       journal: { ...j, deepestFloor: newDeepest, bestRun, runsCompleted: j.runsCompleted + 1 },
+      lifetime,
+      collection: { ...meta.collection, classesCleared },
     };
     // Victory bonus shards + account XP
     if (outcome === "victory") {
