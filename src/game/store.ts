@@ -6,6 +6,7 @@ import {
   gearSellPrice, profXpForLevel,
   IDLE_YIELDS, IDLE_SECONDS_PER_UNIT, IDLE_MAX_SECONDS, rollAffixes, rollGear, rollClassLegendary,
 } from "./data";
+import type { MetaOptions } from "./meta";
 import {
   type MetaState, type EchoNode, emptyMeta, loadMeta, saveMeta,
   echoStart, accountXpForLevel, ACCOUNT_LEVEL_CAP, stashCapacity, racialChargesForLevel,
@@ -184,6 +185,7 @@ interface GameState {
   devUnlockDemonHunter: () => void;
   devGrantFelResidue: () => void;
   devResetChronicles: () => void;
+  setOption: <K extends keyof MetaOptions>(key: K, value: MetaOptions[K]) => void;
 }
 
 const emptyPlayer = (): PlayerState => ({
@@ -246,6 +248,20 @@ function recompute(p: PlayerState): PlayerState {
 function bagCap(p: PlayerState, meta: MetaState) {
   const echo = echoStart(meta);
   return (p.isChampion ? BAG_SIZE_CHAMPION : BAG_SIZE_BASE) + echo.bonusBag;
+}
+
+/** Count how many bag slots are currently in use — gear + material stacks (every
+ *  MATERIAL_STACK_SIZE units of a given material id occupies one slot). */
+function bagSlotsUsed(p: PlayerState) {
+  let used = p.bag.length;
+  for (const n of Object.values(p.materials)) {
+    if (n > 0) used += Math.ceil(n / MATERIAL_STACK_SIZE);
+  }
+  return used;
+}
+
+function bagFreeSlots(p: PlayerState, meta: MetaState) {
+  return Math.max(0, bagCap(p, meta) - bagSlotsUsed(p));
 }
 
 /** Builds a fresh PlayerState for a given identity, applying faction passives,
@@ -440,13 +456,27 @@ export const useGame = create<GameState>((set, get) => ({
 
   addMaterial: (id, count = 1) => {
     const p = get().player;
-    const mats = { ...p.materials, [id]: (p.materials[id] ?? 0) + count };
+    const meta = get().meta;
+    const cur = p.materials[id] ?? 0;
+    const slotsBefore = Math.ceil(cur / MATERIAL_STACK_SIZE);
+    // Cap by free bag space — only new SLOTS cost capacity, not new units within a stack.
+    const free = bagFreeSlots(p, meta);
+    let take = count;
+    // Maximum we can add until the next slot tips over what's free.
+    const maxByFree = (slotsBefore + free) * MATERIAL_STACK_SIZE - cur;
+    if (take > maxByFree) {
+      if (maxByFree <= 0) { get().pushLog(`Bag full — could not pick up ${MATERIALS[id]?.name ?? id}.`); return; }
+      get().pushLog(`Bag full — only picked up ${maxByFree} of ${count}× ${MATERIALS[id]?.name ?? id}.`);
+      take = maxByFree;
+    }
+    const nextCount = cur + take;
+    const mats = { ...p.materials, [id]: nextCount };
     set({ player: { ...p, materials: mats } });
     const quests = get().quests.map((q) => {
       if (q.turnedIn || q.completed) return q;
       const def = QUESTS.find((d) => d.id === q.id)!;
       if (def.target.itemId !== id) return q;
-      const progress = Math.min(def.target.count, q.progress + count);
+      const progress = Math.min(def.target.count, q.progress + take);
       const completed = progress >= def.target.count;
       if (completed && !q.completed) get().pushLog(`✓ Quest ready to turn in: ${def.name}`);
       return { ...q, progress, completed };
@@ -678,7 +708,14 @@ export const useGame = create<GameState>((set, get) => ({
   addToBag: (item) => {
     const p = get().player;
     const meta = get().meta;
-    if (p.bag.length >= bagCap(p, meta)) return false;
+    // Auto-sell common/junk if the option is on — bypasses bag pressure entirely.
+    if (meta.options.autoSellCommon && item.rarity === "common") {
+      const price = gearSellPrice(item);
+      set({ player: { ...p, gold: p.gold + price } });
+      get().pushLog(`Auto-sold ${item.name} for ${price}g.`);
+      return true;
+    }
+    if (bagFreeSlots(p, meta) <= 0) { get().pushLog("Bag full."); return false; }
     set({ player: { ...p, bag: [...p.bag, item] } });
     return true;
   },
@@ -700,7 +737,7 @@ export const useGame = create<GameState>((set, get) => ({
     const meta = get().meta;
     const item = p.equipment[slot];
     if (!item) return;
-    if (p.bag.length >= bagCap(p, meta)) { get().pushLog("Bag full."); return; }
+    if (bagFreeSlots(p, meta) <= 0) { get().pushLog("Bag full."); return; }
     const equipment = { ...p.equipment };
     delete equipment[slot];
     set({ player: recompute({ ...p, bag: [...p.bag, item], equipment }) });
@@ -1198,7 +1235,14 @@ export const useGame = create<GameState>((set, get) => ({
     }) });
     get().pushLog("Dev: Chronicle progress reset.");
   },
+
+  setOption: (key, value) => {
+    const meta = get().meta;
+    const nextMeta: MetaState = { ...meta, options: { ...meta.options, [key]: value } };
+    persistMeta(nextMeta);
+    set({ meta: nextMeta });
+  },
 }));
 
-export { xpForLevel, bagCap };
+export { xpForLevel, bagCap, bagSlotsUsed, bagFreeSlots };
 export type { Ability };

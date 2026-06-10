@@ -17,6 +17,7 @@ import { RunSummaryScreen } from "@/game/RunSummaryScreen";
 import { EchoTreeScreen } from "@/game/EchoTreeScreen";
 import { JournalScreen } from "@/game/JournalScreen";
 import { ChronicleScreen } from "@/game/ChronicleScreen";
+import { WandererScreen } from "@/game/WandererScreen";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -57,6 +58,7 @@ function Game() {
       {screen === "echo" && <EchoTreeScreen />}
       {screen === "journal" && <JournalScreen />}
       {screen === "chronicle" && <ChronicleScreen />}
+      {screen === "wanderer" && <WandererScreen />}
     </main>
   );
 }

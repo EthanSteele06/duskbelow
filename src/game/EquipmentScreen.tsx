@@ -1,5 +1,5 @@
-import { useGame, bagCap } from "@/game/store";
-import { SLOT_LABEL, SLOT_ICON, RARITY_CLASS, RARITY_LABEL, gearScore, gearSellPrice, type GearSlot, type GearItem } from "@/game/data";
+import { useGame, bagCap, bagSlotsUsed } from "@/game/store";
+import { SLOT_LABEL, SLOT_ICON, RARITY_CLASS, RARITY_LABEL, MATERIALS, MATERIAL_STACK_SIZE, gearScore, gearSellPrice, type GearSlot, type GearItem } from "@/game/data";
 import { StatBar } from "./StatBar";
 
 const SLOTS: GearSlot[] = ["head", "chest", "legs", "weapon", "offhand", "trinket"];
@@ -24,6 +24,8 @@ export function EquipmentScreen() {
   const discard = useGame((s) => s.discardBagItem);
   const meta = useGame((s) => s.meta);
   const cap = bagCap(player, meta);
+  const used = bagSlotsUsed(player);
+  const matEntries = Object.entries(player.materials).filter(([, n]) => n > 0);
 
   return (
     <div className="flex min-h-full flex-col p-3 gap-3">
@@ -63,8 +65,27 @@ export function EquipmentScreen() {
         <p className="pixel text-[9px] text-gold">Crit {player.crit}% · Dodge {player.dodge}%</p>
       </div>
 
-      <h3 className="pixel text-[10px] text-gold mt-1">▣ Bag ({player.bag.length}/{cap})</h3>
-      {player.bag.length === 0 && (
+      <h3 className="pixel text-[10px] text-gold mt-1">▣ Bag ({used}/{cap} slots)</h3>
+      <p className="font-body text-xs text-muted-foreground -mt-1">Gear and stacks of {MATERIAL_STACK_SIZE} share the same slots.</p>
+
+      {matEntries.length > 0 && (
+        <div className="border-2 border-black bg-card/60 p-2">
+          <p className="pixel text-[8px] text-gold mb-1">Materials</p>
+          <div className="flex flex-wrap gap-1">
+            {matEntries.map(([id, n]) => {
+              const def = MATERIALS[id];
+              const stacks = Math.ceil(n / MATERIAL_STACK_SIZE);
+              return (
+                <span key={id} className="pixel text-[7px] border border-black bg-background/60 px-1.5 py-1" title={def?.name ?? id}>
+                  {def?.name ?? id} · {n} <span className="text-muted-foreground">({stacks} slot{stacks > 1 ? "s" : ""})</span>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {player.bag.length === 0 && matEntries.length === 0 && (
         <p className="font-body text-sm text-muted-foreground">Empty. Slay things to fill it.</p>
       )}
       <div className="space-y-2">
