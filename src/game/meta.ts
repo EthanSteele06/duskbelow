@@ -258,6 +258,9 @@ export const LORE_FRAGMENTS: LoreFragment[] = [
   { id: "lore_ogre",    source: "ogre",     title: "Lord of the Lower Halls",   text: "Before the brutes were brutes, they were jailers. The chains rusted; their grip did not." },
   { id: "lore_dragon",  source: "dragon",   title: "The Heart, Beating",        text: "Below the last stair, a heart the size of a barn pumps black ichor through the stone. They say it was once a god." },
   { id: "lore_brigade", source: "skeleton", title: "Conscript's Marker",        text: "Endless Brigade tags scratched into a femur. The march ended here. The names did not." },
+  { id: "lore_voidspawn", source: "voidspawn", title: "Eyes That Open Inward",   text: "When the Hierarch looked at the wall, the wall blinked back. Cartography has stopped serving us this deep." },
+  { id: "lore_sealed",  source: "sealed_one", title: "The Last Chain",          text: "Six wards hold it. Three were forged of song, two of bone, one of a promise we have already broken." },
+  { id: "lore_cursed",  source: "sealed_one", title: "After the Crown",         text: "Some who slew the Sealed One report a low voice still asking favors of them, years later. They are advised not to answer." },
 ];
 
 // ── Persistence ──────────────────────────────────────────────────────────────
@@ -269,9 +272,7 @@ export function loadMeta(): MetaState {
     if (!raw) return emptyMeta();
     const parsed = JSON.parse(raw) as Partial<MetaState>;
     if (!parsed || parsed.version !== META_VERSION) return emptyMeta();
-    // Merge in case of new fields
     const base = emptyMeta();
-    // Migration: if save predates rogue-at-start, fold it in.
     const baseUnlocks = parsed.unlockedClasses ?? base.unlockedClasses;
     const mergedUnlocks = baseUnlocks.includes("rogue") ? baseUnlocks : [...baseUnlocks, "rogue" as ClassId];
     return {
@@ -285,6 +286,9 @@ export function loadMeta(): MetaState {
       lifetime: { ...base.lifetime, ...(parsed.lifetime ?? {}) },
       collection: { ...base.collection, ...(parsed.collection ?? {}) },
       options: { ...base.options, ...(parsed.options ?? {}) },
+      dailyContract: parsed.dailyContract ?? null,
+      relicVendor: parsed.relicVendor ?? null,
+      seenBossIntros: parsed.seenBossIntros ?? [],
     };
   } catch { return emptyMeta(); }
 }
