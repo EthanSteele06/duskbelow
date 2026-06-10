@@ -728,11 +728,20 @@ export function DungeonScreen() {
         {enc.kind === "path" && (
           <div className="border-2 border-black bg-card p-3 fade-in-up">
             <p className="pixel text-[9px] text-foreground">The corridor forks.</p>
-            <p className="font-body text-sm text-muted-foreground mt-1">Each step risks worse — and richer.</p>
+            <p className="font-body text-sm text-muted-foreground mt-1">Each path twists the next room — pick your risk.</p>
             <div className="mt-3 grid grid-cols-3 gap-2">
-              <button className="pixel-btn !text-[8px]" onClick={advance}>← Left</button>
-              <button className="pixel-btn !text-[8px]" onClick={advance}>↑ Onward</button>
-              <button className="pixel-btn !text-[8px]" onClick={advance}>Right →</button>
+              <button className="pixel-btn !text-[8px] flex flex-col items-center gap-0.5" onClick={() => advance("left")}>
+                <span>← Left</span>
+                <span className="pixel text-[6px] text-blood">+combat · +gold</span>
+              </button>
+              <button className="pixel-btn !text-[8px] flex flex-col items-center gap-0.5" onClick={() => advance("onward")}>
+                <span>↑ Onward</span>
+                <span className="pixel text-[6px] text-muted-foreground">balanced</span>
+              </button>
+              <button className="pixel-btn !text-[8px] flex flex-col items-center gap-0.5" onClick={() => advance("right")}>
+                <span>Right →</span>
+                <span className="pixel text-[6px] text-ember">+traps · +XP</span>
+              </button>
             </div>
           </div>
         )}
