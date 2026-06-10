@@ -4,7 +4,7 @@ import { useGame } from "@/game/store";
 import { TitleScreen } from "@/game/TitleScreen";
 import { IntroScreen } from "@/game/IntroScreen";
 import { CityScreen } from "@/game/CityScreen";
-import { VendorScreen, AuctionScreen } from "@/game/MarketScreens";
+import { VendorScreen, AuctionScreen, AuctionHouseScreen } from "@/game/MarketScreens";
 import { QuestsScreen } from "@/game/QuestsScreen";
 import { TalentTreeScreen } from "@/game/TalentTreeScreen";
 import { ProfessionScreen } from "@/game/ProfessionScreen";
@@ -48,6 +48,7 @@ function Game() {
       {screen === "city" && <CityScreen />}
       {screen === "vendor" && <VendorScreen />}
       {screen === "auction" && <AuctionScreen />}
+      {screen === "auction_house" && <AuctionHouseScreen />}
       {screen === "quests" && <QuestsScreen />}
       {(screen === "trainer" || screen === "talents") && <TalentTreeScreen />}
       {screen === "profession" && <ProfessionScreen />}

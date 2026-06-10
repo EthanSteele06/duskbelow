@@ -1,9 +1,20 @@
 import { useEffect } from "react";
 import { useGame } from "@/game/store";
-import { VENDOR_ITEMS, rollRelicListings, RARITY_LABEL } from "@/game/data";
+import { VENDOR_ITEMS, AUCTION_LISTINGS, rollRelicListings, RARITY_LABEL, SLOT_ICON, type GearItem } from "@/game/data";
 import { DAILY_ROTATION_MS } from "@/game/meta";
 import { StatBar } from "./StatBar";
 import { GearCompare } from "./GearCompare";
+
+function statsLine(it: GearItem) {
+  const s = it.stats;
+  const parts: string[] = [];
+  if (s.atk) parts.push(`+${s.atk} ATK`);
+  if (s.mag) parts.push(`+${s.mag} MAG`);
+  if (s.maxHp) parts.push(`+${s.maxHp} HP`);
+  if (s.crit) parts.push(`+${s.crit}% crit`);
+  if (s.dodge) parts.push(`+${s.dodge}% dodge`);
+  return parts.join(" · ") || "—";
+}
 
 export function VendorScreen() {
   const setScreen = useGame((s) => s.setScreen);
@@ -126,7 +137,11 @@ export function AuctionScreen() {
                   {RARITY_LABEL[entry.listing.rarity]}
                 </span>
               </div>
-              {entry.flavor && <p className="font-body text-xs italic text-muted-foreground mt-0.5">"{entry.flavor}"</p>}
+              <p className="pixel text-[7px] text-muted-foreground mt-0.5">
+                {SLOT_ICON[entry.listing.slot]} {entry.listing.slot.toUpperCase()} · iLvl {entry.listing.ilvl}
+              </p>
+              <p className="font-body text-xs text-foreground mt-1">{statsLine(entry.listing)}</p>
+              {entry.flavor && <p className="font-body text-xs italic text-muted-foreground mt-1">"{entry.flavor}"</p>}
               <div className="mt-1">
                 <GearCompare item={entry.listing} equipped={equipped} compact />
               </div>
@@ -143,6 +158,47 @@ export function AuctionScreen() {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ── Auction House (stub) ────────────────────────────────────────────────────
+// Re-added as a teaser surface. Bidding is non-functional in v1; the screen
+// exists so players can see what's coming and so the city tile reads as alive.
+export function AuctionHouseScreen() {
+  const setScreen = useGame((s) => s.setScreen);
+  const rarityColor = (r: string) =>
+    r === "epic" ? "text-arcane" : r === "rare" ? "text-allies" : "text-muted-foreground";
+  return (
+    <div className="flex min-h-full flex-col p-3 gap-3">
+      <StatBar />
+      <button onClick={() => setScreen("city")} className="pixel-btn !text-[8px] w-fit">← Back to City</button>
+      <h2 className="pixel text-[12px] text-gold">⚖ Auction House</h2>
+      <p className="font-body text-sm text-muted-foreground -mt-2">
+        Listings from delvers across the realm. Bidding opens in a future patch — for now, browse and dream.
+      </p>
+      <div className="border-2 border-black bg-card/60 p-2">
+        <p className="pixel text-[7px] text-gold">COMING SOON</p>
+        <p className="font-body text-xs text-muted-foreground mt-1">
+          Real player-driven auctions will live here. Today's slate is a preview.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        {AUCTION_LISTINGS.map((l) => (
+          <div key={l.id} className="border-2 border-black bg-card p-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="pixel text-[9px]">{l.name}</span>
+              <span className={`pixel text-[7px] uppercase ${rarityColor(l.rarity)}`}>{l.rarity}</span>
+            </div>
+            <p className="font-body text-xs text-muted-foreground">Seller: {l.seller}</p>
+            <div className="mt-2 flex items-center justify-between">
+              <span className="pixel text-[9px] text-gold">Top bid {l.bid}g</span>
+              <button className="pixel-btn !text-[8px] opacity-60" disabled>Bid (soon)</button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

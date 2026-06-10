@@ -751,21 +751,41 @@ export function DungeonScreen() {
         )}
 
         {enc.kind === "path" && (
-          <div className="border-2 border-black bg-card p-3 fade-in-up">
-            <p className="pixel text-[9px] text-foreground">The corridor forks.</p>
-            <p className="font-body text-sm text-muted-foreground mt-1">Each path twists the next room — pick your risk.</p>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <button className="pixel-btn !text-[8px] flex flex-col items-center gap-0.5" onClick={() => advance("left")}>
-                <span>← Left</span>
-                <span className="pixel text-[6px] text-blood">+combat · +gold</span>
+          <div className="border-2 border-black bg-card p-3 fade-in-up space-y-2">
+            <div>
+              <p className="pixel text-[10px] text-gold">▣ The corridor forks</p>
+              <p className="font-body text-sm text-muted-foreground mt-0.5">Each path bends the next room. Pick how you'd like to bleed.</p>
+            </div>
+            <div className="space-y-2">
+              <button
+                onClick={() => advance("left")}
+                className="pixel-btn w-full !p-3 flex items-center gap-3 border-l-4 border-l-blood text-left"
+              >
+                <span className="pixel text-[14px] text-blood w-6 text-center">◀</span>
+                <span className="flex-1">
+                  <span className="block pixel text-[9px] text-foreground">Left Passage</span>
+                  <span className="block font-body text-xs text-muted-foreground mt-0.5">More combat. Fewer traps. +25% gold drops.</span>
+                </span>
               </button>
-              <button className="pixel-btn !text-[8px] flex flex-col items-center gap-0.5" onClick={() => advance("onward")}>
-                <span>↑ Onward</span>
-                <span className="pixel text-[6px] text-muted-foreground">balanced</span>
+              <button
+                onClick={() => advance("onward")}
+                className="pixel-btn w-full !p-3 flex items-center gap-3 border-l-4 border-l-muted text-left"
+              >
+                <span className="pixel text-[14px] text-muted-foreground w-6 text-center">▲</span>
+                <span className="flex-1">
+                  <span className="block pixel text-[9px] text-foreground">Onward</span>
+                  <span className="block font-body text-xs text-muted-foreground mt-0.5">Balanced corridor. No bias either way.</span>
+                </span>
               </button>
-              <button className="pixel-btn !text-[8px] flex flex-col items-center gap-0.5" onClick={() => advance("right")}>
-                <span>Right →</span>
-                <span className="pixel text-[6px] text-ember">+traps · +XP</span>
+              <button
+                onClick={() => advance("right")}
+                className="pixel-btn w-full !p-3 flex items-center gap-3 border-l-4 border-l-ember text-left"
+              >
+                <span className="pixel text-[14px] text-ember w-6 text-center">▶</span>
+                <span className="flex-1">
+                  <span className="block pixel text-[9px] text-foreground">Right Passage</span>
+                  <span className="block font-body text-xs text-muted-foreground mt-0.5">More traps. Fewer fights. +30% XP &amp; materials.</span>
+                </span>
               </button>
             </div>
           </div>

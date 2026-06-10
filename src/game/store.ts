@@ -16,7 +16,7 @@ import {
 
 export type Screen =
   | "title" | "intro" | "city"
-  | "vendor" | "auction" | "quests"
+  | "vendor" | "auction" | "auction_house" | "quests"
   | "trainer" | "talents" | "profession"
   | "equipment" | "shop" | "champion"
   | "dungeon"
