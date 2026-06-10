@@ -658,9 +658,33 @@ export const STORYLINES: StorylineDef[] = [
       outro: "It is done. You are Illidari now — bound and burning. Remember what we taught the world at the Black Temple: you are not prepared. Few ever are.",
     },
   },
-  { id: "story_sealed", name: "The Sealed Heart", lore: "Beneath the throne, something old beats slow. Find the wards that hold it. Find what they cost." },
-  { id: "story_marrow", name: "The Marrow March",  lore: "Bones march in formation in the deep. They remember orders no living captain ever gave." },
-  { id: "story_moss",   name: "The Mossfather's Toll", lore: "The grove sent you to bring back what the stone took. The stone has been keeping a list." },
+  {
+    id: "story_sealed", name: "The Sealed Heart",
+    lore: "Beneath the throne, something old beats slow. Find the wards that hold it. Find what they cost.",
+    npc: {
+      name: "Sister Vola", title: "Keeper of the Quiet Light", portrait: trainerPriestImg,
+      intro: "I have read the ward-songs since I could hold a candle. Six wards bind the thing below the throne — and I felt one break the night you first descended.",
+      outro: "It is finished. The Sealed One sleeps again, or it does not — but the city wakes tomorrow regardless. That is more than I dared pray for. Go rest, hero.",
+    },
+  },
+  {
+    id: "story_marrow", name: "The Marrow March",
+    lore: "Bones march in formation in the deep. They remember orders no living captain ever gave.",
+    npc: {
+      name: "Captain Veil", title: "The Bone-Listener", portrait: trainerDeathKnightImg,
+      intro: "The dead in the lower halls still march in step. I hear their drum from up here on quiet nights. Someone is giving them orders. I want the orders.",
+      outro: "You brought back enough to read the march. It was a man — a captain — who died ordering a retreat that was never sounded. The dead still wait for the horn. We will sound it for them. Soon.",
+    },
+  },
+  {
+    id: "story_moss", name: "The Mossfather's Toll",
+    lore: "The grove sent you to bring back what the stone took. The stone has been keeping a list.",
+    npc: {
+      name: "Elder Thorn", title: "Speaker of the Mossfather", portrait: trainerDruidImg,
+      intro: "The Mossfather has counted what the dungeon ate from his grove. Saplings. Seedstones. A daughter, once. He asks only what is owed — no more.",
+      outro: "The toll is paid in full. The Mossfather will sleep easier under the city, and the grove will remember your name in green. Take this — it is his.",
+    },
+  },
 ];
 
 export const QUESTS: QuestDef[] = [
