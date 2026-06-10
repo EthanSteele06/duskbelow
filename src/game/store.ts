@@ -1345,6 +1345,86 @@ export const useGame = create<GameState>((set, get) => ({
     persistMeta(nextMeta);
     set({ meta: nextMeta });
   },
+
+  // ── Pass 4: contracts, relics, bosses ───────────────────────────────────
+  ensureDailyRoll: () => {
+    const meta = get().meta;
+    const now = Date.now();
+    if (meta.dailyContract && now - meta.dailyContract.rolledAt < DAILY_ROTATION_MS) return;
+    const seed = Math.floor(now / DAILY_ROTATION_MS);
+    const def = rollDailyContract(get().player.faction ?? null, seed);
+    const nextMeta: MetaState = {
+      ...meta,
+      dailyContract: { defId: def.id, rolledAt: now, accepted: false, progress: 0, claimed: false },
+    };
+    persistMeta(nextMeta); set({ meta: nextMeta });
+  },
+
+  acceptDailyContract: () => {
+    const meta = get().meta;
+    if (!meta.dailyContract || meta.dailyContract.accepted) return;
+    const nextMeta: MetaState = { ...meta, dailyContract: { ...meta.dailyContract, accepted: true } };
+    persistMeta(nextMeta); set({ meta: nextMeta });
+    get().pushLog("✦ Daily contract accepted.");
+  },
+
+  claimDailyContract: () => {
+    const meta = get().meta;
+    const dc = meta.dailyContract;
+    if (!dc || !dc.accepted || dc.claimed) return false;
+    const def = DAILY_CONTRACTS.find((c) => c.id === dc.defId);
+    if (!def) return false;
+    const need =
+      def.objective.kind === "kill_enemy" ? def.objective.count :
+      def.objective.kind === "kill_boss" ? def.objective.count :
+      def.objective.kind === "turn_in_material" ? def.objective.count :
+      def.objective.kind === "reach_floor" ? 1 : 1;
+    if (dc.progress < need) return false;
+    let nextMeta: MetaState = {
+      ...meta,
+      shards: meta.shards + def.rewardShards,
+      dailyContract: { ...dc, claimed: true },
+    };
+    nextMeta = grantAccountXp(nextMeta, def.rewardAccountXp);
+    persistMeta(nextMeta); set({ meta: nextMeta });
+    get().pushLog(`✦ Contract complete — +${def.rewardShards} shards, +${def.rewardAccountXp} account XP.`);
+    return true;
+  },
+
+  ensureRelicRoll: () => {
+    const meta = get().meta;
+    const now = Date.now();
+    if (meta.relicVendor && now - meta.relicVendor.rolledAt < DAILY_ROTATION_MS) return;
+    const seed = Math.floor(now / DAILY_ROTATION_MS) + 1;
+    const nextMeta: MetaState = { ...meta, relicVendor: { rolledAt: now, seed, sold: [] } };
+    persistMeta(nextMeta); set({ meta: nextMeta });
+  },
+
+  purchaseRelic: (idx) => {
+    const s = get();
+    const v = s.meta.relicVendor;
+    if (!v) return false;
+    const listings = rollRelicListings(v.seed, s.player.faction ?? null);
+    const entry = listings[idx];
+    if (!entry) return false;
+    const key = `${idx}:${entry.listing.id}`;
+    if (v.sold.includes(key)) return false;
+    if (s.player.gold < entry.price) { get().pushLog("Not enough gold."); return false; }
+    if (!get().addToBag(entry.listing)) return false;
+    const np = get().player;
+    const nextMeta: MetaState = { ...s.meta, relicVendor: { ...v, sold: [...v.sold, key] } };
+    persistMeta(nextMeta);
+    set({ meta: nextMeta, player: { ...np, gold: np.gold - entry.price } });
+    get().pushLog(`Acquired ${entry.listing.name} for ${entry.price}g.`);
+    return true;
+  },
+
+  markBossSeen: (bossId) => {
+    const meta = get().meta;
+    if (meta.seenBossIntros.includes(bossId)) return;
+    const nextMeta: MetaState = { ...meta, seenBossIntros: [...meta.seenBossIntros, bossId] };
+    persistMeta(nextMeta); set({ meta: nextMeta });
+  },
 }));
 
 export { xpForLevel, bagCap, bagSlotsUsed, bagFreeSlots };
