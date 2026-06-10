@@ -18,7 +18,8 @@ export type Screen =
   | "trainer" | "talents" | "profession"
   | "equipment" | "shop" | "champion"
   | "dungeon"
-  | "run_summary" | "echo" | "journal";
+  | "run_summary" | "echo" | "journal"
+  | "wanderer" | "chronicle";
 
 export interface QuestState {
   id: string;
