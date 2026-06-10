@@ -142,7 +142,7 @@ interface GameState {
   buy: (itemId: string) => boolean;
   buyGem: (itemId: string) => boolean;
   use: (itemId: string) => void;
-  enterDungeon: (mode?: DungeonMode) => void;
+  enterDungeon: (mode?: DungeonMode, oaths?: OathId[]) => void;
   exitDungeon: () => void;
   reset: () => void;
   pickSpec: (specId: string) => void;
