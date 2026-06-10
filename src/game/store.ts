@@ -6,6 +6,7 @@ import {
   gearSellPrice, profXpForLevel,
   IDLE_YIELDS, IDLE_SECONDS_PER_UNIT, IDLE_MAX_SECONDS, rollAffixes, rollGear, rollClassLegendary,
 } from "./data";
+import type { MetaOptions } from "./meta";
 import {
   type MetaState, type EchoNode, emptyMeta, loadMeta, saveMeta,
   echoStart, accountXpForLevel, ACCOUNT_LEVEL_CAP, stashCapacity, racialChargesForLevel,
