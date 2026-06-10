@@ -117,8 +117,11 @@ interface GameState {
   meta: MetaState;
   /** populated when the player dies or wins; consumed by RunSummaryScreen */
   lastRun: RunSummary | null;
+  /** active storyline id when screen === "chronicle" */
+  chronicleStoryId: string | null;
 
   setScreen: (s: Screen) => void;
+  openChronicle: (storyId: string) => void;
   startGame: (faction: FactionId, classId: ClassId, name: string) => void;
   pushLog: (msg: string) => void;
   damage: (n: number) => number;
@@ -126,11 +129,12 @@ interface GameState {
   rewardXp: (n: number) => void;
   rewardGold: (n: number) => void;
   rewardGems: (n: number) => void;
-  addQuestItem: (id: string, count?: number) => void;
-  addMaterial: (id: string, count?: number) => void;
+  addQuestItem: (id: string, count?: number) => number;
+  addMaterial: (id: string, count?: number) => number;
   learnRecipe: (id: string) => void;
   acceptQuest: (id: string) => void;
   turnInQuest: (id: string) => void;
+  turnInAllReady: () => void;
   buy: (itemId: string) => boolean;
   buyGem: (itemId: string) => boolean;
   use: (itemId: string) => void;
@@ -166,6 +170,7 @@ interface GameState {
   useHearthstone: () => boolean;
   stashItem: (itemId: string, fromEquipment?: GearSlot) => boolean;
   unstashItem: (idx: number) => void;
+  withdrawStash: (idx: number) => boolean;
   spendEcho: (nodeId: string) => boolean;
   respecEcho: () => void;
   wipeCharacter: () => void;
@@ -174,11 +179,15 @@ interface GameState {
   markTutorialSeen: (id: string, all?: boolean) => void;
   hydrateMeta: () => void;
   unlockClass: (classId: ClassId, opts?: { devFree?: boolean }) => boolean;
+  setAutoSellCommon: (on: boolean) => void;
   // Dev cheats
   devGrantClassLegendary: () => boolean;
   devGrantRandomEpic: () => boolean;
   devGrantGold: (n: number) => void;
   devGrantAllMaterials: () => void;
+  devUnlockDemonHunter: () => void;
+  devGrantFelResidue: () => void;
+  devResetChronicles: () => void;
 }
 
 const emptyPlayer = (): PlayerState => ({
