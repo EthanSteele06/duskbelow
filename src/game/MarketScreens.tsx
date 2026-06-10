@@ -128,7 +128,7 @@ export function AuctionScreen() {
               </div>
               {entry.flavor && <p className="font-body text-xs italic text-muted-foreground mt-0.5">"{entry.flavor}"</p>}
               <div className="mt-1">
-                <GearCompare candidate={entry.listing} equipped={equipped} />
+                <GearCompare item={entry.listing} equipped={equipped} compact />
               </div>
               <div className="mt-2 flex items-center justify-between">
                 <span className="pixel text-[9px] text-gold">{entry.price}g</span>
