@@ -658,9 +658,33 @@ export const STORYLINES: StorylineDef[] = [
       outro: "It is done. You are Illidari now — bound and burning. Remember what we taught the world at the Black Temple: you are not prepared. Few ever are.",
     },
   },
-  { id: "story_sealed", name: "The Sealed Heart", lore: "Beneath the throne, something old beats slow. Find the wards that hold it. Find what they cost." },
-  { id: "story_marrow", name: "The Marrow March",  lore: "Bones march in formation in the deep. They remember orders no living captain ever gave." },
-  { id: "story_moss",   name: "The Mossfather's Toll", lore: "The grove sent you to bring back what the stone took. The stone has been keeping a list." },
+  {
+    id: "story_sealed", name: "The Sealed Heart",
+    lore: "Beneath the throne, something old beats slow. Find the wards that hold it. Find what they cost.",
+    npc: {
+      name: "Sister Vola", title: "Keeper of the Quiet Light", portrait: trainerPriestImg,
+      intro: "I have read the ward-songs since I could hold a candle. Six wards bind the thing below the throne — and I felt one break the night you first descended.",
+      outro: "It is finished. The Sealed One sleeps again, or it does not — but the city wakes tomorrow regardless. That is more than I dared pray for. Go rest, hero.",
+    },
+  },
+  {
+    id: "story_marrow", name: "The Marrow March",
+    lore: "Bones march in formation in the deep. They remember orders no living captain ever gave.",
+    npc: {
+      name: "Captain Veil", title: "The Bone-Listener", portrait: trainerDeathKnightImg,
+      intro: "The dead in the lower halls still march in step. I hear their drum from up here on quiet nights. Someone is giving them orders. I want the orders.",
+      outro: "You brought back enough to read the march. It was a man — a captain — who died ordering a retreat that was never sounded. The dead still wait for the horn. We will sound it for them. Soon.",
+    },
+  },
+  {
+    id: "story_moss", name: "The Mossfather's Toll",
+    lore: "The grove sent you to bring back what the stone took. The stone has been keeping a list.",
+    npc: {
+      name: "Elder Thorn", title: "Speaker of the Mossfather", portrait: trainerDruidImg,
+      intro: "The Mossfather has counted what the dungeon ate from his grove. Saplings. Seedstones. A daughter, once. He asks only what is owed — no more.",
+      outro: "The toll is paid in full. The Mossfather will sleep easier under the city, and the grove will remember your name in green. Take this — it is his.",
+    },
+  },
 ];
 
 export const QUESTS: QuestDef[] = [
@@ -730,7 +754,283 @@ export const QUESTS: QuestDef[] = [
       ],
     },
   },
+  // ── Chronicles: The Sealed Heart ───────────────────────────────────────────
+  {
+    id: "sealed_1", storyId: "story_sealed", storyStep: 1, name: "Listen for the Crack",
+    desc: "Sister Vola wants ward fragments — splintered when the seal first cracked. They fall in the deep halls (floors 20-29).",
+    target: { itemId: "ward_fragment", count: 4, label: "Ward Fragment" }, rewardGold: 180, rewardXp: 120,
+    dialogue: {
+      before: [
+        "When a ward sings, it sings on key. When it cracks, it falls out of tune by an exact note — the song tells you which ward, and how badly.",
+        "I need four splinters from the deep halls. The ones that fell when the throne-binding first slipped. They'll be hot to the touch and quietly humming the wrong note.",
+        "Mind your hands. A ward fragment knows it is broken, and resents being reminded.",
+      ],
+      after: [
+        "Three of these are mine — old work, my grandmother's hand. The fourth is older than the city. That's the one that worries me.",
+        "Come back. There is a sigil down there with the throne's mark on it. We need it before someone else picks it up.",
+      ],
+    },
+  },
+  {
+    id: "sealed_2", storyId: "story_sealed", storyStep: 2, chainFrom: "sealed_1", name: "Recover the Sigil",
+    desc: "A sealed sigil bearing the throne-mark lies in the lower vaults. Bring it back before it's claimed.",
+    target: { itemId: "sealed_sigil", count: 1, label: "Sealed Sigil (rare drop from deep-floor bosses, 15+)" }, rewardGold: 300, rewardXp: 200,
+    dialogue: {
+      before: [
+        "The sigil is iron washed in moon-silver. It bears a fingerprint — not the maker's. The thing the wards hold pressed itself against the inside of its cage long enough to leave a mark.",
+        "Slay the wardens of the lower halls. The sigil will fall from one of them. Bring it directly to me, hands wrapped. Do not look at the fingerprint.",
+      ],
+      after: [
+        "You looked. I can see it in your eyes.",
+        "It is fine. We all look, eventually. Now we know what it wants. We end this on the throne floor.",
+      ],
+    },
+  },
+  {
+    id: "sealed_3", storyId: "story_sealed", storyStep: 3, chainFrom: "sealed_2", name: "Seal the Heart",
+    desc: "Descend to floor 30 and put the Sealed One down for good. Return with the proof.",
+    target: { itemId: "sealed_sigil", count: 1, label: "Second Sealed Sigil — only the Sealed One drops it on floor 30" }, rewardGold: 800, rewardXp: 600,
+    dialogue: {
+      before: [
+        "On the throne floor, the thing will speak. It will not lie — it has not learned to. That is what makes it dangerous.",
+        "Strike when it offers. Do not bargain. The wards were paid for in lives already; we do not owe it another.",
+      ],
+      after: [
+        "It is finished. The bell in the chapel rang on its own at the hour you struck — that is how I knew. The city will not know how close it came. They never do.",
+        "Take this lore. You earned the right to know what you ended.",
+      ],
+    },
+  },
+  // ── Chronicles: The Marrow March ───────────────────────────────────────────
+  {
+    id: "marrow_1", storyId: "story_marrow", storyStep: 1, name: "Bone Tax",
+    desc: "Captain Veil wants bone dust from the skeletons in the middle halls — clean, recent, marrow-flecked.",
+    target: { itemId: "bone_dust", count: 6, label: "Bone Dust" }, rewardGold: 140, rewardXp: 100,
+    dialogue: {
+      before: [
+        "The dead march in step down there. I want to know whose step. Bring me bone dust — fresh, with the marrow still tacky. Old bone tells nothing.",
+        "I'll grind it on the captain's-stone and read what the dust remembers. Cheap necromancy, but it works.",
+      ],
+      after: [
+        "I read the dust. They were Brigade once — conscripts of a war the city never named. Whoever drilled them is still drilling them.",
+        "Find me a written order. Something they were marching toward. Then we'll know who.",
+      ],
+    },
+  },
+  {
+    id: "marrow_2", storyId: "story_marrow", storyStep: 2, chainFrom: "marrow_1", name: "Steal the Orders",
+    desc: "Skeletons on floors 8-18 carry marching orders pinned to their ribcages. Cut three free.",
+    target: { itemId: "marching_order", count: 3, label: "Marching Order (drops from skeletons on floors 8-18)" }, rewardGold: 260, rewardXp: 180,
+    dialogue: {
+      before: [
+        "They wear the orders pinned through the sternum like a brooch. Old habit — the captains used to do it to keep the lads from forgetting where to be.",
+        "Cut three. Do not unfold them on the floor; the ink is still wet, in its way, and it'll try to march you too.",
+      ],
+      after: [
+        "Three orders, three different days, one signature. A captain named Marrow — yes, that was the joke he made — promised them they'd march out the other side. They didn't.",
+        "He's still down there. We close the march by giving him an out. Come back when you're ready.",
+      ],
+    },
+  },
+  {
+    id: "marrow_3", storyId: "story_marrow", storyStep: 3, chainFrom: "marrow_2", name: "Sound the Retreat",
+    desc: "Carry a final marching order — Veil's own forged retreat — to the Bone Halls and read it aloud.",
+    target: { itemId: "marching_order", count: 1, label: "Veil's Forged Retreat Order" }, rewardGold: 500, rewardXp: 400,
+    dialogue: {
+      before: [
+        "I forged the retreat in his hand. Forty years late, but the dead are not picky about postmark.",
+        "Take it to the deepest skeleton you can find. Read it aloud. Do not stop reading even if they kneel. Especially if they kneel.",
+      ],
+      after: [
+        "They knelt, then. I felt the floor go quiet. The march is over.",
+        "The Brigade will not thank you. They prefer the dead loud. But the city sleeps better tonight, and I sleep at all, which is new.",
+      ],
+    },
+  },
+  // ── Chronicles: The Mossfather's Toll ──────────────────────────────────────
+  {
+    id: "moss_1", storyId: "story_moss", storyStep: 1, name: "Herbs of the Lower Grove",
+    desc: "The Mossfather wants his herbs back — the ones that crept down into the dungeon when the city was built over the grove.",
+    target: { itemId: "herb_bundle", count: 6, label: "Herb Bundle" }, rewardGold: 120, rewardXp: 90,
+    dialogue: {
+      before: [
+        "The grove once spread under this hill. The masons paved it. The herbs went looking for sunlight in the only direction left — down.",
+        "Bring back six bundles. The Mossfather will know each one. He keeps a list.",
+      ],
+      after: [
+        "Yes — these three are his daughters'. These two are the rotwort he planted as a boy. The last he won't name. We never ask why.",
+        "Next he wants the seedstones. Stone-eaten things. Heavy. You'll know them when one looks back at you.",
+      ],
+    },
+  },
+  {
+    id: "moss_2", storyId: "story_moss", storyStep: 2, chainFrom: "moss_1", name: "The Seedstones",
+    desc: "Stoneheart seeds grow in the deep, fed on rot and minerals. The Mossfather wants three back.",
+    target: { itemId: "stoneheart_seed", count: 3, label: "Stoneheart Seed (drops from stone golems & mire shamblers)" }, rewardGold: 280, rewardXp: 200,
+    dialogue: {
+      before: [
+        "A seedstone is an acorn that grew up in the dark, ate too much iron, and forgot how to be an acorn.",
+        "Three. No more. The Mossfather doesn't want the dungeon. He just wants his children home.",
+      ],
+      after: [
+        "Beautiful. Heavy. Listen — that one is humming. The Mossfather will plant it in the inner ring, where the sun still finds.",
+        "One last thing. There is a stoneheart down there older than the others. The size of a man's chest. We want it. Then we are done.",
+      ],
+    },
+  },
+  {
+    id: "moss_3", storyId: "story_moss", storyStep: 3, chainFrom: "moss_2", name: "The Mossfather's Daughter",
+    desc: "The largest stoneheart — a true heart-stone — lies in the deep. Bring it home.",
+    target: { itemId: "stoneheart_seed", count: 1, label: "Heart-stone (single, from deep-floor mire bosses)" }, rewardGold: 600, rewardXp: 450,
+    dialogue: {
+      before: [
+        "You'll feel her before you see her. She hums in the chest — your chest, hers, the stone she sleeps under.",
+        "Cut her out gently. The dungeon will resent it. Bring her up. The Mossfather has been holding a place for her since before the city.",
+      ],
+      after: [
+        "She is home. The Mossfather has not spoken in four hundred years — he spoke today. He said: thank you.",
+        "Take this recipe. Mossbind Salve. You will not need it often, but when you do, you will not have time to ask.",
+      ],
+    },
+  },
 ];
+
+// ── Daily Contracts ──────────────────────────────────────────────────────────
+
+export type ContractObjective =
+  | { kind: "kill_enemy"; enemyId: string; count: number }
+  | { kind: "kill_boss"; count: number }
+  | { kind: "reach_floor"; floor: number }
+  | { kind: "turn_in_material"; materialId: string; count: number };
+
+export interface DailyContractDef {
+  id: string;
+  name: string;
+  desc: string;
+  objective: ContractObjective;
+  rewardShards: number;
+  rewardAccountXp: number;
+  /** Optional faction restriction — only rolls for that side. */
+  faction?: FactionId;
+}
+
+export const DAILY_CONTRACTS: DailyContractDef[] = [
+  { id: "dc_cult",   name: "Cull the Cult",       desc: "Slay 8 robed cultists in the dungeon.",                 objective: { kind: "kill_enemy", enemyId: "cultist", count: 8 }, rewardShards: 8,  rewardAccountXp: 40 },
+  { id: "dc_skel",   name: "Bone-Tithe",          desc: "Put down 10 risen skeletons.",                          objective: { kind: "kill_enemy", enemyId: "skeleton", count: 10 }, rewardShards: 7, rewardAccountXp: 35 },
+  { id: "dc_wraith", name: "Lay the Wailers",     desc: "Silence 6 wailing wraiths.",                            objective: { kind: "kill_enemy", enemyId: "wraith", count: 6 }, rewardShards: 9,   rewardAccountXp: 45 },
+  { id: "dc_boss",   name: "Hunt the Crowned",    desc: "Down 2 bosses (any floor).",                            objective: { kind: "kill_boss", count: 2 }, rewardShards: 15, rewardAccountXp: 60 },
+  { id: "dc_deep",   name: "Touch the Deep",      desc: "Reach floor 18 in a single run.",                       objective: { kind: "reach_floor", floor: 18 }, rewardShards: 12, rewardAccountXp: 55 },
+  { id: "dc_scrolls",name: "Deliver Scrolls",     desc: "Turn in 3 Sealed Scrolls to the city.",                 objective: { kind: "turn_in_material", materialId: "sealed_scroll", count: 3 }, rewardShards: 6, rewardAccountXp: 30 },
+  { id: "dc_marauder",name:"Counter-Banner",      desc: "Cut down 6 Brigade Marauders.",                         objective: { kind: "kill_enemy", enemyId: "brigade_marauder", count: 6 }, rewardShards: 11, rewardAccountXp: 50, faction: "allies" },
+  { id: "dc_knight", name: "Break the Oath",      desc: "Cut down 6 Oathsworn Knights.",                         objective: { kind: "kill_enemy", enemyId: "kingdom_knight", count: 6 }, rewardShards: 11, rewardAccountXp: 50, faction: "brigade" },
+];
+
+export function rollDailyContract(faction: FactionId | null, seed: number): DailyContractDef {
+  const pool = DAILY_CONTRACTS.filter((c) => !c.faction || c.faction === faction);
+  // Deterministic by seed so the same day shows the same contract.
+  const idx = Math.abs(seed) % pool.length;
+  return pool[idx];
+}
+
+// ── Pre-descent Oaths ────────────────────────────────────────────────────────
+
+export type OathId = "greedy" | "silent" | "deep";
+
+export interface OathDef {
+  id: OathId;
+  name: string;
+  desc: string;
+}
+
+export const OATHS: OathDef[] = [
+  { id: "greedy", name: "Greedy Oath", desc: "+30% gold drops. Traps deal +50% damage." },
+  { id: "silent", name: "Silent Oath", desc: "Potions are sealed. +50% Soul Shards." },
+  { id: "deep",   name: "Deep Oath",   desc: "Start at floor 3. Enemies hit +15% harder. +20% XP." },
+];
+
+// ── Faction-specific shrine variants ─────────────────────────────────────────
+
+export type FactionShrineId = "bulwark" | "bloodlust";
+
+export interface FactionShrineDef {
+  id: FactionShrineId;
+  faction: FactionId;
+  name: string;
+  desc: string;
+  /** Stats applied for the remainder of the run on prayer. */
+  buff: BuffEffect;
+}
+
+export const FACTION_SHRINES: FactionShrineDef[] = [
+  { id: "bulwark",   faction: "allies",  name: "Shrine of the Bulwark Oath", desc: "Stand and be steadied. +12 Max HP and +3% dodge for the rest of this descent.", buff: { maxHp: 12 } },
+  { id: "bloodlust", faction: "brigade", name: "Shrine of Bloodlust",        desc: "Bleed and be answered. +3 ATK for the rest of this descent.", buff: { atk: 3 } },
+];
+
+// ── Boss phase + intro data ──────────────────────────────────────────────────
+
+export interface BossMomentDef {
+  /** Spoken once when the player first encounters the boss. */
+  intro: string;
+  /** Logged when the boss enters phase 2 (≤50% HP). */
+  phaseLine: string;
+  /** Phase 2 damage multiplier on top of base intent mult. */
+  phaseDmgMult: number;
+  /** Extra intent injected into the pool once phase 2 starts. */
+  phaseIntent: EnemyIntent;
+  /** Lore fragment guaranteed on first kill. */
+  firstKillLore: string;
+}
+
+export const BOSS_MOMENTS: Record<string, BossMomentDef> = {
+  dragon: {
+    intro: "Black Dragon — the Heart, Beating. The chamber smells of forge-coal and old prayer. It does not look at you yet.",
+    phaseLine: "The Dragon spreads its wings — the floor goes red.",
+    phaseDmgMult: 1.10,
+    phaseIntent: { id: "wingbleed", label: "🩸 Wing Buffet", mult: 1.4, line: "A wing buffet shreds you for {d} — wounds open!", telegraphable: true },
+    firstKillLore: "lore_dragon",
+  },
+  voidspawn: {
+    intro: "Voidspawn Hierarch. Three of your shadows now. Your reflection blinks first.",
+    phaseLine: "An eye opens in the floor — the Hierarch ascends.",
+    phaseDmgMult: 1.10,
+    phaseIntent: { id: "voidecho", label: "🌑 Void Echo", mult: 1.8, line: "A void echo crashes for {d} — your name is forgotten!", telegraphable: true },
+    firstKillLore: "lore_voidspawn",
+  },
+  sealed_one: {
+    intro: "The Sealed One stirs. The stone forgets its name. You remember yours, for now.",
+    phaseLine: "Chains snap one by one — the Sealed One is loose.",
+    phaseDmgMult: 1.10,
+    phaseIntent: { id: "shardbleed", label: "💀 Shard Summon", mult: 1.2, line: "A bone-shard erupts and rakes you for {d} — bleed!", telegraphable: true },
+    firstKillLore: "lore_sealed",
+  },
+};
+
+// ── Rotating Relics vendor roller ────────────────────────────────────────────
+
+/** Build the 3 listings for a relic vendor cycle, deterministic on (seed, faction). */
+export function rollRelicListings(seed: number, faction: FactionId | null): { listing: GearItem; price: number; flavor?: string }[] {
+  // Tiny seeded RNG (LCG) so the same seed always produces the same listings.
+  let s = seed | 0; if (s === 0) s = 1;
+  const rng = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+  const rarities: Rarity[] = ["rare", "rare", "epic"];
+  if (rng() < 0.2) rarities[2] = "legendary";
+  const out: { listing: GearItem; price: number; flavor?: string }[] = [];
+  for (let i = 0; i < 3; i++) {
+    const depth = 10 + Math.floor(rng() * 18);
+    const item = rollGear(depth, { minRarity: rarities[i], source: rarities[i] === "legendary" ? "final_boss" : "major_boss" });
+    item.rarity = rarities[i];
+    const basePrice = Math.max(50, gearSellPrice(item) * (item.rarity === "legendary" ? 14 : item.rarity === "epic" ? 8 : 4));
+    const flavorAllies  = ["Recovered from a fallen knight's pack.", "Pawned by a temple novice.", "Stamped with the Allies' bulwark mark."];
+    const flavorBrigade = ["Ripped from a marauder's belt.", "Won in a Brigade dice game.", "Still smells of marrow-smoke."];
+    let flavor: string | undefined;
+    if (faction && rng() < 0.4) {
+      const pool = faction === "allies" ? flavorAllies : flavorBrigade;
+      flavor = pool[Math.floor(rng() * pool.length)];
+    }
+    out.push({ listing: item, price: Math.floor(basePrice), flavor });
+  }
+  return out;
+}
 
 // ── Intro flavor text ────────────────────────────────────────────────────────
 
@@ -883,6 +1183,10 @@ export const MATERIALS: Record<string, MaterialDef> = {
   herb_bundle:   { id: "herb_bundle",   name: "Herb Bundle",   sellPrice: 4 },
   spider_silk:   { id: "spider_silk",   name: "Spider Silk",   sellPrice: 9 },
   fel_residue:   { id: "fel_residue",   name: "Fel Residue",   sellPrice: 14 },
+  ward_fragment: { id: "ward_fragment", name: "Ward Fragment", sellPrice: 22 },
+  sealed_sigil:  { id: "sealed_sigil",  name: "Sealed Sigil",  sellPrice: 60 },
+  marching_order:{ id: "marching_order",name: "Marching Order",sellPrice: 18 },
+  stoneheart_seed:{ id: "stoneheart_seed",name: "Stoneheart Seed", sellPrice: 30 },
 };
 
 export interface RecipeDef {

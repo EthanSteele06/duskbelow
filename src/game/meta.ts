@@ -1,5 +1,30 @@
 import type { ClassId, FactionId, GearItem } from "./data";
 
+// ── Daily Contract + Rotating Relics ─────────────────────────────────────────
+
+export interface DailyContractState {
+  /** Contract definition id (from DAILY_CONTRACTS in data.ts) */
+  defId: string;
+  /** ms timestamp the day's roll was generated */
+  rolledAt: number;
+  /** has the player accepted the contract this cycle */
+  accepted: boolean;
+  /** progress counter, contract-specific semantics */
+  progress: number;
+  /** has the reward been claimed (locks the contract until rotation) */
+  claimed: boolean;
+}
+
+export interface RelicVendorState {
+  rolledAt: number;
+  /** seed used so the listings are deterministic for the cycle */
+  seed: number;
+  /** ids of listings the player has already purchased this cycle */
+  sold: string[];
+}
+
+export const DAILY_ROTATION_MS = 24 * 60 * 60 * 1000;
+
 // ── Persistent meta state (survives character wipes) ─────────────────────────
 
 export interface AccountState {
@@ -57,6 +82,12 @@ export interface MetaState {
   lifetime: LifetimeStats;
   collection: CollectionState;
   options: MetaOptions;
+  /** Per-cycle daily contract slot. Null until first rotation. */
+  dailyContract: DailyContractState | null;
+  /** Per-cycle rotating relic vendor state. Null until first rotation. */
+  relicVendor: RelicVendorState | null;
+  /** Boss ids whose first-encounter intro banner has already been shown. */
+  seenBossIntros: string[];
 }
 
 export const META_VERSION = 1;
@@ -81,6 +112,9 @@ export const emptyMeta = (): MetaState => ({
   lifetime: { runs: 0, bossesKilled: 0, goldEarned: 0, deepest: 0, deepestCursed: 0, legendariesFound: 0 },
   collection: { classesPlayed: [], classesCleared: [], factionsPlayed: [], legendaryClasses: [] },
   options: { autoSellCommon: false },
+  dailyContract: null,
+  relicVendor: null,
+  seenBossIntros: [],
 });
 
 // ── Account leveling ─────────────────────────────────────────────────────────
@@ -146,6 +180,8 @@ export interface EchoNode {
   desc: string;
   cost: number;
   requires?: string;
+  /** Only show this node to players of a specific faction. */
+  requiresFaction?: FactionId;
 }
 
 export const ECHO_TREE: EchoNode[] = [
@@ -170,6 +206,11 @@ export const ECHO_TREE: EchoNode[] = [
   { id: "unlock_priest", name: "Awaken the Priest", desc: "Permanently unlock the Priest class on the title screen.", cost: 10, requires: "unlock_mage" },
   // Capstone
   { id: "ascendance",   name: "Ascendance",       desc: "New characters begin at level 2.",        cost: 8, requires: "shard_bonus" },
+  // Capstone
+  { id: "ascendance",   name: "Ascendance",       desc: "New characters begin at level 2.",        cost: 8, requires: "shard_bonus" },
+  // ── Faction echoes (only visible to the matching banner) ──
+  { id: "oath_bulwark", name: "Oathbound Bulwark", desc: "Allies-only. +1 dodge for every 5 Wanderer levels.", cost: 4, requiresFaction: "allies" },
+  { id: "oath_warmarch", name: "Warmarch", desc: "Brigade-only. +1 crit for every 5 Wanderer levels.", cost: 4, requiresFaction: "brigade" },
 ];
 
 export function hasEcho(meta: MetaState, id: string) { return meta.echoLearned.includes(id); }
@@ -217,6 +258,9 @@ export const LORE_FRAGMENTS: LoreFragment[] = [
   { id: "lore_ogre",    source: "ogre",     title: "Lord of the Lower Halls",   text: "Before the brutes were brutes, they were jailers. The chains rusted; their grip did not." },
   { id: "lore_dragon",  source: "dragon",   title: "The Heart, Beating",        text: "Below the last stair, a heart the size of a barn pumps black ichor through the stone. They say it was once a god." },
   { id: "lore_brigade", source: "skeleton", title: "Conscript's Marker",        text: "Endless Brigade tags scratched into a femur. The march ended here. The names did not." },
+  { id: "lore_voidspawn", source: "voidspawn", title: "Eyes That Open Inward",   text: "When the Hierarch looked at the wall, the wall blinked back. Cartography has stopped serving us this deep." },
+  { id: "lore_sealed",  source: "sealed_one", title: "The Last Chain",          text: "Six wards hold it. Three were forged of song, two of bone, one of a promise we have already broken." },
+  { id: "lore_cursed",  source: "sealed_one", title: "After the Crown",         text: "Some who slew the Sealed One report a low voice still asking favors of them, years later. They are advised not to answer." },
 ];
 
 // ── Persistence ──────────────────────────────────────────────────────────────
@@ -228,9 +272,7 @@ export function loadMeta(): MetaState {
     if (!raw) return emptyMeta();
     const parsed = JSON.parse(raw) as Partial<MetaState>;
     if (!parsed || parsed.version !== META_VERSION) return emptyMeta();
-    // Merge in case of new fields
     const base = emptyMeta();
-    // Migration: if save predates rogue-at-start, fold it in.
     const baseUnlocks = parsed.unlockedClasses ?? base.unlockedClasses;
     const mergedUnlocks = baseUnlocks.includes("rogue") ? baseUnlocks : [...baseUnlocks, "rogue" as ClassId];
     return {
@@ -244,6 +286,9 @@ export function loadMeta(): MetaState {
       lifetime: { ...base.lifetime, ...(parsed.lifetime ?? {}) },
       collection: { ...base.collection, ...(parsed.collection ?? {}) },
       options: { ...base.options, ...(parsed.options ?? {}) },
+      dailyContract: parsed.dailyContract ?? null,
+      relicVendor: parsed.relicVendor ?? null,
+      seenBossIntros: parsed.seenBossIntros ?? [],
     };
   } catch { return emptyMeta(); }
 }
