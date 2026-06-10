@@ -82,6 +82,12 @@ export interface MetaState {
   lifetime: LifetimeStats;
   collection: CollectionState;
   options: MetaOptions;
+  /** Per-cycle daily contract slot. Null until first rotation. */
+  dailyContract: DailyContractState | null;
+  /** Per-cycle rotating relic vendor state. Null until first rotation. */
+  relicVendor: RelicVendorState | null;
+  /** Boss ids whose first-encounter intro banner has already been shown. */
+  seenBossIntros: string[];
 }
 
 export const META_VERSION = 1;
@@ -106,6 +112,9 @@ export const emptyMeta = (): MetaState => ({
   lifetime: { runs: 0, bossesKilled: 0, goldEarned: 0, deepest: 0, deepestCursed: 0, legendariesFound: 0 },
   collection: { classesPlayed: [], classesCleared: [], factionsPlayed: [], legendaryClasses: [] },
   options: { autoSellCommon: false },
+  dailyContract: null,
+  relicVendor: null,
+  seenBossIntros: [],
 });
 
 // ── Account leveling ─────────────────────────────────────────────────────────
