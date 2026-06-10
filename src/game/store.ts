@@ -1,16 +1,17 @@
 import { create } from "zustand";
-import type { ClassId, FactionId, Ability, ProfessionId, GearItem, GearSlot, TalentNode, BuffEffect, DungeonMode, AffixId } from "./data";
+import type { ClassId, FactionId, Ability, ProfessionId, GearItem, GearSlot, TalentNode, BuffEffect, DungeonMode, AffixId, OathId } from "./data";
 import {
   CLASSES, FACTIONS, VENDOR_ITEMS, QUESTS, TRAINERS, RECIPES, MATERIALS, SPECS, TALENT_TREES, COSMETICS,
   BAG_SIZE_BASE, BAG_SIZE_CHAMPION, RESPEC_GOLD_COST, MAX_ACTIVE_QUESTS, MATERIAL_STACK_SIZE,
   gearSellPrice, profXpForLevel,
   IDLE_YIELDS, IDLE_SECONDS_PER_UNIT, IDLE_MAX_SECONDS, rollAffixes, rollGear, rollClassLegendary,
+  DAILY_CONTRACTS, rollDailyContract, rollRelicListings,
 } from "./data";
 import type { MetaOptions } from "./meta";
 import {
   type MetaState, type EchoNode, emptyMeta, loadMeta, saveMeta,
   echoStart, accountXpForLevel, ACCOUNT_LEVEL_CAP, stashCapacity, racialChargesForLevel,
-  ECHO_TREE, hasEcho,
+  ECHO_TREE, hasEcho, DAILY_ROTATION_MS,
 } from "./meta";
 
 export type Screen =
@@ -20,7 +21,7 @@ export type Screen =
   | "equipment" | "shop" | "champion"
   | "dungeon"
   | "run_summary" | "echo" | "journal"
-  | "wanderer" | "chronicle";
+  | "wanderer" | "chronicle" | "daily";
 
 export interface QuestState {
   id: string;
@@ -93,6 +94,8 @@ interface PlayerState {
   affixes: AffixId[];
   /** Stacking weakness debuff turns remaining (reduces ATK/MAG by 25%). */
   weaknessTurns: number;
+  /** Pre-descent Oaths active for this run. Cleared on finishRun/exitDungeon. */
+  activeOaths: OathId[];
 }
 
 export interface RunSummary {
@@ -139,7 +142,7 @@ interface GameState {
   buy: (itemId: string) => boolean;
   buyGem: (itemId: string) => boolean;
   use: (itemId: string) => void;
-  enterDungeon: (mode?: DungeonMode) => void;
+  enterDungeon: (mode?: DungeonMode, oaths?: OathId[]) => void;
   exitDungeon: () => void;
   reset: () => void;
   pickSpec: (specId: string) => void;
@@ -186,6 +189,13 @@ interface GameState {
   devGrantFelResidue: () => void;
   devResetChronicles: () => void;
   setOption: <K extends keyof MetaOptions>(key: K, value: MetaOptions[K]) => void;
+  // ── Pass 4: contracts, relics, bosses ──
+  ensureDailyRoll: () => void;
+  acceptDailyContract: () => void;
+  claimDailyContract: () => boolean;
+  ensureRelicRoll: () => void;
+  purchaseRelic: (idx: number) => boolean;
+  markBossSeen: (bossId: string) => void;
 }
 
 const emptyPlayer = (): PlayerState => ({
@@ -201,6 +211,7 @@ const emptyPlayer = (): PlayerState => ({
   runKills: 0, runGold: 0, runXp: 0, runShards: 0,
   activeBuffs: [], buffGoldMult: 1, firstHitCritArmed: false,
   dungeonMode: "normal", affixes: [], weaknessTurns: 0,
+  activeOaths: [],
 });
 
 const xpForLevel = (lvl: number) => lvl * 25;
@@ -407,7 +418,8 @@ export const useGame = create<GameState>((set, get) => ({
     const s = get();
     const champBonus = s.player.isChampion ? Math.floor(n * 0.5) : 0;
     const echo = echoStart(s.meta);
-    const total = Math.floor((n + champBonus) * echo.goldMult * (s.player.buffGoldMult || 1));
+    const oathMult = s.player.activeOaths.includes("greedy") ? 1.3 : 1;
+    const total = Math.floor((n + champBonus) * echo.goldMult * (s.player.buffGoldMult || 1) * oathMult);
     const nextMeta: MetaState = {
       ...s.meta,
       lifetime: { ...s.meta.lifetime, goldEarned: s.meta.lifetime.goldEarned + total },
@@ -425,7 +437,8 @@ export const useGame = create<GameState>((set, get) => ({
     const meta = get().meta;
     const echo = echoStart(meta);
     const champBonus = p.isChampion ? Math.floor(n * 0.5) : 0;
-    const total = Math.floor((n + champBonus) * echo.xpMult);
+    const oathXp = p.activeOaths.includes("deep") ? 1.2 : 1;
+    const total = Math.floor((n + champBonus) * echo.xpMult * oathXp);
     let xp = p.xp + total;
     let level = p.level;
     let baseMaxHp = p.baseMaxHp;
@@ -520,6 +533,20 @@ export const useGame = create<GameState>((set, get) => ({
       return;
     }
     const def = QUESTS.find((d) => d.id === id)!;
+    // One chronicle at a time: if this quest is part of a story arc, refuse if
+    // any other story arc has accepted-but-not-finished quests.
+    if (def.storyId) {
+      const blocking = get().quests.find((q) => {
+        if (q.turnedIn) return false;
+        const qd = QUESTS.find((d) => d.id === q.id);
+        return qd?.storyId && qd.storyId !== def.storyId;
+      });
+      if (blocking) {
+        const bd = QUESTS.find((d) => d.id === blocking.id);
+        get().pushLog(`Another chronicle is already underway — finish "${bd?.name ?? "it"}" first.`);
+        return;
+      }
+    }
     // Seed progress from anything the player is already carrying so collecting
     // items before accepting the quest still counts.
     const p = get().player;
@@ -598,6 +625,10 @@ export const useGame = create<GameState>((set, get) => ({
     const item = VENDOR_ITEMS.find((i) => i.id === itemId);
     if (!item || item.kind !== "potion") return;
     const p = get().player;
+    if (p.activeOaths.includes("silent") && p.dungeonDepth > 0) {
+      get().pushLog("Silent Oath — potions are sealed.");
+      return;
+    }
     const idx = p.inventory.indexOf(itemId);
     if (idx === -1) return;
     const inv = [...p.inventory];
@@ -606,20 +637,19 @@ export const useGame = create<GameState>((set, get) => ({
     get().pushLog(`Drank ${item.name}. +${item.heal} HP.`);
   },
 
-  enterDungeon: (mode = "normal") => {
+  enterDungeon: (mode = "normal", oaths = []) => {
     set((s) => {
       const buffs = s.player.activeBuffs ?? [];
       const bAtk = buffs.reduce((a, b) => a + (b.atk ?? 0), 0);
       const bMag = buffs.reduce((a, b) => a + (b.mag ?? 0), 0);
       const bHp  = buffs.reduce((a, b) => a + (b.maxHp ?? 0), 0);
       const bGold = 1 + buffs.reduce((a, b) => a + (b.goldMult ?? 0), 0);
-      // Add Iron Will echo: +1 racial charge for this run if learned.
       const ironWill = hasEcho(s.meta, "iron_will") ? 1 : 0;
       const affixes = mode === "cursed" ? rollAffixes(2) : [];
-      // Apply to base stats temporarily — exitDungeon/finishRun restore them.
+      const startDepth = oaths.includes("deep") ? 3 : 1;
       const p = recompute({
         ...s.player,
-        dungeonDepth: 1,
+        dungeonDepth: startDepth,
         racialUsed: 0,
         racialMax: racialChargesForLevel(s.meta.account.level) + ironWill,
         nextAttackMult: 1,
@@ -632,11 +662,13 @@ export const useGame = create<GameState>((set, get) => ({
         dungeonMode: mode,
         affixes,
         weaknessTurns: 0,
+        activeOaths: oaths,
       });
       return { screen: "dungeon", player: p };
     });
     if ((get().player.activeBuffs ?? []).length > 0) get().pushLog("✦ Town blessings infuse your gear.");
     if (mode === "cursed") get().pushLog(`☠ Cursed Depths — affixes rolled: ${get().player.affixes.join(", ")}.`);
+    if (oaths.length > 0) get().pushLog(`✦ Oaths sworn: ${oaths.join(", ")}.`);
     get().pushLog("You descend into darkness...");
   },
   exitDungeon: () => {
@@ -654,6 +686,7 @@ export const useGame = create<GameState>((set, get) => ({
         hp:        Math.max(1, s.player.hp - bHp),
         activeBuffs: [],
         buffGoldMult: 1,
+        activeOaths: [],
       });
       return { screen: "city", player: p };
     });
@@ -963,15 +996,28 @@ export const useGame = create<GameState>((set, get) => ({
   // ── Pass 7: meta progression ───────────────────────────────────────────
   recordKill: (enemyId, opts) => {
     const meta = get().meta;
+    const p = get().player;
     const echo = echoStart(meta);
-    // Slower shard economy: trash 0 (25% chance of 1), bosses 3.
     const baseShards = opts?.shardValue ?? (opts?.boss ? 3 : (Math.random() < 0.25 ? 1 : 0));
-    const shards = Math.max(0, Math.floor(baseShards * echo.shardMult));
+    const oathShardMult = p.activeOaths.includes("silent") ? 1.5 : 1;
+    const shards = Math.max(0, Math.floor(baseShards * echo.shardMult * oathShardMult));
     const j = meta.journal;
     const enemyKills = { ...j.enemyKills, [enemyId]: (j.enemyKills[enemyId] ?? 0) + 1 };
     const bossesDowned = opts?.boss ? { ...j.bossesDowned, [enemyId]: (j.bossesDowned[enemyId] ?? 0) + 1 } : j.bossesDowned;
     const itemsFound = opts?.itemDropId ? { ...j.itemsFound, [opts.itemDropId]: (j.itemsFound[opts.itemDropId] ?? 0) + 1 } : j.itemsFound;
     const loreFound = opts?.loreId && !j.loreFound.includes(opts.loreId) ? [...j.loreFound, opts.loreId] : j.loreFound;
+    // Daily contract progress (kill_enemy / kill_boss)
+    let dailyContract = meta.dailyContract;
+    if (dailyContract && dailyContract.accepted && !dailyContract.claimed) {
+      const def = DAILY_CONTRACTS.find((c) => c.id === dailyContract!.defId);
+      if (def) {
+        if (def.objective.kind === "kill_enemy" && def.objective.enemyId === enemyId) {
+          dailyContract = { ...dailyContract, progress: Math.min(def.objective.count, dailyContract.progress + 1) };
+        } else if (def.objective.kind === "kill_boss" && opts?.boss) {
+          dailyContract = { ...dailyContract, progress: Math.min(def.objective.count, dailyContract.progress + 1) };
+        }
+      }
+    }
     let nextMeta: MetaState = {
       ...meta,
       shards: meta.shards + shards,
@@ -979,6 +1025,7 @@ export const useGame = create<GameState>((set, get) => ({
       lifetime: opts?.boss
         ? { ...meta.lifetime, bossesKilled: meta.lifetime.bossesKilled + 1 }
         : meta.lifetime,
+      dailyContract,
     };
     // Account XP feed
     nextMeta = grantAccountXp(nextMeta, opts?.boss ? 30 : 2);
@@ -1179,6 +1226,7 @@ export const useGame = create<GameState>((set, get) => ({
       hp:        Math.max(1, p.hp - bHp),
       activeBuffs: [],
       buffGoldMult: 1,
+      activeOaths: [],
     });
     set({ meta: nextMeta, lastRun: summary, screen: "run_summary", player: cleanedPlayer });
   },
@@ -1296,6 +1344,86 @@ export const useGame = create<GameState>((set, get) => ({
     const nextMeta: MetaState = { ...meta, options: { ...meta.options, [key]: value } };
     persistMeta(nextMeta);
     set({ meta: nextMeta });
+  },
+
+  // ── Pass 4: contracts, relics, bosses ───────────────────────────────────
+  ensureDailyRoll: () => {
+    const meta = get().meta;
+    const now = Date.now();
+    if (meta.dailyContract && now - meta.dailyContract.rolledAt < DAILY_ROTATION_MS) return;
+    const seed = Math.floor(now / DAILY_ROTATION_MS);
+    const def = rollDailyContract(get().player.faction ?? null, seed);
+    const nextMeta: MetaState = {
+      ...meta,
+      dailyContract: { defId: def.id, rolledAt: now, accepted: false, progress: 0, claimed: false },
+    };
+    persistMeta(nextMeta); set({ meta: nextMeta });
+  },
+
+  acceptDailyContract: () => {
+    const meta = get().meta;
+    if (!meta.dailyContract || meta.dailyContract.accepted) return;
+    const nextMeta: MetaState = { ...meta, dailyContract: { ...meta.dailyContract, accepted: true } };
+    persistMeta(nextMeta); set({ meta: nextMeta });
+    get().pushLog("✦ Daily contract accepted.");
+  },
+
+  claimDailyContract: () => {
+    const meta = get().meta;
+    const dc = meta.dailyContract;
+    if (!dc || !dc.accepted || dc.claimed) return false;
+    const def = DAILY_CONTRACTS.find((c) => c.id === dc.defId);
+    if (!def) return false;
+    const need =
+      def.objective.kind === "kill_enemy" ? def.objective.count :
+      def.objective.kind === "kill_boss" ? def.objective.count :
+      def.objective.kind === "turn_in_material" ? def.objective.count :
+      def.objective.kind === "reach_floor" ? 1 : 1;
+    if (dc.progress < need) return false;
+    let nextMeta: MetaState = {
+      ...meta,
+      shards: meta.shards + def.rewardShards,
+      dailyContract: { ...dc, claimed: true },
+    };
+    nextMeta = grantAccountXp(nextMeta, def.rewardAccountXp);
+    persistMeta(nextMeta); set({ meta: nextMeta });
+    get().pushLog(`✦ Contract complete — +${def.rewardShards} shards, +${def.rewardAccountXp} account XP.`);
+    return true;
+  },
+
+  ensureRelicRoll: () => {
+    const meta = get().meta;
+    const now = Date.now();
+    if (meta.relicVendor && now - meta.relicVendor.rolledAt < DAILY_ROTATION_MS) return;
+    const seed = Math.floor(now / DAILY_ROTATION_MS) + 1;
+    const nextMeta: MetaState = { ...meta, relicVendor: { rolledAt: now, seed, sold: [] } };
+    persistMeta(nextMeta); set({ meta: nextMeta });
+  },
+
+  purchaseRelic: (idx) => {
+    const s = get();
+    const v = s.meta.relicVendor;
+    if (!v) return false;
+    const listings = rollRelicListings(v.seed, s.player.faction ?? null);
+    const entry = listings[idx];
+    if (!entry) return false;
+    const key = `${idx}:${entry.listing.id}`;
+    if (v.sold.includes(key)) return false;
+    if (s.player.gold < entry.price) { get().pushLog("Not enough gold."); return false; }
+    if (!get().addToBag(entry.listing)) return false;
+    const np = get().player;
+    const nextMeta: MetaState = { ...s.meta, relicVendor: { ...v, sold: [...v.sold, key] } };
+    persistMeta(nextMeta);
+    set({ meta: nextMeta, player: { ...np, gold: np.gold - entry.price } });
+    get().pushLog(`Acquired ${entry.listing.name} for ${entry.price}g.`);
+    return true;
+  },
+
+  markBossSeen: (bossId) => {
+    const meta = get().meta;
+    if (meta.seenBossIntros.includes(bossId)) return;
+    const nextMeta: MetaState = { ...meta, seenBossIntros: [...meta.seenBossIntros, bossId] };
+    persistMeta(nextMeta); set({ meta: nextMeta });
   },
 }));
 
