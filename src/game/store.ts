@@ -94,6 +94,8 @@ interface PlayerState {
   affixes: AffixId[];
   /** Stacking weakness debuff turns remaining (reduces ATK/MAG by 25%). */
   weaknessTurns: number;
+  /** Pre-descent Oaths active for this run. Cleared on finishRun/exitDungeon. */
+  activeOaths: OathId[];
 }
 
 export interface RunSummary {
