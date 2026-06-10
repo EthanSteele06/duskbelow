@@ -129,8 +129,8 @@ interface GameState {
   rewardXp: (n: number) => void;
   rewardGold: (n: number) => void;
   rewardGems: (n: number) => void;
-  addQuestItem: (id: string, count?: number) => number;
-  addMaterial: (id: string, count?: number) => number;
+  addQuestItem: (id: string, count?: number) => void;
+  addMaterial: (id: string, count?: number) => void;
   learnRecipe: (id: string) => void;
   acceptQuest: (id: string) => void;
   turnInQuest: (id: string) => void;
@@ -165,12 +165,10 @@ interface GameState {
   armNextAttack: (mult: number) => void;
   applyWeakness: (turns: number) => void;
   tickWeakness: () => void;
-  // Pass 7
   recordKill: (enemyId: string, opts?: { boss?: boolean; shardValue?: number; loreId?: string; itemDropId?: string }) => void;
   useHearthstone: () => boolean;
   stashItem: (itemId: string, fromEquipment?: GearSlot) => boolean;
   unstashItem: (idx: number) => void;
-  withdrawStash: (idx: number) => boolean;
   spendEcho: (nodeId: string) => boolean;
   respecEcho: () => void;
   wipeCharacter: () => void;
@@ -179,8 +177,6 @@ interface GameState {
   markTutorialSeen: (id: string, all?: boolean) => void;
   hydrateMeta: () => void;
   unlockClass: (classId: ClassId, opts?: { devFree?: boolean }) => boolean;
-  setAutoSellCommon: (on: boolean) => void;
-  // Dev cheats
   devGrantClassLegendary: () => boolean;
   devGrantRandomEpic: () => boolean;
   devGrantGold: (n: number) => void;
