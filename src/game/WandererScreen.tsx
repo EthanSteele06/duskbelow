@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useGame } from "@/game/store";
-import { CLASSES, FACTIONS, RARITY_CLASS, SLOT_ICON, type GearItem } from "@/game/data";
+import { CLASSES, FACTIONS, RARITY_CLASS, SLOT_ICON, SLOT_LABEL, type GearItem, type GearSlot } from "@/game/data";
 import {
   ACCOUNT_UNLOCKS, accountXpForLevel, ACCOUNT_LEVEL_CAP, nextUnlock, stashCapacity,
 } from "@/game/meta";
@@ -8,13 +8,18 @@ import { StatBar } from "./StatBar";
 
 type Tab = "stash" | "profile" | "unlocks" | "collection";
 
+const SLOTS: GearSlot[] = ["head", "chest", "legs", "weapon", "offhand", "trinket"];
+
 export function WandererScreen() {
   const setScreen = useGame((s) => s.setScreen);
   const meta = useGame((s) => s.meta);
   const player = useGame((s) => s.player);
-  const unstash = useGame((s) => s.unstashItem);
+  const withdraw = useGame((s) => s.withdrawStash);
+  const stashItem = useGame((s) => s.stashItem);
   const setOption = useGame((s) => s.setOption);
   const [tab, setTab] = useState<Tab>("stash");
+  const stashCap = stashCapacity(meta.account.level);
+  const stashFull = meta.stash.length >= stashCap;
 
   return (
     <div className="flex min-h-full flex-col p-3 gap-3">
@@ -44,7 +49,16 @@ export function WandererScreen() {
         ))}
       </nav>
 
-      {tab === "stash" && <StashTab stash={meta.stash} cap={stashCapacity(meta.account.level)} unstash={unstash} />}
+      {tab === "stash" && (
+        <StashTab
+          stash={meta.stash}
+          cap={stashCap}
+          stashFull={stashFull}
+          equipment={player.equipment}
+          onWithdraw={withdraw}
+          onStashSlot={(slot) => stashItem("", slot)}
+        />
+      )}
       {tab === "profile" && (
         <ProfileTab
           meta={meta}
@@ -58,8 +72,7 @@ export function WandererScreen() {
           collection={meta.collection}
           unlocked={meta.unlockedClasses}
           owned={meta.ownedClasses}
-          currentClass={player.classId}
-          currentFaction={player.faction}
+          onOpenLore={() => setScreen("journal")}
         />
       )}
     </div>
@@ -68,18 +81,30 @@ export function WandererScreen() {
 
 // ─── Tabs ──────────────────────────────────────────────────────────────────
 
-function StashTab({ stash, cap, unstash }: { stash: GearItem[]; cap: number; unstash: (i: number) => void }) {
+function StashTab({
+  stash, cap, stashFull, equipment, onWithdraw, onStashSlot,
+}: {
+  stash: GearItem[];
+  cap: number;
+  stashFull: boolean;
+  equipment: Partial<Record<GearSlot, GearItem>>;
+  onWithdraw: (i: number) => boolean;
+  onStashSlot: (slot: GearSlot) => boolean;
+}) {
+  const equipped = SLOTS.map((s) => [s, equipment[s]] as const).filter(([, it]) => !!it) as [GearSlot, GearItem][];
   return (
-    <section className="space-y-2">
-      <p className="pixel text-[9px] text-gold">▣ Heirloom Stash ({stash.length}/{cap})</p>
-      <p className="font-body text-xs text-muted-foreground">
-        Items here survive death. New characters auto-equip what fits, the rest land in their bag.
-      </p>
+    <section className="space-y-3">
+      <div>
+        <p className="pixel text-[9px] text-gold">▣ Heirloom Stash ({stash.length}/{cap})</p>
+        <p className="font-body text-xs text-muted-foreground">
+          Items here survive death. New characters auto-equip what fits, the rest land in their bag.
+        </p>
+      </div>
       {cap === 0 && (
         <p className="font-body text-sm text-muted-foreground italic">Unlock your first stash slot at Wanderer Lv 3.</p>
       )}
       {stash.length === 0 && cap > 0 && (
-        <p className="font-body text-sm text-muted-foreground italic">Empty. Stash items from your Equipment screen.</p>
+        <p className="font-body text-sm text-muted-foreground italic">Empty. Stash items from below or your Equipment screen.</p>
       )}
       {stash.map((it, idx) => (
         <div key={`${it.id}-${idx}`} className={`border-2 border-black bg-card p-2 rarity-frame-${it.rarity}`}>
@@ -90,9 +115,30 @@ function StashTab({ stash, cap, unstash }: { stash: GearItem[]; cap: number; uns
           {it.legendaryDesc && (
             <p className="pixel text-[7px] text-rarity-legendary mt-1">✦ {it.legendaryDesc}</p>
           )}
-          <button onClick={() => unstash(idx)} className="pixel-btn !text-[8px] mt-2 w-full">Withdraw (discard)</button>
+          <button onClick={() => onWithdraw(idx)} className="pixel-btn !text-[8px] mt-2 w-full">Withdraw to bag</button>
         </div>
       ))}
+
+      {equipped.length > 0 && cap > 0 && (
+        <div className="mt-2">
+          <p className="pixel text-[9px] text-gold mb-1">▣ Stash from equipment</p>
+          <p className="font-body text-xs text-muted-foreground mb-2">Send currently-equipped gear straight to the heirloom stash.</p>
+          <div className="grid grid-cols-2 gap-2">
+            {equipped.map(([slot, it]) => (
+              <button
+                key={slot}
+                disabled={stashFull}
+                onClick={() => onStashSlot(slot)}
+                className={`border-2 border-black bg-card p-2 text-left rarity-frame-${it.rarity} disabled:opacity-40`}
+              >
+                <p className="pixel text-[7px] text-muted-foreground">{SLOT_ICON[slot]} {SLOT_LABEL[slot]}</p>
+                <p className={`pixel text-[8px] mt-0.5 ${RARITY_CLASS[it.rarity]} truncate`}>{it.name}</p>
+                <p className="pixel text-[7px] text-gold mt-1">→ Stash</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -112,13 +158,22 @@ function ProfileTab({
       <div className="border-2 border-black bg-card p-2 grid grid-cols-2 gap-1 font-body text-sm">
         <div>Wanderer level</div><div className="text-right text-gold">{meta.account.level}/{ACCOUNT_LEVEL_CAP}</div>
         <div>Soul Shards</div><div className="text-right text-gold">{meta.shards}</div>
-        <div>Runs completed</div><div className="text-right">{j.runsCompleted}</div>
-        <div>Deepest floor</div><div className="text-right">{j.deepestFloor}</div>
+        <div>Runs completed</div><div className="text-right">{Math.max(lt.runs, j.runsCompleted)}</div>
+        <div>Deepest floor</div><div className="text-right">{Math.max(lt.deepest, j.deepestFloor)}</div>
         <div>Deepest (cursed)</div><div className="text-right">{lt.deepestCursed}</div>
         <div>Bosses slain</div><div className="text-right">{lt.bossesKilled}</div>
         <div>Gold earned</div><div className="text-right">{lt.goldEarned}</div>
         <div>Legendaries found</div><div className="text-right text-rarity-legendary">{lt.legendariesFound}</div>
       </div>
+
+      {j.bestRun && (
+        <div className="border-2 border-black bg-card/60 p-2">
+          <p className="pixel text-[8px] text-gold">★ Best Run</p>
+          <p className="font-body text-xs text-muted-foreground mt-0.5">
+            Floor {j.bestRun.floors} · {j.bestRun.kills} kills · {j.bestRun.gold}g
+          </p>
+        </div>
+      )}
 
       <p className="pixel text-[9px] text-gold mt-2">▣ Quality of Life</p>
       <label className="flex items-center justify-between border-2 border-black bg-card p-2 gap-2">
@@ -171,17 +226,16 @@ function UnlocksTab({ level, xp }: { level: number; xp: number }) {
 }
 
 function CollectionTab({
-  collection, unlocked, owned, currentClass, currentFaction,
+  collection, unlocked, owned, onOpenLore,
 }: {
   collection: ReturnType<typeof useGame.getState>["meta"]["collection"];
   unlocked: string[];
   owned: string[];
-  currentClass: string | null;
-  currentFaction: string | null;
+  onOpenLore: () => void;
 }) {
   const totalClasses = CLASSES.length;
-  const playedSet = new Set([...(collection.classesPlayed ?? []), ...(currentClass ? [currentClass] : [])]);
-  const factionSet = new Set([...(collection.factionsPlayed ?? []), ...(currentFaction ? [currentFaction] : [])]);
+  const playedSet = new Set(collection.classesPlayed ?? []);
+  const factionSet = new Set(collection.factionsPlayed ?? []);
 
   return (
     <section className="space-y-2">
@@ -228,6 +282,8 @@ function CollectionTab({
           );
         })}
       </div>
+
+      <button onClick={onOpenLore} className="pixel-btn !text-[9px] w-full mt-2">▣ Open Bestiary & Lore →</button>
     </section>
   );
 }
