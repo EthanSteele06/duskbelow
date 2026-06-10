@@ -4,7 +4,7 @@ import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumb
 import {
   CLASS_ABILITIES, SPEC_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
   RARITY_CLASS, RARITY_LABEL, rollDamage, damageRange,
-  MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth, rollClassLegendary, AFFIXES,
+  MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth, rollClassLegendary, AFFIXES, BOSS_MOMENTS,
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
   type StatusEffect, type EnemyIntent, type FactionId,
 } from "@/game/data";
@@ -38,10 +38,13 @@ type CombatEnc = {
   enemyEffects: StatusEffect[];
   playerEffects: StatusEffect[];
   nextIntent: EnemyIntent;
+  /** 1 = healthy boss / regular enemy, 2 = boss in phase 2 (≤50% HP). */
+  bossPhase: 1 | 2;
 };
 
 type ShrineKind = "heal" | "blessing";
 type TrapKind = "spikes" | "gas";
+type ForkBias = "left" | "onward" | "right";
 
 type Encounter =
   | { kind: "path"; depth: number }
@@ -68,17 +71,23 @@ function buildCombat(depth: number, faction?: FactionId | null, affixes: string[
     stunnedTurns: 0, shieldReduce: 0, cooldowns: {},
     enemyEffects: [], playerEffects: [],
     nextIntent: pickIntent(e),
+    bossPhase: 1,
   };
 }
 
-function rollEncounter(depth: number, faction?: FactionId | null, affixes: string[] = []): Encounter {
-  // Boss floors are always forced combat.
+function rollEncounter(depth: number, faction?: FactionId | null, affixes: string[] = [], bias: ForkBias = "onward"): Encounter {
   if (MAJOR_BOSS_FLOORS.has(depth) || MINI_BOSS_FLOORS.has(depth)) return buildCombat(depth, faction, affixes);
-  const r = Math.random();
-  if (r < 0.58) return buildCombat(depth, faction, affixes);
-  if (r < 0.78) return { kind: "chest", depth, preview: rollChest(depth) };
-  if (r < 0.82) return { kind: "shrine", depth, shrine: Math.random() < 0.6 ? "heal" : "blessing" };
-  if (r < 0.94) return { kind: "trap", depth, trap: Math.random() < 0.5 ? "spikes" : "gas", sprung: false };
+  // Bias bends the encounter weights: Left = more fights & less traps, Right = more traps & fewer fights.
+  const combatW = 0.58 * (bias === "left" ? 1.6 : bias === "right" ? 0.7 : 1);
+  const trapW = 0.12 * (bias === "left" ? 0.5 : bias === "right" ? 1.8 : 1);
+  const chestW = 0.20, shrineW = 0.04, pathW = 0.06;
+  const total = combatW + chestW + shrineW + trapW + pathW;
+  const r = Math.random() * total;
+  let acc = 0;
+  if (r < (acc += combatW)) return buildCombat(depth, faction, affixes);
+  if (r < (acc += chestW)) return { kind: "chest", depth, preview: rollChest(depth) };
+  if (r < (acc += shrineW)) return { kind: "shrine", depth, shrine: Math.random() < 0.6 ? "heal" : "blessing" };
+  if (r < (acc += trapW)) return { kind: "trap", depth, trap: Math.random() < 0.5 ? "spikes" : "gas", sprung: false };
   return { kind: "path", depth };
 }
 
