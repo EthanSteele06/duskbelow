@@ -996,15 +996,28 @@ export const useGame = create<GameState>((set, get) => ({
   // ── Pass 7: meta progression ───────────────────────────────────────────
   recordKill: (enemyId, opts) => {
     const meta = get().meta;
+    const p = get().player;
     const echo = echoStart(meta);
-    // Slower shard economy: trash 0 (25% chance of 1), bosses 3.
     const baseShards = opts?.shardValue ?? (opts?.boss ? 3 : (Math.random() < 0.25 ? 1 : 0));
-    const shards = Math.max(0, Math.floor(baseShards * echo.shardMult));
+    const oathShardMult = p.activeOaths.includes("silent") ? 1.5 : 1;
+    const shards = Math.max(0, Math.floor(baseShards * echo.shardMult * oathShardMult));
     const j = meta.journal;
     const enemyKills = { ...j.enemyKills, [enemyId]: (j.enemyKills[enemyId] ?? 0) + 1 };
     const bossesDowned = opts?.boss ? { ...j.bossesDowned, [enemyId]: (j.bossesDowned[enemyId] ?? 0) + 1 } : j.bossesDowned;
     const itemsFound = opts?.itemDropId ? { ...j.itemsFound, [opts.itemDropId]: (j.itemsFound[opts.itemDropId] ?? 0) + 1 } : j.itemsFound;
     const loreFound = opts?.loreId && !j.loreFound.includes(opts.loreId) ? [...j.loreFound, opts.loreId] : j.loreFound;
+    // Daily contract progress (kill_enemy / kill_boss)
+    let dailyContract = meta.dailyContract;
+    if (dailyContract && dailyContract.accepted && !dailyContract.claimed) {
+      const def = DAILY_CONTRACTS.find((c) => c.id === dailyContract!.defId);
+      if (def) {
+        if (def.objective.kind === "kill_enemy" && def.objective.enemyId === enemyId) {
+          dailyContract = { ...dailyContract, progress: Math.min(def.objective.count, dailyContract.progress + 1) };
+        } else if (def.objective.kind === "kill_boss" && opts?.boss) {
+          dailyContract = { ...dailyContract, progress: Math.min(def.objective.count, dailyContract.progress + 1) };
+        }
+      }
+    }
     let nextMeta: MetaState = {
       ...meta,
       shards: meta.shards + shards,
@@ -1012,6 +1025,7 @@ export const useGame = create<GameState>((set, get) => ({
       lifetime: opts?.boss
         ? { ...meta.lifetime, bossesKilled: meta.lifetime.bossesKilled + 1 }
         : meta.lifetime,
+      dailyContract,
     };
     // Account XP feed
     nextMeta = grantAccountXp(nextMeta, opts?.boss ? 30 : 2);
