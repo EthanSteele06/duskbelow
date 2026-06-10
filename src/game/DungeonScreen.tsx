@@ -488,7 +488,6 @@ export function DungeonScreen() {
   // Equipped gear delta for inline equip
   const lootGear = enc.kind === "victory" ? enc.loot.gear : undefined;
   const equippedForSlot = lootGear ? player.equipment[lootGear.slot] : undefined;
-  const gearDelta = lootGear ? gearScore(lootGear) - (equippedForSlot ? gearScore(equippedForSlot) : 0) : 0;
 
   return (
     <div className="flex min-h-full flex-col">
