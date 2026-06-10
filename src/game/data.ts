@@ -982,6 +982,9 @@ function tree(prefix: string, t: { atk?: number; mag?: number; maxHp?: number })
 /** Cap on active (accepted, not-yet-turned-in) quests. */
 export const MAX_ACTIVE_QUESTS = 3;
 
+/** Bag stacking: every N units of a single material/quest item id occupies one bag slot. */
+export const MATERIAL_STACK_SIZE = 20;
+
 export const TALENT_TREES: Record<string, TalentNode[]> = {
   arms:          tree("arms",       { atk: 3 }),
   fury:          tree("fury",       { atk: 2, maxHp: 2 }),
