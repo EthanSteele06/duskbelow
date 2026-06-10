@@ -1,6 +1,9 @@
+import { useEffect } from "react";
 import { useGame } from "@/game/store";
-import { VENDOR_ITEMS, AUCTION_LISTINGS } from "@/game/data";
+import { VENDOR_ITEMS, rollRelicListings, RARITY_LABEL } from "@/game/data";
+import { DAILY_ROTATION_MS } from "@/game/meta";
 import { StatBar } from "./StatBar";
+import { GearCompare } from "./GearCompare";
 
 export function VendorScreen() {
   const setScreen = useGame((s) => s.setScreen);
@@ -22,7 +25,6 @@ export function VendorScreen() {
       )
     : null;
 
-  // Only show town-relevant items (no gem-priced consumables — those live in the Vault).
   const items = VENDOR_ITEMS.filter((it) => !it.gemPrice);
 
   return (
@@ -75,30 +77,72 @@ export function VendorScreen() {
   );
 }
 
+function timeLeft(ms: number) {
+  const total = Math.max(0, ms);
+  const h = Math.floor(total / 3600000);
+  const m = Math.floor((total % 3600000) / 60000);
+  return `${h}h ${m}m`;
+}
+
+// Renamed: "Rotating Relics" — replaces the old Auction House stub.
 export function AuctionScreen() {
   const setScreen = useGame((s) => s.setScreen);
-  const rarityColor = { common: "text-muted-foreground", rare: "text-allies", epic: "text-arcane" };
+  const ensureRelicRoll = useGame((s) => s.ensureRelicRoll);
+  const purchase = useGame((s) => s.purchaseRelic);
+  const meta = useGame((s) => s.meta);
+  const player = useGame((s) => s.player);
+  useEffect(() => { ensureRelicRoll(); }, [ensureRelicRoll]);
+
+  const v = meta.relicVendor;
+  const listings = v ? rollRelicListings(v.seed, player.faction ?? null) : [];
+  const remaining = v ? v.rolledAt + DAILY_ROTATION_MS - Date.now() : 0;
+
+  const rarityColor = (r: string) =>
+    r === "legendary" ? "text-gold" : r === "epic" ? "text-arcane" : r === "rare" ? "text-allies" : "text-muted-foreground";
+
   return (
     <div className="flex min-h-full flex-col p-3 gap-3">
       <StatBar />
       <button onClick={() => setScreen("city")} className="pixel-btn !text-[8px] w-fit">← Back to City</button>
-      <h2 className="pixel text-[12px] text-gold">⚖ Auction House</h2>
-      <p className="font-body text-sm text-muted-foreground -mt-2">Listings from delvers across the realm.</p>
+      <div className="flex items-baseline justify-between">
+        <h2 className="pixel text-[12px] text-gold">⚖ Rotating Relics</h2>
+        {v && <p className="pixel text-[7px] text-muted-foreground">Rotates in {timeLeft(remaining)}</p>}
+      </div>
+      <p className="font-body text-sm text-muted-foreground -mt-2">
+        A traveling fence lays out three relics each day. When they're sold, they're gone — until tomorrow.
+      </p>
 
       <div className="space-y-2">
-        {AUCTION_LISTINGS.map((l) => (
-          <div key={l.id} className="border-2 border-black bg-card p-2">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="pixel text-[9px]">{l.name}</span>
-              <span className={`pixel text-[8px] uppercase ${rarityColor[l.rarity]}`}>{l.rarity}</span>
+        {listings.map((entry, i) => {
+          const key = `${i}:${entry.listing.id}`;
+          const sold = v?.sold.includes(key);
+          const canAfford = player.gold >= entry.price;
+          const equipped = player.equipment[entry.listing.slot];
+          return (
+            <div key={key} className={`border-2 border-black bg-card p-2 ${sold ? "opacity-50" : ""}`}>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="pixel text-[9px]">{entry.listing.name}</span>
+                <span className={`pixel text-[7px] uppercase ${rarityColor(entry.listing.rarity)}`}>
+                  {RARITY_LABEL[entry.listing.rarity]}
+                </span>
+              </div>
+              {entry.flavor && <p className="font-body text-xs italic text-muted-foreground mt-0.5">"{entry.flavor}"</p>}
+              <div className="mt-1">
+                <GearCompare candidate={entry.listing} equipped={equipped} />
+              </div>
+              <div className="mt-2 flex items-center justify-between">
+                <span className="pixel text-[9px] text-gold">{entry.price}g</span>
+                <button
+                  className="pixel-btn pixel-btn-gold !text-[8px] disabled:opacity-40"
+                  disabled={sold || !canAfford}
+                  onClick={() => purchase(i)}
+                >
+                  {sold ? "Sold" : canAfford ? "Acquire" : "Too costly"}
+                </button>
+              </div>
             </div>
-            <p className="font-body text-sm text-muted-foreground">Seller: {l.seller}</p>
-            <div className="mt-2 flex items-center justify-between">
-              <span className="pixel text-[9px] text-gold">Bid {l.bid}g</span>
-              <button className="pixel-btn !text-[8px]" onClick={() => alert("Auction House comes online in v2.")}>Place Bid</button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
