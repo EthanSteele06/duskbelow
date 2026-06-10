@@ -189,6 +189,13 @@ interface GameState {
   devGrantFelResidue: () => void;
   devResetChronicles: () => void;
   setOption: <K extends keyof MetaOptions>(key: K, value: MetaOptions[K]) => void;
+  // ── Pass 4: contracts, relics, bosses ──
+  ensureDailyRoll: () => void;
+  acceptDailyContract: () => void;
+  claimDailyContract: () => boolean;
+  ensureRelicRoll: () => void;
+  purchaseRelic: (idx: number) => boolean;
+  markBossSeen: (bossId: string) => void;
 }
 
 const emptyPlayer = (): PlayerState => ({
