@@ -9,14 +9,11 @@ export function JournalScreen() {
 
   return (
     <div className="flex min-h-full flex-col p-3 gap-3">
-      <button onClick={() => setScreen("city")} className="pixel-btn !text-[8px] w-fit">← Back to City</button>
-      <h1 className="pixel text-[14px] text-gold">▣ Dungeon Journal</h1>
-
-      <div className="border-2 border-black bg-card p-2 text-sm font-body grid grid-cols-2 gap-1">
-        <div>Runs completed</div><div className="text-right">{j.runsCompleted}</div>
-        <div>Deepest floor</div><div className="text-right text-gold">{j.deepestFloor}</div>
-        {j.bestRun && (<><div>Best run kills</div><div className="text-right">{j.bestRun.kills}</div></>)}
-      </div>
+      <button onClick={() => setScreen("wanderer")} className="pixel-btn !text-[8px] w-fit">← Back to Wanderer</button>
+      <h1 className="pixel text-[14px] text-gold">▣ Bestiary & Lore</h1>
+      <p className="font-body text-xs text-muted-foreground -mt-2">
+        What you've slain and what you've read. Lifetime stats live on the Wanderer page.
+      </p>
 
       <h2 className="pixel text-[10px] text-gold">Bestiary</h2>
       <div className="border-2 border-black bg-card p-2 space-y-1">
