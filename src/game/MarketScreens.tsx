@@ -15,8 +15,6 @@ function statsLine(it: GearItem) {
   if (s.dodge) parts.push(`+${s.dodge}% dodge`);
   return parts.join(" · ") || "—";
 }
-import { StatBar } from "./StatBar";
-import { GearCompare } from "./GearCompare";
 
 export function VendorScreen() {
   const setScreen = useGame((s) => s.setScreen);
