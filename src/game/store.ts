@@ -625,6 +625,10 @@ export const useGame = create<GameState>((set, get) => ({
     const item = VENDOR_ITEMS.find((i) => i.id === itemId);
     if (!item || item.kind !== "potion") return;
     const p = get().player;
+    if (p.activeOaths.includes("silent") && p.dungeonDepth > 0) {
+      get().pushLog("Silent Oath — potions are sealed.");
+      return;
+    }
     const idx = p.inventory.indexOf(itemId);
     if (idx === -1) return;
     const inv = [...p.inventory];
@@ -633,20 +637,19 @@ export const useGame = create<GameState>((set, get) => ({
     get().pushLog(`Drank ${item.name}. +${item.heal} HP.`);
   },
 
-  enterDungeon: (mode = "normal") => {
+  enterDungeon: (mode = "normal", oaths = []) => {
     set((s) => {
       const buffs = s.player.activeBuffs ?? [];
       const bAtk = buffs.reduce((a, b) => a + (b.atk ?? 0), 0);
       const bMag = buffs.reduce((a, b) => a + (b.mag ?? 0), 0);
       const bHp  = buffs.reduce((a, b) => a + (b.maxHp ?? 0), 0);
       const bGold = 1 + buffs.reduce((a, b) => a + (b.goldMult ?? 0), 0);
-      // Add Iron Will echo: +1 racial charge for this run if learned.
       const ironWill = hasEcho(s.meta, "iron_will") ? 1 : 0;
       const affixes = mode === "cursed" ? rollAffixes(2) : [];
-      // Apply to base stats temporarily — exitDungeon/finishRun restore them.
+      const startDepth = oaths.includes("deep") ? 3 : 1;
       const p = recompute({
         ...s.player,
-        dungeonDepth: 1,
+        dungeonDepth: startDepth,
         racialUsed: 0,
         racialMax: racialChargesForLevel(s.meta.account.level) + ironWill,
         nextAttackMult: 1,
@@ -659,11 +662,13 @@ export const useGame = create<GameState>((set, get) => ({
         dungeonMode: mode,
         affixes,
         weaknessTurns: 0,
+        activeOaths: oaths,
       });
       return { screen: "dungeon", player: p };
     });
     if ((get().player.activeBuffs ?? []).length > 0) get().pushLog("✦ Town blessings infuse your gear.");
     if (mode === "cursed") get().pushLog(`☠ Cursed Depths — affixes rolled: ${get().player.affixes.join(", ")}.`);
+    if (oaths.length > 0) get().pushLog(`✦ Oaths sworn: ${oaths.join(", ")}.`);
     get().pushLog("You descend into darkness...");
   },
   exitDungeon: () => {
@@ -681,6 +686,7 @@ export const useGame = create<GameState>((set, get) => ({
         hp:        Math.max(1, s.player.hp - bHp),
         activeBuffs: [],
         buffGoldMult: 1,
+        activeOaths: [],
       });
       return { screen: "city", player: p };
     });
