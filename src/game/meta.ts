@@ -206,6 +206,11 @@ export const ECHO_TREE: EchoNode[] = [
   { id: "unlock_priest", name: "Awaken the Priest", desc: "Permanently unlock the Priest class on the title screen.", cost: 10, requires: "unlock_mage" },
   // Capstone
   { id: "ascendance",   name: "Ascendance",       desc: "New characters begin at level 2.",        cost: 8, requires: "shard_bonus" },
+  // Capstone
+  { id: "ascendance",   name: "Ascendance",       desc: "New characters begin at level 2.",        cost: 8, requires: "shard_bonus" },
+  // ── Faction echoes (only visible to the matching banner) ──
+  { id: "oath_bulwark", name: "Oathbound Bulwark", desc: "Allies-only. +1 dodge for every 5 Wanderer levels.", cost: 4, requiresFaction: "allies" },
+  { id: "oath_warmarch", name: "Warmarch", desc: "Brigade-only. +1 crit for every 5 Wanderer levels.", cost: 4, requiresFaction: "brigade" },
 ];
 
 export function hasEcho(meta: MetaState, id: string) { return meta.echoLearned.includes(id); }
