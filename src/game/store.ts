@@ -1226,6 +1226,7 @@ export const useGame = create<GameState>((set, get) => ({
       hp:        Math.max(1, p.hp - bHp),
       activeBuffs: [],
       buffGoldMult: 1,
+      activeOaths: [],
     });
     set({ meta: nextMeta, lastRun: summary, screen: "run_summary", player: cleanedPlayer });
   },
