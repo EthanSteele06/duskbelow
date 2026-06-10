@@ -42,6 +42,7 @@ import barracksImg from "@/assets/dungeon-barracks.jpg";
 import sanctumImg from "@/assets/dungeon-sanctum.jpg";
 import vaultImg from "@/assets/dungeon-vault.jpg";
 import throneImg from "@/assets/dungeon-throne.jpg";
+import npcAltruisImg from "@/assets/npc-altruis.jpg";
 
 export type ClassId = "warrior" | "rogue" | "mage" | "priest" | "druid" | "deathknight" | "demonhunter";
 export type FactionId = "allies" | "brigade";
@@ -627,6 +628,8 @@ export interface QuestDef {
   chainFrom?: string;
   /** On turn-in, unlock this class permanently (Demon Hunter etc). */
   unlocksClass?: ClassId;
+  /** Lore-rich NPC dialogue paged before accepting and after turning in. */
+  dialogue?: { before: string[]; after: string[] };
 }
 
 /** Story arcs shown as Chronicles, separate from one-off bounties. */
@@ -634,13 +637,30 @@ export interface StorylineDef {
   id: string;
   name: string;
   lore: string;
+  npc?: {
+    name: string;
+    title: string;
+    portrait: string;
+    /** Spoken once when the player first opens the Chronicle. */
+    intro: string;
+    /** Spoken after the final step is turned in. */
+    outro: string;
+  };
 }
 
 export const STORYLINES: StorylineDef[] = [
-  { id: "story_dh",      name: "Path of the Demon Hunter", lore: "A blind veteran offers a pact: bind a demon's hunger to your spine, and walk the dark on equal footing." },
-  { id: "story_sealed",  name: "The Sealed Heart",         lore: "Beneath the throne, something old beats slow. Find the wards that hold it. Find what they cost." },
-  { id: "story_marrow",  name: "The Marrow March",         lore: "Bones march in formation in the deep. They remember orders no living captain ever gave." },
-  { id: "story_moss",    name: "The Mossfather's Toll",    lore: "The grove sent you to bring back what the stone took. The stone has been keeping a list." },
+  {
+    id: "story_dh", name: "Path of the Demon Hunter",
+    lore: "A blind veteran offers a pact: bind a demon's hunger to your spine, and walk the dark on equal footing.",
+    npc: {
+      name: "Altruis the Sufferer", title: "Illidari Outcast", portrait: npcAltruisImg,
+      intro: "You smell of the dark below. Good. Sit. I was Illidari once — sworn to my master Illidan Stormrage. I left, but the fel does not leave you. It only waits.",
+      outro: "It is done. You are Illidari now — bound and burning. Remember what we taught the world at the Black Temple: you are not prepared. Few ever are.",
+    },
+  },
+  { id: "story_sealed", name: "The Sealed Heart", lore: "Beneath the throne, something old beats slow. Find the wards that hold it. Find what they cost." },
+  { id: "story_marrow", name: "The Marrow March",  lore: "Bones march in formation in the deep. They remember orders no living captain ever gave." },
+  { id: "story_moss",   name: "The Mossfather's Toll", lore: "The grove sent you to bring back what the stone took. The stone has been keeping a list." },
 ];
 
 export const QUESTS: QuestDef[] = [
@@ -655,15 +675,61 @@ export const QUESTS: QuestDef[] = [
   { id: "cq_priest",  name: "Restless Souls", desc: "Bring wraith essence to be put to rest.",             target: { itemId: "ghost_essence",count: 2,label: "Ghost Essence" },rewardGold: 60, rewardXp: 60, classId: "priest" },
 
   // ── Chronicles: Path of the Demon Hunter (3-step unlock chain) ─────────────
-  { id: "dh_1", storyId: "story_dh", storyStep: 1, name: "Whispers from the Wards",
-    desc: "Kael'thar wants proof the seals are leaking. Gather fel residue from imps in the deep.",
-    target: { itemId: "fel_residue", count: 5, label: "Fel Residue" }, rewardGold: 80, rewardXp: 50 },
-  { id: "dh_2", storyId: "story_dh", storyStep: 2, chainFrom: "dh_1", name: "Hunt the Shacklewarden",
+  {
+    id: "dh_1", storyId: "story_dh", storyStep: 1, name: "Whispers from the Wards",
+    desc: "Altruis senses fel-taint leaking through the city wards. Gather fel residue from imps in the deep.",
+    target: { itemId: "fel_residue", count: 5, label: "Fel Residue" }, rewardGold: 80, rewardXp: 50,
+    dialogue: {
+      before: [
+        "The wards above this city were sung by night elves a thousand years dead. They were never meant to hold against what comes now.",
+        "Long before your birth, my people learned of Sargeras — the Dark Titan, fallen architect, who forged the Burning Legion to unmake every world the Pantheon ever shaped.",
+        "I and my brothers followed Illidan Stormrage into a shattered world called Mardum, where the first demons were caged. We tore them apart and drank what was inside. Eye, claw, soul. We became what we hunted.",
+        "Now the dark below leaks fel — that sickly green fire that is the Legion's blood. Bring me five drops of it from the imps that scurry in the lower halls. I need to be sure of what I smell.",
+      ],
+      after: [
+        "Yes. Fresh-pulled, still hot. The taint is the same as the day Mardum burned.",
+        "Something down there is not just a demon, hunter. Something is feeding them, holding the chain.",
+        "Step closer. The next hunt is bigger.",
+      ],
+    },
+  },
+  {
+    id: "dh_2", storyId: "story_dh", storyStep: 2, chainFrom: "dh_1", name: "Hunt the Shacklewarden",
     desc: "A chained demon stalks the middle floors. Slay it and bring back a piece of its chain.",
-    target: { itemId: "fel_residue", count: 3, label: "Warden's Chain (drops from the Shacklewarden — rare spawn, floors 8-22)" }, rewardGold: 220, rewardXp: 140 },
-  { id: "dh_3", storyId: "story_dh", storyStep: 3, chainFrom: "dh_2", name: "Bind the Pact",
-    desc: "Return to Kael'thar. Survive the ritual. Walk out a Demon Hunter.",
-    target: { itemId: "fel_residue", count: 1, label: "One last drop of fel residue for the ritual" }, rewardGold: 0, rewardXp: 200, unlocksClass: "demonhunter" },
+    target: { itemId: "fel_residue", count: 3, label: "Warden's Chain (drops from the Shacklewarden — rare spawn, floors 8-22)" }, rewardGold: 220, rewardXp: 140,
+    dialogue: {
+      before: [
+        "There is a demon below — a Shacklewarden. A jailer-thing born of the Black Temple's collapse, when Maiev Shadowsong led her watchers to drag Illidan from his throne.",
+        "I knew the Temple. I knew Varedis Felsoul, who refused his pact and tried to walk free of it. The Legion does not let you walk free. They send the wardens — bound to chains forged in Mardum — to drag the apostate back.",
+        "This one fled into your dungeon when its master was unmade. It is still hunting. It is still chained. That chain is what I need.",
+        "Find it. Kill it. Bring me a link. Do not let it speak to you in your sleep — the dead-tongue it whispers is older than men.",
+      ],
+      after: [
+        "You wear no chain. Good. Some return from this hunt as the warden's new puppet.",
+        "I see your eyes have changed. The fel has marked you, even without the rite. You are nearly ready.",
+        "Come back when your hands are steady. The last step is the one that breaks most.",
+      ],
+    },
+  },
+  {
+    id: "dh_3", storyId: "story_dh", storyStep: 3, chainFrom: "dh_2", name: "Bind the Pact",
+    desc: "Return to Altruis. Survive the ritual. Walk out a Demon Hunter.",
+    target: { itemId: "fel_residue", count: 1, label: "One last drop of fel residue for the ritual" }, rewardGold: 0, rewardXp: 200, unlocksClass: "demonhunter",
+    dialogue: {
+      before: [
+        "This is the pact. There is no taking it back. Listen.",
+        "Tonight you will consume a demon's soul. Not eat — consume. You will feel its memory crawl into yours. You will feel it want your body. You will refuse it, or you will end as a husk on this floor.",
+        "I will blind you. Your eyes will be useless to the Spectral Sight that follows. We never look at the world the way the others do again. This is the cost.",
+        "When the fire takes you, do not fight the metamorphosis. Let the wings open. Let the horns come. They are yours, paid for in pain.",
+        "Now — give me the last drop of residue, and let us begin.",
+      ],
+      after: [
+        "Rise, Illidari. The pain will not leave. You will learn to carry it.",
+        "Remember what Illidan said to the Lich King at the Frozen Throne, before the world turned again: 'You are not prepared.'",
+        "Now go. The dark below has cousins waiting for you. They have not yet learned to fear the bound.",
+      ],
+    },
+  },
 ];
 
 // ── Intro flavor text ────────────────────────────────────────────────────────
@@ -915,6 +981,9 @@ function tree(prefix: string, t: { atk?: number; mag?: number; maxHp?: number })
 
 /** Cap on active (accepted, not-yet-turned-in) quests. */
 export const MAX_ACTIVE_QUESTS = 3;
+
+/** Bag stacking: every N units of a single material/quest item id occupies one bag slot. */
+export const MATERIAL_STACK_SIZE = 20;
 
 export const TALENT_TREES: Record<string, TalentNode[]> = {
   arms:          tree("arms",       { atk: 3 }),

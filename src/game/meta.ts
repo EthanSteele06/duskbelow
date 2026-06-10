@@ -1,4 +1,4 @@
-import type { ClassId, GearItem } from "./data";
+import type { ClassId, FactionId, GearItem } from "./data";
 
 // ── Persistent meta state (survives character wipes) ─────────────────────────
 
@@ -15,6 +15,26 @@ export interface JournalState {
   bestRun?: { floors: number; kills: number; gold: number; date: number };
   loreFound: string[];
   runsCompleted: number;
+}
+
+export interface LifetimeStats {
+  runs: number;
+  bossesKilled: number;
+  goldEarned: number;
+  deepest: number;
+  deepestCursed: number;
+  legendariesFound: number;
+}
+
+export interface CollectionState {
+  classesPlayed: ClassId[];
+  classesCleared: ClassId[];
+  factionsPlayed: FactionId[];
+  legendaryClasses: ClassId[];
+}
+
+export interface MetaOptions {
+  autoSellCommon: boolean;
 }
 
 export interface MetaState {
@@ -34,6 +54,9 @@ export interface MetaState {
   seenWipeIntro: boolean;
   /** Per-step tutorial dismissal map. */
   tutorialSeen: Record<string, boolean>;
+  lifetime: LifetimeStats;
+  collection: CollectionState;
+  options: MetaOptions;
 }
 
 export const META_VERSION = 1;
@@ -55,6 +78,9 @@ export const emptyMeta = (): MetaState => ({
   stash: [],
   seenWipeIntro: false,
   tutorialSeen: {},
+  lifetime: { runs: 0, bossesKilled: 0, goldEarned: 0, deepest: 0, deepestCursed: 0, legendariesFound: 0 },
+  collection: { classesPlayed: [], classesCleared: [], factionsPlayed: [], legendaryClasses: [] },
+  options: { autoSellCommon: false },
 });
 
 // ── Account leveling ─────────────────────────────────────────────────────────
@@ -215,6 +241,9 @@ export function loadMeta(): MetaState {
       unlockedClasses: mergedUnlocks,
       ownedClasses: parsed.ownedClasses ?? [],
       stash: parsed.stash ?? [],
+      lifetime: { ...base.lifetime, ...(parsed.lifetime ?? {}) },
+      collection: { ...base.collection, ...(parsed.collection ?? {}) },
+      options: { ...base.options, ...(parsed.options ?? {}) },
     };
   } catch { return emptyMeta(); }
 }

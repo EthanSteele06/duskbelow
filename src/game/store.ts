@@ -2,7 +2,8 @@ import { create } from "zustand";
 import type { ClassId, FactionId, Ability, ProfessionId, GearItem, GearSlot, TalentNode, BuffEffect, DungeonMode, AffixId } from "./data";
 import {
   CLASSES, FACTIONS, VENDOR_ITEMS, QUESTS, TRAINERS, RECIPES, MATERIALS, SPECS, TALENT_TREES, COSMETICS,
-  BAG_SIZE_BASE, BAG_SIZE_CHAMPION, RESPEC_GOLD_COST, MAX_ACTIVE_QUESTS, gearSellPrice, profXpForLevel,
+  BAG_SIZE_BASE, BAG_SIZE_CHAMPION, RESPEC_GOLD_COST, MAX_ACTIVE_QUESTS, MATERIAL_STACK_SIZE,
+  gearSellPrice, profXpForLevel,
   IDLE_YIELDS, IDLE_SECONDS_PER_UNIT, IDLE_MAX_SECONDS, rollAffixes, rollGear, rollClassLegendary,
 } from "./data";
 import {
@@ -17,7 +18,8 @@ export type Screen =
   | "trainer" | "talents" | "profession"
   | "equipment" | "shop" | "champion"
   | "dungeon"
-  | "run_summary" | "echo" | "journal";
+  | "run_summary" | "echo" | "journal"
+  | "wanderer" | "chronicle";
 
 export interface QuestState {
   id: string;
@@ -115,8 +117,11 @@ interface GameState {
   meta: MetaState;
   /** populated when the player dies or wins; consumed by RunSummaryScreen */
   lastRun: RunSummary | null;
+  /** active storyline id when screen === "chronicle" */
+  chronicleStoryId: string | null;
 
   setScreen: (s: Screen) => void;
+  openChronicle: (storyId: string) => void;
   startGame: (faction: FactionId, classId: ClassId, name: string) => void;
   pushLog: (msg: string) => void;
   damage: (n: number) => number;
@@ -129,6 +134,7 @@ interface GameState {
   learnRecipe: (id: string) => void;
   acceptQuest: (id: string) => void;
   turnInQuest: (id: string) => void;
+  turnInAllReady: () => void;
   buy: (itemId: string) => boolean;
   buyGem: (itemId: string) => boolean;
   use: (itemId: string) => void;
@@ -159,7 +165,6 @@ interface GameState {
   armNextAttack: (mult: number) => void;
   applyWeakness: (turns: number) => void;
   tickWeakness: () => void;
-  // Pass 7
   recordKill: (enemyId: string, opts?: { boss?: boolean; shardValue?: number; loreId?: string; itemDropId?: string }) => void;
   useHearthstone: () => boolean;
   stashItem: (itemId: string, fromEquipment?: GearSlot) => boolean;
@@ -172,11 +177,13 @@ interface GameState {
   markTutorialSeen: (id: string, all?: boolean) => void;
   hydrateMeta: () => void;
   unlockClass: (classId: ClassId, opts?: { devFree?: boolean }) => boolean;
-  // Dev cheats
   devGrantClassLegendary: () => boolean;
   devGrantRandomEpic: () => boolean;
   devGrantGold: (n: number) => void;
   devGrantAllMaterials: () => void;
+  devUnlockDemonHunter: () => void;
+  devGrantFelResidue: () => void;
+  devResetChronicles: () => void;
 }
 
 const emptyPlayer = (): PlayerState => ({
@@ -314,8 +321,10 @@ export const useGame = create<GameState>((set, get) => ({
   quests: [],
   meta: emptyMeta(),
   lastRun: null,
+  chronicleStoryId: null,
 
   setScreen: (screen) => set({ screen }),
+  openChronicle: (storyId) => set({ chronicleStoryId: storyId, screen: "chronicle" }),
 
   startGame: (faction, classId, name) => {
     const meta = get().meta;
