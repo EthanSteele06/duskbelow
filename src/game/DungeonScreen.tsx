@@ -726,7 +726,9 @@ export function DungeonScreen() {
             {!enc.sprung && (
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button className="pixel-btn !text-[8px]" onClick={() => {
-                  const dmg = Math.max(3, Math.floor(player.maxHp * (enc.trap === "spikes" ? 0.22 : 0.15)));
+                  const trapMult = forkBias === "left" ? 0.5 : forkBias === "right" ? 1.8 : 1;
+                  const oathMult = player.activeOaths?.includes("greedy") ? 1.5 : 1;
+                  const dmg = Math.max(3, Math.floor(player.maxHp * (enc.trap === "spikes" ? 0.22 : 0.15) * trapMult * oathMult));
                   const taken = damage(dmg);
                   addFloater("enemy", taken);
                   setHit(true); setTimeout(() => setHit(false), 350);
