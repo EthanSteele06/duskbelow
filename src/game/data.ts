@@ -883,6 +883,10 @@ export const MATERIALS: Record<string, MaterialDef> = {
   herb_bundle:   { id: "herb_bundle",   name: "Herb Bundle",   sellPrice: 4 },
   spider_silk:   { id: "spider_silk",   name: "Spider Silk",   sellPrice: 9 },
   fel_residue:   { id: "fel_residue",   name: "Fel Residue",   sellPrice: 14 },
+  ward_fragment: { id: "ward_fragment", name: "Ward Fragment", sellPrice: 22 },
+  sealed_sigil:  { id: "sealed_sigil",  name: "Sealed Sigil",  sellPrice: 60 },
+  marching_order:{ id: "marching_order",name: "Marching Order",sellPrice: 18 },
+  stoneheart_seed:{ id: "stoneheart_seed",name: "Stoneheart Seed", sellPrice: 30 },
 };
 
 export interface RecipeDef {
