@@ -241,6 +241,9 @@ export function loadMeta(): MetaState {
       unlockedClasses: mergedUnlocks,
       ownedClasses: parsed.ownedClasses ?? [],
       stash: parsed.stash ?? [],
+      lifetime: { ...base.lifetime, ...(parsed.lifetime ?? {}) },
+      collection: { ...base.collection, ...(parsed.collection ?? {}) },
+      options: { ...base.options, ...(parsed.options ?? {}) },
     };
   } catch { return emptyMeta(); }
 }
