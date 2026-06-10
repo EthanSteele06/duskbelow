@@ -180,6 +180,8 @@ export interface EchoNode {
   desc: string;
   cost: number;
   requires?: string;
+  /** Only show this node to players of a specific faction. */
+  requiresFaction?: FactionId;
 }
 
 export const ECHO_TREE: EchoNode[] = [
