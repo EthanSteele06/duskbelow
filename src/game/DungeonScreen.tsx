@@ -851,6 +851,19 @@ export function DungeonScreen() {
         body="Tap an ability to use it. You can't retreat mid-fight — keep a Hearthstone Charm if you want a safe escape. Dying drops your loot."
         position="top"
       />
+
+      {bossIntro && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-md border-2 border-gold bg-background p-4 space-y-3">
+            <p className="pixel text-[10px] text-blood">⚑ MAJOR BOSS</p>
+            <p className="font-body text-base italic leading-snug">"{bossIntro.intro}"</p>
+            <button
+              onClick={() => setBossIntro(null)}
+              className="pixel-btn pixel-btn-danger w-full !text-[10px]"
+            >Face it</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
