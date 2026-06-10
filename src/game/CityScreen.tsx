@@ -101,6 +101,7 @@ export function CityScreen() {
             badge={dcReady ? "✦" : !dc?.accepted && dcDef ? "NEW" : undefined}
             accent={!!dcReady}
           />
+          <ActionTile title="Auction House" desc="Bid on relics (soon)." icon="⚖" onClick={() => setScreen("auction_house")} />
         </Section>
 
         <Section title="▣ Meta">
