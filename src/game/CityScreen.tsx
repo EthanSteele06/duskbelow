@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useGame } from "@/game/store";
-import { FACTIONS, TRAINERS, SPECS } from "@/game/data";
+import { FACTIONS, TRAINERS, SPECS, OATHS, DAILY_CONTRACTS, type OathId } from "@/game/data";
 import { nextUnlock } from "@/game/meta";
 import { playMusic } from "@/game/audio";
 import { SettingsButton } from "@/game/Settings";
@@ -17,16 +17,43 @@ export function CityScreen() {
   const meta = useGame((s) => s.meta);
   const log = useGame((s) => s.log);
   const claimIdle = useGame((s) => s.claimIdleProfession);
-  useEffect(() => { claimIdle(); }, [claimIdle]);
+  const ensureDaily = useGame((s) => s.ensureDailyRoll);
+  const ensureRelics = useGame((s) => s.ensureRelicRoll);
+  useEffect(() => { claimIdle(); ensureDaily(); ensureRelics(); }, [claimIdle, ensureDaily, ensureRelics]);
   useEffect(() => {
     playMusic(player.faction === "brigade" ? "city-brigade" : "city-kingdom");
   }, [player.faction]);
+
   const f = FACTIONS.find((x) => x.id === player.faction)!;
   const trainer = player.classId ? TRAINERS[player.classId] : null;
   const spec = player.specId ? SPECS.find((s) => s.id === player.specId) : null;
   const newGear = player.bag.length > 0;
   const firstRunDone = meta.hasCompletedFirstRun;
   const upNext = nextUnlock(meta.account.level);
+
+  const dc = meta.dailyContract;
+  const dcDef = dc ? DAILY_CONTRACTS.find((c) => c.id === dc.defId) : null;
+  const dcNeed =
+    dcDef?.objective.kind === "kill_enemy" ? dcDef.objective.count :
+    dcDef?.objective.kind === "kill_boss" ? dcDef.objective.count :
+    dcDef?.objective.kind === "turn_in_material" ? dcDef.objective.count :
+    dcDef?.objective.kind === "reach_floor" ? 1 : 1;
+  const dcReady = dc && dc.accepted && !dc.claimed && dc.progress >= dcNeed;
+  const dcDesc = dcDef
+    ? dc?.claimed ? "Claimed — back tomorrow." : dcReady ? "Reward ready!" : dc?.accepted ? `${dc.progress}/${dcNeed} progress` : "New work posted."
+    : "Check the board.";
+
+  const [oathModal, setOathModal] = useState<null | "normal" | "cursed">(null);
+  const [chosenOaths, setChosenOaths] = useState<OathId[]>([]);
+  const toggleOath = (id: OathId) =>
+    setChosenOaths((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+
+  const beginDescent = () => {
+    if (!oathModal) return;
+    enter(oathModal, chosenOaths);
+    setOathModal(null);
+    setChosenOaths([]);
+  };
 
   return (
     <div className="relative flex min-h-full flex-col">
@@ -65,7 +92,15 @@ export function CityScreen() {
           <ActionTile title="Vendors" desc="Buy potions & gear." icon="⚒" onClick={() => setScreen("vendor")} />
           <ActionTile title="Quest Board" desc="Jobs for gold." icon="✦" onClick={() => setScreen("quests")} />
           <ActionTile title="Crafter's Row" desc="Professions." icon="⚒" onClick={() => setScreen("profession")} />
-          <ActionTile title="Auction House" desc="Bid on relics." icon="⚖" onClick={() => setScreen("auction")} />
+          <ActionTile title="Rotating Relics" desc="Three relics, daily." icon="⚖" onClick={() => setScreen("auction")} />
+          <ActionTile
+            title="Contract Board"
+            desc={dcDesc}
+            icon="▣"
+            onClick={() => setScreen("daily")}
+            badge={dcReady ? "✦" : !dc?.accepted && dcDef ? "NEW" : undefined}
+            accent={dcReady}
+          />
         </Section>
 
         <Section title="▣ Meta">
@@ -83,9 +118,15 @@ export function CityScreen() {
           )}
         </Section>
 
-        <button onClick={() => enter()} className="pixel-btn pixel-btn-primary w-full text-center !text-[12px] !py-4">▼ DESCEND DUNGEON</button>
+        <button
+          onClick={() => { setChosenOaths([]); setOathModal("normal"); }}
+          className="pixel-btn pixel-btn-primary w-full text-center !text-[12px] !py-4"
+        >▼ DESCEND DUNGEON</button>
         {meta.hasClearedNormal && (
-          <button onClick={() => enter("cursed")} className="pixel-btn pixel-btn-danger w-full text-center !text-[10px] !py-3">☠ DESCEND CURSED DEPTHS (Hard)</button>
+          <button
+            onClick={() => { setChosenOaths([]); setOathModal("cursed"); }}
+            className="pixel-btn pixel-btn-danger w-full text-center !text-[10px] !py-3"
+          >☠ DESCEND CURSED DEPTHS (Hard)</button>
         )}
       </div>
 
@@ -103,6 +144,47 @@ export function CityScreen() {
         title="Your Hub"
         body="Visit the Trainer to spec, Vendors for blessings, Crafter's Row for professions. Echo Tree spends shards between runs. When ready, Descend."
       />
+
+      {oathModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center">
+          <div className="w-full max-w-md border-2 border-gold bg-background p-4 space-y-3">
+            <div className="flex items-baseline justify-between">
+              <h3 className="pixel text-[12px] text-gold">Swear Oaths Before You Descend</h3>
+              <button onClick={() => setOathModal(null)} className="pixel text-[10px] text-muted-foreground">✕</button>
+            </div>
+            <p className="font-body text-sm text-muted-foreground">
+              Optional vows that scar this descent. Take none, take all — each one cuts both ways.
+            </p>
+            <div className="space-y-2">
+              {OATHS.map((o) => {
+                const on = chosenOaths.includes(o.id);
+                return (
+                  <button
+                    key={o.id}
+                    onClick={() => toggleOath(o.id)}
+                    className={`w-full text-left border-2 p-2 ${on ? "border-gold bg-card" : "border-black bg-card/60"}`}
+                  >
+                    <div className="flex items-baseline justify-between">
+                      <span className="pixel text-[9px] text-gold">{o.name}</span>
+                      <span className="pixel text-[7px]">{on ? "SWORN" : "TAP TO SWEAR"}</span>
+                    </div>
+                    <p className="font-body text-xs text-muted-foreground mt-1">{o.desc}</p>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button onClick={() => setOathModal(null)} className="pixel-btn !text-[9px]">Cancel</button>
+              <button
+                onClick={beginDescent}
+                className={`pixel-btn !text-[9px] ${oathModal === "cursed" ? "pixel-btn-danger" : "pixel-btn-primary"}`}
+              >
+                {chosenOaths.length === 0 ? "Descend (no oaths)" : `Descend with ${chosenOaths.length} oath${chosenOaths.length > 1 ? "s" : ""}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
