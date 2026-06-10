@@ -625,9 +625,7 @@ export function DungeonScreen() {
                     ✦ {lootGear.legendaryDesc}
                   </p>
                 )}
-                <p className={`pixel text-[7px] ${gearDelta > 0 ? "text-divine" : gearDelta < 0 ? "text-blood" : "text-muted-foreground"}`}>
-                  {equippedForSlot ? (gearDelta > 0 ? `▲ +${gearDelta} vs equipped` : gearDelta < 0 ? `▼ ${gearDelta} vs equipped` : "= same score") : "▲ slot empty"}
-                </p>
+                <GearCompare item={lootGear} equipped={equippedForSlot} />
                 {equippedFlash === lootGear.id ? (
                   <p className="pixel text-[8px] text-divine text-center border-2 border-divine py-1">✓ EQUIPPED{equippedForSlot ? ` — replaced ${equippedForSlot.name}` : ""}</p>
                 ) : (
