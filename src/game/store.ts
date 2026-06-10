@@ -204,6 +204,7 @@ const emptyPlayer = (): PlayerState => ({
   runKills: 0, runGold: 0, runXp: 0, runShards: 0,
   activeBuffs: [], buffGoldMult: 1, firstHitCritArmed: false,
   dungeonMode: "normal", affixes: [], weaknessTurns: 0,
+  activeOaths: [],
 });
 
 const xpForLevel = (lvl: number) => lvl * 25;
