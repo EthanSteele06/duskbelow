@@ -169,7 +169,7 @@ interface GameState {
   recordKill: (enemyId: string, opts?: { boss?: boolean; shardValue?: number; loreId?: string; itemDropId?: string }) => void;
   useHearthstone: () => boolean;
   stashItem: (itemId: string, fromEquipment?: GearSlot) => boolean;
-  unstashItem: (idx: number) => void;
+  withdrawStash: (idx: number) => boolean;
   spendEcho: (nodeId: string) => boolean;
   respecEcho: () => void;
   wipeCharacter: () => void;
