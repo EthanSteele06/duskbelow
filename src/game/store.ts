@@ -976,6 +976,9 @@ export const useGame = create<GameState>((set, get) => ({
       ...meta,
       shards: meta.shards + shards,
       journal: { ...j, enemyKills, bossesDowned, itemsFound, loreFound },
+      lifetime: opts?.boss
+        ? { ...meta.lifetime, bossesKilled: meta.lifetime.bossesKilled + 1 }
+        : meta.lifetime,
     };
     // Account XP feed
     nextMeta = grantAccountXp(nextMeta, opts?.boss ? 30 : 2);
