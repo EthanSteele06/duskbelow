@@ -4,7 +4,7 @@ import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumb
 import {
   CLASS_ABILITIES, SPEC_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
   RARITY_CLASS, RARITY_LABEL, rollDamage, damageRange,
-  MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth, rollClassLegendary, AFFIXES,
+  MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth, rollClassLegendary, AFFIXES, BOSS_MOMENTS,
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
   type StatusEffect, type EnemyIntent, type FactionId,
 } from "@/game/data";
@@ -38,10 +38,13 @@ type CombatEnc = {
   enemyEffects: StatusEffect[];
   playerEffects: StatusEffect[];
   nextIntent: EnemyIntent;
+  /** 1 = healthy boss / regular enemy, 2 = boss in phase 2 (≤50% HP). */
+  bossPhase: 1 | 2;
 };
 
 type ShrineKind = "heal" | "blessing";
 type TrapKind = "spikes" | "gas";
+type ForkBias = "left" | "onward" | "right";
 
 type Encounter =
   | { kind: "path"; depth: number }
@@ -68,17 +71,23 @@ function buildCombat(depth: number, faction?: FactionId | null, affixes: string[
     stunnedTurns: 0, shieldReduce: 0, cooldowns: {},
     enemyEffects: [], playerEffects: [],
     nextIntent: pickIntent(e),
+    bossPhase: 1,
   };
 }
 
-function rollEncounter(depth: number, faction?: FactionId | null, affixes: string[] = []): Encounter {
-  // Boss floors are always forced combat.
+function rollEncounter(depth: number, faction?: FactionId | null, affixes: string[] = [], bias: ForkBias = "onward"): Encounter {
   if (MAJOR_BOSS_FLOORS.has(depth) || MINI_BOSS_FLOORS.has(depth)) return buildCombat(depth, faction, affixes);
-  const r = Math.random();
-  if (r < 0.58) return buildCombat(depth, faction, affixes);
-  if (r < 0.78) return { kind: "chest", depth, preview: rollChest(depth) };
-  if (r < 0.82) return { kind: "shrine", depth, shrine: Math.random() < 0.6 ? "heal" : "blessing" };
-  if (r < 0.94) return { kind: "trap", depth, trap: Math.random() < 0.5 ? "spikes" : "gas", sprung: false };
+  // Bias bends the encounter weights: Left = more fights & less traps, Right = more traps & fewer fights.
+  const combatW = 0.58 * (bias === "left" ? 1.6 : bias === "right" ? 0.7 : 1);
+  const trapW = 0.12 * (bias === "left" ? 0.5 : bias === "right" ? 1.8 : 1);
+  const chestW = 0.20, shrineW = 0.04, pathW = 0.06;
+  const total = combatW + chestW + shrineW + trapW + pathW;
+  const r = Math.random() * total;
+  let acc = 0;
+  if (r < (acc += combatW)) return buildCombat(depth, faction, affixes);
+  if (r < (acc += chestW)) return { kind: "chest", depth, preview: rollChest(depth) };
+  if (r < (acc += shrineW)) return { kind: "shrine", depth, shrine: Math.random() < 0.6 ? "heal" : "blessing" };
+  if (r < (acc += trapW)) return { kind: "trap", depth, trap: Math.random() < 0.5 ? "spikes" : "gas", sprung: false };
   return { kind: "path", depth };
 }
 
@@ -145,6 +154,8 @@ export function DungeonScreen() {
   const [equippedFlash, setEquippedFlash] = useState<string | null>(null);
   const [floaters, setFloaters] = useState<FloatingNum[]>([]);
   const [attackFx, setAttackFx] = useState<{ kind: "melee" | "spell"; key: number; tint?: string } | null>(null);
+  const [forkBias, setForkBias] = useState<ForkBias>("onward");
+  const [bossIntro, setBossIntro] = useState<{ id: string; intro: string } | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   const classColor = player.classId ? CLASSES.find((c) => c.id === player.classId)?.color : undefined;
@@ -167,6 +178,9 @@ export function DungeonScreen() {
   const finishRun = useGame((s) => s.finishRun);
   const recordKill = useGame((s) => s.recordKill);
   const useHearth = useGame((s) => s.useHearthstone);
+  const markBossSeen = useGame((s) => s.markBossSeen);
+  const bumpDailyFloor = useGame((s) => s.bumpDailyFloor);
+  const seenBossIntros = useGame((s) => s.meta.seenBossIntros);
 
   useEffect(() => {
     if (player.hp <= 0) finishRun("defeat");
@@ -176,13 +190,23 @@ export function DungeonScreen() {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [combatLog]);
 
-  const advance = () => {
+  const advance = (bias: ForkBias = "onward") => {
     const newDepth = enc.depth + 1;
     if (newDepth > MAX_DEPTH) { finishRun("victory"); return; }
     restoreBetweenRooms();
-    const next = rollEncounter(newDepth, playerFaction, player.affixes ?? []);
+    setForkBias(bias);
+    bumpDailyFloor(newDepth);
+    const next = rollEncounter(newDepth, playerFaction, player.affixes ?? [], bias);
     setEnc(next);
-    if (next.kind === "combat") addLog(`A ${next.enemy.name} blocks your path!`);
+    // Boss intro banner: first time the player meets a major boss.
+    if (next.kind === "combat") {
+      const moment = BOSS_MOMENTS[next.enemy.id];
+      if (moment && !seenBossIntros.includes(next.enemy.id)) {
+        setBossIntro({ id: next.enemy.id, intro: moment.intro });
+        markBossSeen(next.enemy.id);
+      }
+      addLog(`A ${next.enemy.name} blocks your path!`);
+    }
     else if (next.kind === "chest") addLog(`You spot ${next.preview.label}.`);
     else addLog("The corridor opens further.");
   };
@@ -216,16 +240,25 @@ export function DungeonScreen() {
       setTimeout(() => finishKill(e), 0);
       return e;
     }
+    // Boss phase transition: ≤50% HP triggers phase 2 once.
+    const moment = BOSS_MOMENTS[e.enemy.id];
+    if (moment && e.bossPhase === 1 && e.enemyHp <= e.enemyMaxHp / 2) {
+      addLog(`★ ${moment.phaseLine}`);
+      e = { ...e, bossPhase: 2 };
+    }
     if (e.stunnedTurns > 0) {
       addLog(`${e.enemy.name} is frozen and cannot act.`);
-      // re-telegraph for next round
-      return { ...e, stunnedTurns: e.stunnedTurns - 1, shieldReduce: 0, nextIntent: pickIntent(e.enemy) };
+      const pool = moment && e.bossPhase === 2 ? [...e.enemy.intents, moment.phaseIntent] : e.enemy.intents;
+      const nextI = pool[Math.floor(Math.random() * pool.length)];
+      return { ...e, stunnedTurns: e.stunnedTurns - 1, shieldReduce: 0, nextIntent: nextI };
     }
     const intent = e.nextIntent;
     const affixes = player.affixes ?? [];
     let mult = intent.mult;
     if (affixes.includes("sapping")) mult *= 1.2;
     if (affixes.includes("bloodlust") && e.enemyHp / e.enemyMaxHp < 0.3) mult *= 1.5;
+    if (moment && e.bossPhase === 2) mult *= moment.phaseDmgMult;
+    if (player.activeOaths?.includes("deep")) mult *= 1.15;
     const baseDmg = (e.enemy.atkBase + e.depth * 0.6) * mult;
     let dmg = rollDamage(baseDmg);
     if (e.shieldReduce > 0) dmg = Math.max(1, Math.floor(dmg * (1 - e.shieldReduce)));
@@ -235,7 +268,14 @@ export function DungeonScreen() {
       setHit(true); setTimeout(() => setHit(false), 350);
     }
     addLog(intent.line.replace("{n}", e.enemy.name).replace("{d}", String(taken)) + (e.shieldReduce > 0 ? " (shielded!)" : ""));
-    return { ...e, shieldReduce: 0, nextIntent: pickIntent(e.enemy) };
+    // Pick next intent — include phase intent in pool if boss is in phase 2.
+    const pool = moment && e.bossPhase === 2 ? [...e.enemy.intents, moment.phaseIntent] : e.enemy.intents;
+    const teleg = pool.filter((i) => i.telegraphable);
+    const normal = pool.filter((i) => !i.telegraphable);
+    const nextI = teleg.length && Math.random() < 0.4
+      ? teleg[Math.floor(Math.random() * teleg.length)]
+      : (normal.length ? normal : pool)[Math.floor(Math.random() * (normal.length || pool.length))];
+    return { ...e, shieldReduce: 0, nextIntent: nextI };
   };
 
   const applyAttack = (e: CombatEnc, ab: Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> }): CombatEnc => {
@@ -412,8 +452,13 @@ export function DungeonScreen() {
   const addToBag = useGame((s) => s.addToBag);
 
   const finishKill = (e: CombatEnc) => {
-    const goldDrop = 4 + e.depth * 3;
-    const xpDrop = 6 + e.depth * 4;
+    // Fork bias: Left favors gold, Right favors XP & material drops.
+    const goldMult = forkBias === "left" ? 1.25 : 1;
+    const xpMult = forkBias === "right" ? 1.3 : 1;
+    const gearChanceBonus = forkBias === "left" ? 0.1 : 0;
+    const matChanceMult = forkBias === "right" ? 1.3 : 1;
+    const goldDrop = Math.round((4 + e.depth * 3) * goldMult);
+    const xpDrop = Math.round((6 + e.depth * 4) * xpMult);
     rewardGold(goldDrop); rewardXp(xpDrop);
     addLog(`${e.enemy.name} falls. +${goldDrop}g +${xpDrop}xp`);
     vibrate([20, 40, 60]);
@@ -422,8 +467,9 @@ export function DungeonScreen() {
     let material: string | undefined;
     let gear: GearItem | undefined;
     if (e.enemy.questItemId && Math.random() < 0.6) { addQuestItem(e.enemy.questItemId); questItem = e.enemy.questItemId; }
-    if (e.enemy.materialDrop && Math.random() < e.enemy.materialDrop.chance) { addMaterial(e.enemy.materialDrop.id); material = e.enemy.materialDrop.id; }
+    if (e.enemy.materialDrop && Math.random() < e.enemy.materialDrop.chance * matChanceMult) { addMaterial(e.enemy.materialDrop.id); material = e.enemy.materialDrop.id; }
     const isFinalBoss = e.depth >= MAX_DEPTH;
+    const isBossEnemy = !!BOSS_MOMENTS[e.enemy.id];
     const ownsLegendary =
       Object.values(player.equipment).some((g) => g?.rarity === "legendary") ||
       player.bag.some((g) => g.rarity === "legendary");
@@ -438,20 +484,21 @@ export function DungeonScreen() {
         : MAJOR_BOSS_FLOORS.has(e.depth) ? "major_boss"
         : MINI_BOSS_FLOORS.has(e.depth) ? "mini_boss"
         : "trash";
-      const gearChance = isFinalBoss ? 1 : 0.35 + e.depth * 0.04;
+      const gearChance = isFinalBoss ? 1 : Math.min(1, 0.35 + e.depth * 0.04 + gearChanceBonus);
       if (Math.random() < gearChance) {
         const rolled = rollGear(e.depth, { source });
         if (addToBag(rolled)) gear = rolled;
         else addLog("Bag full — gear left behind.");
       }
     }
-    // Journal + shards
+    // Journal + shards. Major bosses guarantee their first-kill lore page.
     const loreByEnemy: Record<string, string> = {
       cultist: "lore_seals", wraith: "lore_wraith", ogre: "lore_ogre", dragon: "lore_dragon", skeleton: "lore_brigade",
     };
+    const bossLore = BOSS_MOMENTS[e.enemy.id]?.firstKillLore;
     recordKill(e.enemy.id, {
-      boss: e.enemy.id === "dragon",
-      loreId: Math.random() < 0.4 ? loreByEnemy[e.enemy.id] : undefined,
+      boss: isBossEnemy,
+      loreId: bossLore ?? (Math.random() < 0.4 ? loreByEnemy[e.enemy.id] : undefined),
       itemDropId: gear?.baseId,
     });
     setEnc({ kind: "victory", depth: e.depth, loot: { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material, gear } });
@@ -679,7 +726,9 @@ export function DungeonScreen() {
             {!enc.sprung && (
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button className="pixel-btn !text-[8px]" onClick={() => {
-                  const dmg = Math.max(3, Math.floor(player.maxHp * (enc.trap === "spikes" ? 0.22 : 0.15)));
+                  const trapMult = forkBias === "left" ? 0.5 : forkBias === "right" ? 1.8 : 1;
+                  const oathMult = player.activeOaths?.includes("greedy") ? 1.5 : 1;
+                  const dmg = Math.max(3, Math.floor(player.maxHp * (enc.trap === "spikes" ? 0.22 : 0.15) * trapMult * oathMult));
                   const taken = damage(dmg);
                   addFloater("enemy", taken);
                   setHit(true); setTimeout(() => setHit(false), 350);
@@ -704,11 +753,20 @@ export function DungeonScreen() {
         {enc.kind === "path" && (
           <div className="border-2 border-black bg-card p-3 fade-in-up">
             <p className="pixel text-[9px] text-foreground">The corridor forks.</p>
-            <p className="font-body text-sm text-muted-foreground mt-1">Each step risks worse — and richer.</p>
+            <p className="font-body text-sm text-muted-foreground mt-1">Each path twists the next room — pick your risk.</p>
             <div className="mt-3 grid grid-cols-3 gap-2">
-              <button className="pixel-btn !text-[8px]" onClick={advance}>← Left</button>
-              <button className="pixel-btn !text-[8px]" onClick={advance}>↑ Onward</button>
-              <button className="pixel-btn !text-[8px]" onClick={advance}>Right →</button>
+              <button className="pixel-btn !text-[8px] flex flex-col items-center gap-0.5" onClick={() => advance("left")}>
+                <span>← Left</span>
+                <span className="pixel text-[6px] text-blood">+combat · +gold</span>
+              </button>
+              <button className="pixel-btn !text-[8px] flex flex-col items-center gap-0.5" onClick={() => advance("onward")}>
+                <span>↑ Onward</span>
+                <span className="pixel text-[6px] text-muted-foreground">balanced</span>
+              </button>
+              <button className="pixel-btn !text-[8px] flex flex-col items-center gap-0.5" onClick={() => advance("right")}>
+                <span>Right →</span>
+                <span className="pixel text-[6px] text-ember">+traps · +XP</span>
+              </button>
             </div>
           </div>
         )}
@@ -793,6 +851,19 @@ export function DungeonScreen() {
         body="Tap an ability to use it. You can't retreat mid-fight — keep a Hearthstone Charm if you want a safe escape. Dying drops your loot."
         position="top"
       />
+
+      {bossIntro && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-md border-2 border-gold bg-background p-4 space-y-3">
+            <p className="pixel text-[10px] text-blood">⚑ MAJOR BOSS</p>
+            <p className="font-body text-base italic leading-snug">"{bossIntro.intro}"</p>
+            <button
+              onClick={() => setBossIntro(null)}
+              className="pixel-btn pixel-btn-danger w-full !text-[10px]"
+            >Face it</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

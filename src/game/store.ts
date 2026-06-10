@@ -196,6 +196,7 @@ interface GameState {
   ensureRelicRoll: () => void;
   purchaseRelic: (idx: number) => boolean;
   markBossSeen: (bossId: string) => void;
+  bumpDailyFloor: (floor: number) => void;
 }
 
 const emptyPlayer = (): PlayerState => ({
@@ -1423,6 +1424,18 @@ export const useGame = create<GameState>((set, get) => ({
     const meta = get().meta;
     if (meta.seenBossIntros.includes(bossId)) return;
     const nextMeta: MetaState = { ...meta, seenBossIntros: [...meta.seenBossIntros, bossId] };
+    persistMeta(nextMeta); set({ meta: nextMeta });
+  },
+
+  bumpDailyFloor: (floor) => {
+    const meta = get().meta;
+    const dc = meta.dailyContract;
+    if (!dc || !dc.accepted || dc.claimed) return;
+    const def = DAILY_CONTRACTS.find((c) => c.id === dc.defId);
+    if (!def || def.objective.kind !== "reach_floor") return;
+    if (floor < def.objective.floor) return;
+    if (dc.progress >= 1) return;
+    const nextMeta: MetaState = { ...meta, dailyContract: { ...dc, progress: 1 } };
     persistMeta(nextMeta); set({ meta: nextMeta });
   },
 }));
