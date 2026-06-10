@@ -1039,12 +1039,18 @@ export const useGame = create<GameState>((set, get) => ({
     return true;
   },
 
-  unstashItem: (idx) => {
+  withdrawStash: (idx) => {
     const meta = get().meta;
+    const p = get().player;
+    const item = meta.stash[idx];
+    if (!item) return false;
+    if (bagFreeSlots(p, meta) <= 0) { get().pushLog("Bag full — cannot withdraw."); return false; }
     const nextStash = meta.stash.filter((_, i) => i !== idx);
     const nextMeta: MetaState = { ...meta, stash: nextStash };
     persistMeta(nextMeta);
-    set({ meta: nextMeta });
+    set({ meta: nextMeta, player: { ...p, bag: [...p.bag, item] } });
+    get().pushLog(`Withdrew ${item.name} to bag.`);
+    return true;
   },
 
   spendEcho: (nodeId) => {
