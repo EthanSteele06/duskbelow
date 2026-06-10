@@ -437,7 +437,8 @@ export const useGame = create<GameState>((set, get) => ({
     const meta = get().meta;
     const echo = echoStart(meta);
     const champBonus = p.isChampion ? Math.floor(n * 0.5) : 0;
-    const total = Math.floor((n + champBonus) * echo.xpMult);
+    const oathXp = p.activeOaths.includes("deep") ? 1.2 : 1;
+    const total = Math.floor((n + champBonus) * echo.xpMult * oathXp);
     let xp = p.xp + total;
     let level = p.level;
     let baseMaxHp = p.baseMaxHp;
