@@ -4,13 +4,16 @@ import { StatBar } from "./StatBar";
 
 export function QuestsScreen() {
   const setScreen = useGame((s) => s.setScreen);
+  const openChronicle = useGame((s) => s.openChronicle);
   const quests = useGame((s) => s.quests);
   const accept = useGame((s) => s.acceptQuest);
   const turnIn = useGame((s) => s.turnInQuest);
+  const turnInAll = useGame((s) => s.turnInAllReady);
   const items = useGame((s) => s.player.questItems);
   const mats = useGame((s) => s.player.materials);
   const activeCount = quests.filter((q) => !q.turnedIn).length;
   const atCap = activeCount >= MAX_ACTIVE_QUESTS;
+  const readyCount = quests.filter((q) => q.completed && !q.turnedIn).length;
 
   const isUnlocked = (chainFrom?: string) => {
     if (!chainFrom) return true;
@@ -63,7 +66,12 @@ export function QuestsScreen() {
     <div className="flex min-h-full flex-col p-3 gap-3">
       <StatBar />
       <button onClick={() => setScreen("city")} className="pixel-btn !text-[8px] w-fit">← Back to City</button>
-      <h2 className="pixel text-[12px] text-gold">✦ Quest Board</h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="pixel text-[12px] text-gold">✦ Quest Board</h2>
+        {readyCount > 0 && (
+          <button onClick={turnInAll} className="pixel-btn pixel-btn-gold !text-[8px]">⇪ Turn in all ({readyCount})</button>
+        )}
+      </div>
       <p className="font-body text-sm text-muted-foreground -mt-2">
         Posted requests from the city's desperate. <span className={atCap ? "text-blood" : "text-gold"}>Active {activeCount}/{MAX_ACTIVE_QUESTS}</span>
       </p>
@@ -85,7 +93,14 @@ export function QuestsScreen() {
         }
         return (
           <div key={s.id} className="border-2 border-black bg-card/70 p-2 space-y-2">
-            <p className="pixel text-[9px] text-gold">{s.name}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="pixel text-[9px] text-gold">{s.name}</p>
+              {s.npc && (
+                <button onClick={() => openChronicle(s.id)} className="pixel-btn !text-[8px]">
+                  ☥ Speak with {s.npc.name.split(" ")[0]}
+                </button>
+              )}
+            </div>
             <p className="font-body text-xs italic text-muted-foreground">{s.lore}</p>
             {stages.map((st) => renderQuest(st.id))}
           </div>
