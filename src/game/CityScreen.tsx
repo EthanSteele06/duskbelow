@@ -99,7 +99,7 @@ export function CityScreen() {
             icon="▣"
             onClick={() => setScreen("daily")}
             badge={dcReady ? "✦" : !dc?.accepted && dcDef ? "NEW" : undefined}
-            accent={dcReady}
+            accent={!!dcReady}
           />
         </Section>
 
