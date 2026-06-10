@@ -11,6 +11,7 @@ import {
 import { playMusic, playSfx } from "@/game/audio";
 import { TutorialTip } from "@/game/Tutorial";
 import { SettingsButton } from "@/game/Settings";
+import { GearCompare } from "@/game/GearCompare";
 import chestImg from "@/assets/dungeon-chest.jpg";
 import shrineImg from "@/assets/dungeon-shrine.png";
 import trapSpikesImg from "@/assets/trap-spikes.png";
