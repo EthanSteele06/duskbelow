@@ -1235,7 +1235,14 @@ export const useGame = create<GameState>((set, get) => ({
     }) });
     get().pushLog("Dev: Chronicle progress reset.");
   },
+
+  setOption: (key, value) => {
+    const meta = get().meta;
+    const nextMeta: MetaState = { ...meta, options: { ...meta.options, [key]: value } };
+    persistMeta(nextMeta);
+    set({ meta: nextMeta });
+  },
 }));
 
-export { xpForLevel, bagCap };
+export { xpForLevel, bagCap, bagSlotsUsed, bagFreeSlots };
 export type { Ability };
