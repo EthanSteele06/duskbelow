@@ -1154,6 +1154,19 @@ export const useGame = create<GameState>((set, get) => ({
     set({ player: { ...p, materials: mats } });
     get().pushLog("Dev grant: +10 of every material.");
   },
+
+  turnInAllReady: () => {
+    get().pushLog("Turn-in-all not yet implemented.");
+  },
+  devUnlockDemonHunter: () => {
+    get().pushLog("Dev: DH unlock not yet implemented.");
+  },
+  devGrantFelResidue: () => {
+    get().pushLog("Dev: fel residue grant not yet implemented.");
+  },
+  devResetChronicles: () => {
+    get().pushLog("Dev: chronicles reset not yet implemented.");
+  },
 }));
 
 export { xpForLevel, bagCap };
