@@ -21,7 +21,7 @@ export type Screen =
   | "equipment" | "shop" | "champion"
   | "dungeon"
   | "run_summary" | "echo" | "journal"
-  | "wanderer" | "chronicle";
+  | "wanderer" | "chronicle" | "daily";
 
 export interface QuestState {
   id: string;
