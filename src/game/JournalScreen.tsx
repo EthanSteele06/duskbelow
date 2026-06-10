@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { useGame } from "@/game/store";
 import { LORE_FRAGMENTS } from "@/game/meta";
-import { ENEMIES } from "@/game/data";
+import { ENEMIES, damageRange, type EnemyDef } from "@/game/data";
 
 function tierFor(kills: number) {
   if (kills >= 25) return 3;
