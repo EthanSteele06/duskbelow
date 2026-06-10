@@ -533,6 +533,20 @@ export const useGame = create<GameState>((set, get) => ({
       return;
     }
     const def = QUESTS.find((d) => d.id === id)!;
+    // One chronicle at a time: if this quest is part of a story arc, refuse if
+    // any other story arc has accepted-but-not-finished quests.
+    if (def.storyId) {
+      const blocking = get().quests.find((q) => {
+        if (q.turnedIn) return false;
+        const qd = QUESTS.find((d) => d.id === q.id);
+        return qd?.storyId && qd.storyId !== def.storyId;
+      });
+      if (blocking) {
+        const bd = QUESTS.find((d) => d.id === blocking.id);
+        get().pushLog(`Another chronicle is already underway — finish "${bd?.name ?? "it"}" first.`);
+        return;
+      }
+    }
     // Seed progress from anything the player is already carrying so collecting
     // items before accepting the quest still counts.
     const p = get().player;
