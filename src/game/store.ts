@@ -735,7 +735,20 @@ export const useGame = create<GameState>((set, get) => ({
       return true;
     }
     if (bagFreeSlots(p, meta) <= 0) { get().pushLog("Bag full."); return false; }
-    set({ player: { ...p, bag: [...p.bag, item] } });
+    // Lifetime tracking: legendaries (per-class collection + global counter).
+    let nextMeta = meta;
+    if (item.rarity === "legendary") {
+      const legendaryClasses = p.classId && !meta.collection.legendaryClasses.includes(p.classId)
+        ? [...meta.collection.legendaryClasses, p.classId]
+        : meta.collection.legendaryClasses;
+      nextMeta = {
+        ...meta,
+        lifetime: { ...meta.lifetime, legendariesFound: meta.lifetime.legendariesFound + 1 },
+        collection: { ...meta.collection, legendaryClasses },
+      };
+      persistMeta(nextMeta);
+    }
+    set({ meta: nextMeta, player: { ...p, bag: [...p.bag, item] } });
     return true;
   },
 
