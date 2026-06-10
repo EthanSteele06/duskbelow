@@ -1,5 +1,6 @@
 import { useGame, bagCap, bagSlotsUsed } from "@/game/store";
-import { SLOT_LABEL, SLOT_ICON, RARITY_CLASS, RARITY_LABEL, MATERIALS, MATERIAL_STACK_SIZE, gearScore, gearSellPrice, type GearSlot, type GearItem } from "@/game/data";
+import { SLOT_LABEL, SLOT_ICON, RARITY_CLASS, RARITY_LABEL, MATERIALS, MATERIAL_STACK_SIZE, gearSellPrice, type GearSlot, type GearItem } from "@/game/data";
+import { GearCompare } from "./GearCompare";
 import { StatBar } from "./StatBar";
 
 const SLOTS: GearSlot[] = ["head", "chest", "legs", "weapon", "offhand", "trinket"];
