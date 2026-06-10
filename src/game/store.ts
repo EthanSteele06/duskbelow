@@ -693,7 +693,14 @@ export const useGame = create<GameState>((set, get) => ({
   addToBag: (item) => {
     const p = get().player;
     const meta = get().meta;
-    if (p.bag.length >= bagCap(p, meta)) return false;
+    // Auto-sell common/junk if the option is on — bypasses bag pressure entirely.
+    if (meta.options.autoSellCommon && item.rarity === "common") {
+      const price = gearSellPrice(item);
+      set({ player: { ...p, gold: p.gold + price } });
+      get().pushLog(`Auto-sold ${item.name} for ${price}g.`);
+      return true;
+    }
+    if (bagFreeSlots(p, meta) <= 0) { get().pushLog("Bag full."); return false; }
     set({ player: { ...p, bag: [...p.bag, item] } });
     return true;
   },
