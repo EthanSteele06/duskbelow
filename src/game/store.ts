@@ -722,7 +722,7 @@ export const useGame = create<GameState>((set, get) => ({
     const meta = get().meta;
     const item = p.equipment[slot];
     if (!item) return;
-    if (p.bag.length >= bagCap(p, meta)) { get().pushLog("Bag full."); return; }
+    if (bagFreeSlots(p, meta) <= 0) { get().pushLog("Bag full."); return; }
     const equipment = { ...p.equipment };
     delete equipment[slot];
     set({ player: recompute({ ...p, bag: [...p.bag, item], equipment }) });
