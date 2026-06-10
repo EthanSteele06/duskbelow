@@ -7,8 +7,10 @@ export function EchoTreeScreen() {
   const spend = useGame((s) => s.spendEcho);
   const respec = useGame((s) => s.respecEcho);
 
-  const available = ECHO_TREE.filter((n) => !hasEcho(meta, n.id));
-  const learned = ECHO_TREE.filter((n) => hasEcho(meta, n.id));
+  const faction = useGame((s) => s.player.faction);
+  const visible = ECHO_TREE.filter((n) => !n.requiresFaction || n.requiresFaction === faction);
+  const available = visible.filter((n) => !hasEcho(meta, n.id));
+  const learned = visible.filter((n) => hasEcho(meta, n.id));
 
   return (
     <div className="flex min-h-full flex-col p-3 gap-3">
