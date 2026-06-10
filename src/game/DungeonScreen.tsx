@@ -240,16 +240,25 @@ export function DungeonScreen() {
       setTimeout(() => finishKill(e), 0);
       return e;
     }
+    // Boss phase transition: ≤50% HP triggers phase 2 once.
+    const moment = BOSS_MOMENTS[e.enemy.id];
+    if (moment && e.bossPhase === 1 && e.enemyHp <= e.enemyMaxHp / 2) {
+      addLog(`★ ${moment.phaseLine}`);
+      e = { ...e, bossPhase: 2 };
+    }
     if (e.stunnedTurns > 0) {
       addLog(`${e.enemy.name} is frozen and cannot act.`);
-      // re-telegraph for next round
-      return { ...e, stunnedTurns: e.stunnedTurns - 1, shieldReduce: 0, nextIntent: pickIntent(e.enemy) };
+      const pool = moment && e.bossPhase === 2 ? [...e.enemy.intents, moment.phaseIntent] : e.enemy.intents;
+      const nextI = pool[Math.floor(Math.random() * pool.length)];
+      return { ...e, stunnedTurns: e.stunnedTurns - 1, shieldReduce: 0, nextIntent: nextI };
     }
     const intent = e.nextIntent;
     const affixes = player.affixes ?? [];
     let mult = intent.mult;
     if (affixes.includes("sapping")) mult *= 1.2;
     if (affixes.includes("bloodlust") && e.enemyHp / e.enemyMaxHp < 0.3) mult *= 1.5;
+    if (moment && e.bossPhase === 2) mult *= moment.phaseDmgMult;
+    if (player.activeOaths?.includes("deep")) mult *= 1.15;
     const baseDmg = (e.enemy.atkBase + e.depth * 0.6) * mult;
     let dmg = rollDamage(baseDmg);
     if (e.shieldReduce > 0) dmg = Math.max(1, Math.floor(dmg * (1 - e.shieldReduce)));
@@ -259,7 +268,14 @@ export function DungeonScreen() {
       setHit(true); setTimeout(() => setHit(false), 350);
     }
     addLog(intent.line.replace("{n}", e.enemy.name).replace("{d}", String(taken)) + (e.shieldReduce > 0 ? " (shielded!)" : ""));
-    return { ...e, shieldReduce: 0, nextIntent: pickIntent(e.enemy) };
+    // Pick next intent — include phase intent in pool if boss is in phase 2.
+    const pool = moment && e.bossPhase === 2 ? [...e.enemy.intents, moment.phaseIntent] : e.enemy.intents;
+    const teleg = pool.filter((i) => i.telegraphable);
+    const normal = pool.filter((i) => !i.telegraphable);
+    const nextI = teleg.length && Math.random() < 0.4
+      ? teleg[Math.floor(Math.random() * teleg.length)]
+      : (normal.length ? normal : pool)[Math.floor(Math.random() * (normal.length || pool.length))];
+    return { ...e, shieldReduce: 0, nextIntent: nextI };
   };
 
   const applyAttack = (e: CombatEnc, ab: Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> }): CombatEnc => {
@@ -436,8 +452,13 @@ export function DungeonScreen() {
   const addToBag = useGame((s) => s.addToBag);
 
   const finishKill = (e: CombatEnc) => {
-    const goldDrop = 4 + e.depth * 3;
-    const xpDrop = 6 + e.depth * 4;
+    // Fork bias: Left favors gold, Right favors XP & material drops.
+    const goldMult = forkBias === "left" ? 1.25 : 1;
+    const xpMult = forkBias === "right" ? 1.3 : 1;
+    const gearChanceBonus = forkBias === "left" ? 0.1 : 0;
+    const matChanceMult = forkBias === "right" ? 1.3 : 1;
+    const goldDrop = Math.round((4 + e.depth * 3) * goldMult);
+    const xpDrop = Math.round((6 + e.depth * 4) * xpMult);
     rewardGold(goldDrop); rewardXp(xpDrop);
     addLog(`${e.enemy.name} falls. +${goldDrop}g +${xpDrop}xp`);
     vibrate([20, 40, 60]);
@@ -446,8 +467,9 @@ export function DungeonScreen() {
     let material: string | undefined;
     let gear: GearItem | undefined;
     if (e.enemy.questItemId && Math.random() < 0.6) { addQuestItem(e.enemy.questItemId); questItem = e.enemy.questItemId; }
-    if (e.enemy.materialDrop && Math.random() < e.enemy.materialDrop.chance) { addMaterial(e.enemy.materialDrop.id); material = e.enemy.materialDrop.id; }
+    if (e.enemy.materialDrop && Math.random() < e.enemy.materialDrop.chance * matChanceMult) { addMaterial(e.enemy.materialDrop.id); material = e.enemy.materialDrop.id; }
     const isFinalBoss = e.depth >= MAX_DEPTH;
+    const isBossEnemy = !!BOSS_MOMENTS[e.enemy.id];
     const ownsLegendary =
       Object.values(player.equipment).some((g) => g?.rarity === "legendary") ||
       player.bag.some((g) => g.rarity === "legendary");
@@ -462,20 +484,21 @@ export function DungeonScreen() {
         : MAJOR_BOSS_FLOORS.has(e.depth) ? "major_boss"
         : MINI_BOSS_FLOORS.has(e.depth) ? "mini_boss"
         : "trash";
-      const gearChance = isFinalBoss ? 1 : 0.35 + e.depth * 0.04;
+      const gearChance = isFinalBoss ? 1 : Math.min(1, 0.35 + e.depth * 0.04 + gearChanceBonus);
       if (Math.random() < gearChance) {
         const rolled = rollGear(e.depth, { source });
         if (addToBag(rolled)) gear = rolled;
         else addLog("Bag full — gear left behind.");
       }
     }
-    // Journal + shards
+    // Journal + shards. Major bosses guarantee their first-kill lore page.
     const loreByEnemy: Record<string, string> = {
       cultist: "lore_seals", wraith: "lore_wraith", ogre: "lore_ogre", dragon: "lore_dragon", skeleton: "lore_brigade",
     };
+    const bossLore = BOSS_MOMENTS[e.enemy.id]?.firstKillLore;
     recordKill(e.enemy.id, {
-      boss: e.enemy.id === "dragon",
-      loreId: Math.random() < 0.4 ? loreByEnemy[e.enemy.id] : undefined,
+      boss: isBossEnemy,
+      loreId: bossLore ?? (Math.random() < 0.4 ? loreByEnemy[e.enemy.id] : undefined),
       itemDropId: gear?.baseId,
     });
     setEnc({ kind: "victory", depth: e.depth, loot: { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material, gear } });
