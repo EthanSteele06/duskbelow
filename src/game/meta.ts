@@ -1,4 +1,4 @@
-import type { ClassId, GearItem } from "./data";
+import type { ClassId, FactionId, GearItem } from "./data";
 
 // ── Persistent meta state (survives character wipes) ─────────────────────────
 
