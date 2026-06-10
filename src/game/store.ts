@@ -1171,16 +1171,32 @@ export const useGame = create<GameState>((set, get) => ({
   },
 
   turnInAllReady: () => {
-    get().pushLog("Turn-in-all not yet implemented.");
+    const ready = get().quests.filter((q) => q.completed && !q.turnedIn);
+    if (ready.length === 0) { get().pushLog("No quests ready to turn in."); return; }
+    for (const q of ready) get().turnInQuest(q.id);
   },
+
   devUnlockDemonHunter: () => {
-    get().pushLog("Dev: DH unlock not yet implemented.");
+    const meta = get().meta;
+    if (meta.ownedClasses.includes("demonhunter") || meta.unlockedClasses.includes("demonhunter")) {
+      get().pushLog("Dev: Demon Hunter already unlocked.");
+      return;
+    }
+    get().unlockClass("demonhunter", { devFree: true });
+    get().pushLog("✦ Dev: Demon Hunter unlocked. Return to title to play.");
   },
+
   devGrantFelResidue: () => {
-    get().pushLog("Dev: fel residue grant not yet implemented.");
+    get().addMaterial("fel_residue", 10);
+    get().pushLog("Dev grant: +10 Fel Residue.");
   },
+
   devResetChronicles: () => {
-    get().pushLog("Dev: chronicles reset not yet implemented.");
+    set({ quests: get().quests.filter((q) => {
+      const def = QUESTS.find((d) => d.id === q.id);
+      return !def?.storyId;
+    }) });
+    get().pushLog("Dev: Chronicle progress reset.");
   },
 }));
 
