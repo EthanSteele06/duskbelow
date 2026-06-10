@@ -1,5 +1,6 @@
 import { useGame, bagCap, bagSlotsUsed } from "@/game/store";
-import { SLOT_LABEL, SLOT_ICON, RARITY_CLASS, RARITY_LABEL, MATERIALS, MATERIAL_STACK_SIZE, gearScore, gearSellPrice, type GearSlot, type GearItem } from "@/game/data";
+import { SLOT_LABEL, SLOT_ICON, RARITY_CLASS, RARITY_LABEL, MATERIALS, MATERIAL_STACK_SIZE, gearSellPrice, type GearSlot, type GearItem } from "@/game/data";
+import { GearCompare } from "./GearCompare";
 import { StatBar } from "./StatBar";
 
 const SLOTS: GearSlot[] = ["head", "chest", "legs", "weapon", "offhand", "trinket"];
@@ -91,7 +92,6 @@ export function EquipmentScreen() {
       <div className="space-y-2">
         {player.bag.map((it) => {
           const equipped = player.equipment[it.slot];
-          const delta = equipped ? gearScore(it) - gearScore(equipped) : gearScore(it);
           return (
             <div key={it.id} className={`border-2 border-black bg-card p-2 rarity-frame-${it.rarity}`}>
               <div className="flex items-baseline justify-between gap-2">
@@ -102,9 +102,7 @@ export function EquipmentScreen() {
               {it.legendaryDesc && (
                 <p className="pixel text-[7px] text-rarity-legendary mt-1">✦ {it.legendaryDesc}</p>
               )}
-              <p className={`pixel text-[7px] mt-1 ${delta > 0 ? "text-divine" : delta < 0 ? "text-blood" : "text-muted-foreground"}`}>
-                {delta > 0 ? `▲ +${delta} vs equipped` : delta < 0 ? `▼ ${delta} vs equipped` : "= same score"}
-              </p>
+              <div className="mt-1"><GearCompare item={it} equipped={equipped} /></div>
               <div className="mt-2 grid grid-cols-3 gap-2">
                 <button onClick={() => equip(it.id)} className="pixel-btn pixel-btn-gold !text-[8px]">Equip</button>
                 <button onClick={() => sell(it.id)} className="pixel-btn !text-[8px]">Sell {gearSellPrice(it)}g</button>

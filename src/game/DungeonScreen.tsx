@@ -3,7 +3,7 @@ import { useGame } from "@/game/store";
 import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumber";
 import {
   CLASS_ABILITIES, SPEC_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
-  RARITY_CLASS, RARITY_LABEL, gearScore, rollDamage, damageRange,
+  RARITY_CLASS, RARITY_LABEL, rollDamage, damageRange,
   MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth, rollClassLegendary, AFFIXES,
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
   type StatusEffect, type EnemyIntent, type FactionId,
@@ -11,6 +11,7 @@ import {
 import { playMusic, playSfx } from "@/game/audio";
 import { TutorialTip } from "@/game/Tutorial";
 import { SettingsButton } from "@/game/Settings";
+import { GearCompare } from "@/game/GearCompare";
 import chestImg from "@/assets/dungeon-chest.jpg";
 import shrineImg from "@/assets/dungeon-shrine.png";
 import trapSpikesImg from "@/assets/trap-spikes.png";
@@ -488,7 +489,6 @@ export function DungeonScreen() {
   // Equipped gear delta for inline equip
   const lootGear = enc.kind === "victory" ? enc.loot.gear : undefined;
   const equippedForSlot = lootGear ? player.equipment[lootGear.slot] : undefined;
-  const gearDelta = lootGear ? gearScore(lootGear) - (equippedForSlot ? gearScore(equippedForSlot) : 0) : 0;
 
   return (
     <div className="flex min-h-full flex-col">
@@ -626,9 +626,7 @@ export function DungeonScreen() {
                     ✦ {lootGear.legendaryDesc}
                   </p>
                 )}
-                <p className={`pixel text-[7px] ${gearDelta > 0 ? "text-divine" : gearDelta < 0 ? "text-blood" : "text-muted-foreground"}`}>
-                  {equippedForSlot ? (gearDelta > 0 ? `▲ +${gearDelta} vs equipped` : gearDelta < 0 ? `▼ ${gearDelta} vs equipped` : "= same score") : "▲ slot empty"}
-                </p>
+                <GearCompare item={lootGear} equipped={equippedForSlot} />
                 {equippedFlash === lootGear.id ? (
                   <p className="pixel text-[8px] text-divine text-center border-2 border-divine py-1">✓ EQUIPPED{equippedForSlot ? ` — replaced ${equippedForSlot.name}` : ""}</p>
                 ) : (

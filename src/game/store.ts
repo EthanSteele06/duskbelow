@@ -169,7 +169,7 @@ interface GameState {
   recordKill: (enemyId: string, opts?: { boss?: boolean; shardValue?: number; loreId?: string; itemDropId?: string }) => void;
   useHearthstone: () => boolean;
   stashItem: (itemId: string, fromEquipment?: GearSlot) => boolean;
-  unstashItem: (idx: number) => void;
+  withdrawStash: (idx: number) => boolean;
   spendEcho: (nodeId: string) => boolean;
   respecEcho: () => void;
   wipeCharacter: () => void;
@@ -348,9 +348,19 @@ export const useGame = create<GameState>((set, get) => ({
     const unlocked = meta.unlockedClasses.includes(classId)
       ? meta.unlockedClasses
       : [...meta.unlockedClasses, classId];
+    // Codex tracking — first time playing this class / faction.
+    const collection = {
+      ...meta.collection,
+      classesPlayed: meta.collection.classesPlayed.includes(classId)
+        ? meta.collection.classesPlayed
+        : [...meta.collection.classesPlayed, classId],
+      factionsPlayed: meta.collection.factionsPlayed.includes(faction)
+        ? meta.collection.factionsPlayed
+        : [...meta.collection.factionsPlayed, faction],
+    };
     // Consume heirloom stash: items are moved into the new character below,
     // so clear it from meta so the next wipe doesn't duplicate them.
-    const nextMeta = { ...meta, unlockedClasses: unlocked, stash: [] };
+    const nextMeta = { ...meta, unlockedClasses: unlocked, collection, stash: [] };
     persistMeta(nextMeta);
     // buildFreshPlayer needs the items it's about to consume; pass the
     // pre-clear meta so it sees the stash, but persist the cleared meta.
@@ -393,12 +403,21 @@ export const useGame = create<GameState>((set, get) => ({
   },
   heal: (n) => set((s) => ({ player: { ...s.player, hp: Math.min(s.player.maxHp, s.player.hp + n) } })),
 
-  rewardGold: (n) => set((s) => {
+  rewardGold: (n) => {
+    const s = get();
     const champBonus = s.player.isChampion ? Math.floor(n * 0.5) : 0;
     const echo = echoStart(s.meta);
     const total = Math.floor((n + champBonus) * echo.goldMult * (s.player.buffGoldMult || 1));
-    return { player: { ...s.player, gold: s.player.gold + total, runGold: s.player.runGold + total } };
-  }),
+    const nextMeta: MetaState = {
+      ...s.meta,
+      lifetime: { ...s.meta.lifetime, goldEarned: s.meta.lifetime.goldEarned + total },
+    };
+    persistMeta(nextMeta);
+    set({
+      meta: nextMeta,
+      player: { ...s.player, gold: s.player.gold + total, runGold: s.player.runGold + total },
+    });
+  },
   rewardGems: (n) => set((s) => ({ player: { ...s.player, gems: s.player.gems + n } })),
 
   rewardXp: (n) => {
@@ -716,7 +735,20 @@ export const useGame = create<GameState>((set, get) => ({
       return true;
     }
     if (bagFreeSlots(p, meta) <= 0) { get().pushLog("Bag full."); return false; }
-    set({ player: { ...p, bag: [...p.bag, item] } });
+    // Lifetime tracking: legendaries (per-class collection + global counter).
+    let nextMeta = meta;
+    if (item.rarity === "legendary") {
+      const legendaryClasses = p.classId && !meta.collection.legendaryClasses.includes(p.classId)
+        ? [...meta.collection.legendaryClasses, p.classId]
+        : meta.collection.legendaryClasses;
+      nextMeta = {
+        ...meta,
+        lifetime: { ...meta.lifetime, legendariesFound: meta.lifetime.legendariesFound + 1 },
+        collection: { ...meta.collection, legendaryClasses },
+      };
+      persistMeta(nextMeta);
+    }
+    set({ meta: nextMeta, player: { ...p, bag: [...p.bag, item] } });
     return true;
   },
 
@@ -944,6 +976,9 @@ export const useGame = create<GameState>((set, get) => ({
       ...meta,
       shards: meta.shards + shards,
       journal: { ...j, enemyKills, bossesDowned, itemsFound, loreFound },
+      lifetime: opts?.boss
+        ? { ...meta.lifetime, bossesKilled: meta.lifetime.bossesKilled + 1 }
+        : meta.lifetime,
     };
     // Account XP feed
     nextMeta = grantAccountXp(nextMeta, opts?.boss ? 30 : 2);
@@ -1004,12 +1039,18 @@ export const useGame = create<GameState>((set, get) => ({
     return true;
   },
 
-  unstashItem: (idx) => {
+  withdrawStash: (idx) => {
     const meta = get().meta;
+    const p = get().player;
+    const item = meta.stash[idx];
+    if (!item) return false;
+    if (bagFreeSlots(p, meta) <= 0) { get().pushLog("Bag full — cannot withdraw."); return false; }
     const nextStash = meta.stash.filter((_, i) => i !== idx);
     const nextMeta: MetaState = { ...meta, stash: nextStash };
     persistMeta(nextMeta);
-    set({ meta: nextMeta });
+    set({ meta: nextMeta, player: { ...p, bag: [...p.bag, item] } });
+    get().pushLog(`Withdrew ${item.name} to bag.`);
+    return true;
   },
 
   spendEcho: (nodeId) => {
@@ -1080,11 +1121,25 @@ export const useGame = create<GameState>((set, get) => ({
     const bestRun = !j.bestRun || p.dungeonDepth > j.bestRun.floors
       ? { floors: p.dungeonDepth, kills: p.runKills, gold: p.runGold, date: Date.now() }
       : j.bestRun;
+    // Lifetime totals (separate from per-run journal stats — survive across characters).
+    const lt = meta.lifetime;
+    const lifetime = {
+      ...lt,
+      runs: lt.runs + 1,
+      deepest: Math.max(lt.deepest, p.dungeonDepth),
+      deepestCursed: p.dungeonMode === "cursed" ? Math.max(lt.deepestCursed, p.dungeonDepth) : lt.deepestCursed,
+    };
+    // Codex: track which classes have cleared a full run (any mode).
+    const classesCleared = outcome === "victory" && p.classId && !meta.collection.classesCleared.includes(p.classId)
+      ? [...meta.collection.classesCleared, p.classId]
+      : meta.collection.classesCleared;
     let nextMeta: MetaState = {
       ...meta,
       hasCompletedFirstRun: true,
       hasClearedNormal: meta.hasClearedNormal || (outcome === "victory" && p.dungeonMode === "normal"),
       journal: { ...j, deepestFloor: newDeepest, bestRun, runsCompleted: j.runsCompleted + 1 },
+      lifetime,
+      collection: { ...meta.collection, classesCleared },
     };
     // Victory bonus shards + account XP
     if (outcome === "victory") {

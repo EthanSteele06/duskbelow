@@ -70,8 +70,7 @@ export function CityScreen() {
 
         <Section title="▣ Meta">
           <ActionTile title="Echo Tree" desc={`✦ ${meta.shards} shards`} icon="✦" onClick={() => setScreen("echo")} />
-          <ActionTile title="Journal" desc={`Wanderer Lv ${meta.account.level}${upNext ? ` · ${upNext.label}` : " · MAX"}`} icon="▣" onClick={() => setScreen("journal")} />
-          <ActionTile title="The Wanderer" desc={`Stash · Codex · Unlocks`} icon="☥" onClick={() => setScreen("wanderer")} />
+          <ActionTile title="The Wanderer" desc={`Lv ${meta.account.level}${upNext ? ` · ${upNext.label}` : " · MAX"}`} icon="☥" onClick={() => setScreen("wanderer")} />
           {firstRunDone ? (
             <ActionTile title="Cobalt Vault" desc="Cosmetics & heroes." icon="◆" onClick={() => setScreen("shop")} />
           ) : (
