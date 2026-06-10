@@ -154,6 +154,8 @@ export function DungeonScreen() {
   const [equippedFlash, setEquippedFlash] = useState<string | null>(null);
   const [floaters, setFloaters] = useState<FloatingNum[]>([]);
   const [attackFx, setAttackFx] = useState<{ kind: "melee" | "spell"; key: number; tint?: string } | null>(null);
+  const [forkBias, setForkBias] = useState<ForkBias>("onward");
+  const [bossIntro, setBossIntro] = useState<{ id: string; intro: string } | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   const classColor = player.classId ? CLASSES.find((c) => c.id === player.classId)?.color : undefined;
