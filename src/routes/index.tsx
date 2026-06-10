@@ -17,6 +17,7 @@ import { RunSummaryScreen } from "@/game/RunSummaryScreen";
 import { EchoTreeScreen } from "@/game/EchoTreeScreen";
 import { JournalScreen } from "@/game/JournalScreen";
 import { ChronicleScreen } from "@/game/ChronicleScreen";
+import { WandererScreen } from "@/game/WandererScreen";
 
 export const Route = createFileRoute("/")({
   head: () => ({
