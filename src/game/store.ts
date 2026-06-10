@@ -470,29 +470,44 @@ export const useGame = create<GameState>((set, get) => ({
       get().pushLog(`Quest log full (${MAX_ACTIVE_QUESTS}/${MAX_ACTIVE_QUESTS}). Turn one in first.`);
       return;
     }
-    set((s) => ({ quests: [...s.quests, { id, progress: 0, completed: false, turnedIn: false }] }));
     const def = QUESTS.find((d) => d.id === id)!;
+    // Seed progress from anything the player is already carrying so collecting
+    // items before accepting the quest still counts.
+    const p = get().player;
+    const carried = (p.questItems[def.target.itemId] ?? 0) + (p.materials[def.target.itemId] ?? 0);
+    const progress = Math.min(def.target.count, carried);
+    const completed = progress >= def.target.count;
+    set((s) => ({ quests: [...s.quests, { id, progress, completed, turnedIn: false }] }));
     get().pushLog(`Quest accepted: ${def.name}`);
+    if (completed) get().pushLog(`✓ Quest ready to turn in: ${def.name}`);
   },
 
   turnInQuest: (id) => {
     const q = get().quests.find((x) => x.id === id);
     if (!q || !q.completed || q.turnedIn) return;
     const def = QUESTS.find((d) => d.id === id)!;
-    get().rewardGold(def.rewardGold);
-    get().rewardXp(def.rewardXp);
     const p = get().player;
+    const targetId = def.target.itemId;
+    const need = def.target.count;
+    const haveQuest = p.questItems[targetId] ?? 0;
+    const haveMat = p.materials[targetId] ?? 0;
+    if (haveQuest + haveMat < need) {
+      get().pushLog(`You no longer have enough ${def.target.label}.`);
+      return;
+    }
     const items = { ...p.questItems };
     const mats = { ...p.materials };
-    const targetId = def.target.itemId;
-    if ((items[targetId] ?? 0) >= def.target.count) items[targetId] = Math.max(0, items[targetId] - def.target.count);
-    else if ((mats[targetId] ?? 0) >= def.target.count) mats[targetId] = Math.max(0, mats[targetId] - def.target.count);
+    let remain = need;
+    const fromQuest = Math.min(haveQuest, remain);
+    if (fromQuest > 0) { items[targetId] = haveQuest - fromQuest; remain -= fromQuest; }
+    if (remain > 0) { mats[targetId] = haveMat - remain; }
     set({
-      player: { ...get().player, questItems: items, materials: mats },
+      player: { ...p, questItems: items, materials: mats },
       quests: get().quests.map((x) => x.id === id ? { ...x, turnedIn: true } : x),
     });
+    get().rewardGold(def.rewardGold);
+    get().rewardXp(def.rewardXp);
     get().pushLog(`Turned in ${def.name}. +${def.rewardGold}g +${def.rewardXp}xp`);
-    // Class unlock on story completion (e.g. Demon Hunter).
     if (def.unlocksClass) {
       const meta = get().meta;
       if (!meta.ownedClasses.includes(def.unlocksClass) && !meta.unlockedClasses.includes(def.unlocksClass)) {
