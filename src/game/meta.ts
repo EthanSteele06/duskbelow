@@ -1,5 +1,30 @@
 import type { ClassId, FactionId, GearItem } from "./data";
 
+// ── Daily Contract + Rotating Relics ─────────────────────────────────────────
+
+export interface DailyContractState {
+  /** Contract definition id (from DAILY_CONTRACTS in data.ts) */
+  defId: string;
+  /** ms timestamp the day's roll was generated */
+  rolledAt: number;
+  /** has the player accepted the contract this cycle */
+  accepted: boolean;
+  /** progress counter, contract-specific semantics */
+  progress: number;
+  /** has the reward been claimed (locks the contract until rotation) */
+  claimed: boolean;
+}
+
+export interface RelicVendorState {
+  rolledAt: number;
+  /** seed used so the listings are deterministic for the cycle */
+  seed: number;
+  /** ids of listings the player has already purchased this cycle */
+  sold: string[];
+}
+
+export const DAILY_ROTATION_MS = 24 * 60 * 60 * 1000;
+
 // ── Persistent meta state (survives character wipes) ─────────────────────────
 
 export interface AccountState {
