@@ -455,13 +455,27 @@ export const useGame = create<GameState>((set, get) => ({
 
   addMaterial: (id, count = 1) => {
     const p = get().player;
-    const mats = { ...p.materials, [id]: (p.materials[id] ?? 0) + count };
+    const meta = get().meta;
+    const cur = p.materials[id] ?? 0;
+    const slotsBefore = Math.ceil(cur / MATERIAL_STACK_SIZE);
+    // Cap by free bag space — only new SLOTS cost capacity, not new units within a stack.
+    const free = bagFreeSlots(p, meta);
+    let take = count;
+    // Maximum we can add until the next slot tips over what's free.
+    const maxByFree = (slotsBefore + free) * MATERIAL_STACK_SIZE - cur;
+    if (take > maxByFree) {
+      if (maxByFree <= 0) { get().pushLog(`Bag full — could not pick up ${MATERIALS[id]?.name ?? id}.`); return; }
+      get().pushLog(`Bag full — only picked up ${maxByFree} of ${count}× ${MATERIALS[id]?.name ?? id}.`);
+      take = maxByFree;
+    }
+    const nextCount = cur + take;
+    const mats = { ...p.materials, [id]: nextCount };
     set({ player: { ...p, materials: mats } });
     const quests = get().quests.map((q) => {
       if (q.turnedIn || q.completed) return q;
       const def = QUESTS.find((d) => d.id === q.id)!;
       if (def.target.itemId !== id) return q;
-      const progress = Math.min(def.target.count, q.progress + count);
+      const progress = Math.min(def.target.count, q.progress + take);
       const completed = progress >= def.target.count;
       if (completed && !q.completed) get().pushLog(`✓ Quest ready to turn in: ${def.name}`);
       return { ...q, progress, completed };
