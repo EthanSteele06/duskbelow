@@ -348,9 +348,19 @@ export const useGame = create<GameState>((set, get) => ({
     const unlocked = meta.unlockedClasses.includes(classId)
       ? meta.unlockedClasses
       : [...meta.unlockedClasses, classId];
+    // Codex tracking — first time playing this class / faction.
+    const collection = {
+      ...meta.collection,
+      classesPlayed: meta.collection.classesPlayed.includes(classId)
+        ? meta.collection.classesPlayed
+        : [...meta.collection.classesPlayed, classId],
+      factionsPlayed: meta.collection.factionsPlayed.includes(faction)
+        ? meta.collection.factionsPlayed
+        : [...meta.collection.factionsPlayed, faction],
+    };
     // Consume heirloom stash: items are moved into the new character below,
     // so clear it from meta so the next wipe doesn't duplicate them.
-    const nextMeta = { ...meta, unlockedClasses: unlocked, stash: [] };
+    const nextMeta = { ...meta, unlockedClasses: unlocked, collection, stash: [] };
     persistMeta(nextMeta);
     // buildFreshPlayer needs the items it's about to consume; pass the
     // pre-clear meta so it sees the stash, but persist the cleared meta.
