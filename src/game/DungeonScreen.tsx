@@ -178,6 +178,9 @@ export function DungeonScreen() {
   const finishRun = useGame((s) => s.finishRun);
   const recordKill = useGame((s) => s.recordKill);
   const useHearth = useGame((s) => s.useHearthstone);
+  const markBossSeen = useGame((s) => s.markBossSeen);
+  const bumpDailyFloor = useGame((s) => s.bumpDailyFloor);
+  const seenBossIntros = useGame((s) => s.meta.seenBossIntros);
 
   useEffect(() => {
     if (player.hp <= 0) finishRun("defeat");
@@ -187,13 +190,23 @@ export function DungeonScreen() {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [combatLog]);
 
-  const advance = () => {
+  const advance = (bias: ForkBias = "onward") => {
     const newDepth = enc.depth + 1;
     if (newDepth > MAX_DEPTH) { finishRun("victory"); return; }
     restoreBetweenRooms();
-    const next = rollEncounter(newDepth, playerFaction, player.affixes ?? []);
+    setForkBias(bias);
+    bumpDailyFloor(newDepth);
+    const next = rollEncounter(newDepth, playerFaction, player.affixes ?? [], bias);
     setEnc(next);
-    if (next.kind === "combat") addLog(`A ${next.enemy.name} blocks your path!`);
+    // Boss intro banner: first time the player meets a major boss.
+    if (next.kind === "combat") {
+      const moment = BOSS_MOMENTS[next.enemy.id];
+      if (moment && !seenBossIntros.includes(next.enemy.id)) {
+        setBossIntro({ id: next.enemy.id, intro: moment.intro });
+        markBossSeen(next.enemy.id);
+      }
+      addLog(`A ${next.enemy.name} blocks your path!`);
+    }
     else if (next.kind === "chest") addLog(`You spot ${next.preview.label}.`);
     else addLog("The corridor opens further.");
   };
