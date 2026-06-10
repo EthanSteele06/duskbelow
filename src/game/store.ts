@@ -403,12 +403,21 @@ export const useGame = create<GameState>((set, get) => ({
   },
   heal: (n) => set((s) => ({ player: { ...s.player, hp: Math.min(s.player.maxHp, s.player.hp + n) } })),
 
-  rewardGold: (n) => set((s) => {
+  rewardGold: (n) => {
+    const s = get();
     const champBonus = s.player.isChampion ? Math.floor(n * 0.5) : 0;
     const echo = echoStart(s.meta);
     const total = Math.floor((n + champBonus) * echo.goldMult * (s.player.buffGoldMult || 1));
-    return { player: { ...s.player, gold: s.player.gold + total, runGold: s.player.runGold + total } };
-  }),
+    const nextMeta: MetaState = {
+      ...s.meta,
+      lifetime: { ...s.meta.lifetime, goldEarned: s.meta.lifetime.goldEarned + total },
+    };
+    persistMeta(nextMeta);
+    set({
+      meta: nextMeta,
+      player: { ...s.player, gold: s.player.gold + total, runGold: s.player.runGold + total },
+    });
+  },
   rewardGems: (n) => set((s) => ({ player: { ...s.player, gems: s.player.gems + n } })),
 
   rewardXp: (n) => {
