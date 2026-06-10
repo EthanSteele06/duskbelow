@@ -24,6 +24,8 @@ export function EquipmentScreen() {
   const discard = useGame((s) => s.discardBagItem);
   const meta = useGame((s) => s.meta);
   const cap = bagCap(player, meta);
+  const used = bagSlotsUsed(player);
+  const matEntries = Object.entries(player.materials).filter(([, n]) => n > 0);
 
   return (
     <div className="flex min-h-full flex-col p-3 gap-3">
