@@ -321,8 +321,10 @@ export const useGame = create<GameState>((set, get) => ({
   quests: [],
   meta: emptyMeta(),
   lastRun: null,
+  chronicleStoryId: null,
 
   setScreen: (screen) => set({ screen }),
+  openChronicle: (storyId) => set({ chronicleStoryId: storyId, screen: "chronicle" }),
 
   startGame: (faction, classId, name) => {
     const meta = get().meta;
