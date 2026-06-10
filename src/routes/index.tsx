@@ -58,6 +58,7 @@ function Game() {
       {screen === "echo" && <EchoTreeScreen />}
       {screen === "journal" && <JournalScreen />}
       {screen === "chronicle" && <ChronicleScreen />}
+      {screen === "wanderer" && <WandererScreen />}
     </main>
   );
 }
