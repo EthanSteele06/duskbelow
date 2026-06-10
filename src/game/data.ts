@@ -42,6 +42,7 @@ import barracksImg from "@/assets/dungeon-barracks.jpg";
 import sanctumImg from "@/assets/dungeon-sanctum.jpg";
 import vaultImg from "@/assets/dungeon-vault.jpg";
 import throneImg from "@/assets/dungeon-throne.jpg";
+import npcAltruisImg from "@/assets/npc-altruis.jpg";
 
 export type ClassId = "warrior" | "rogue" | "mage" | "priest" | "druid" | "deathknight" | "demonhunter";
 export type FactionId = "allies" | "brigade";
