@@ -2,7 +2,8 @@ import { create } from "zustand";
 import type { ClassId, FactionId, Ability, ProfessionId, GearItem, GearSlot, TalentNode, BuffEffect, DungeonMode, AffixId } from "./data";
 import {
   CLASSES, FACTIONS, VENDOR_ITEMS, QUESTS, TRAINERS, RECIPES, MATERIALS, SPECS, TALENT_TREES, COSMETICS,
-  BAG_SIZE_BASE, BAG_SIZE_CHAMPION, RESPEC_GOLD_COST, MAX_ACTIVE_QUESTS, gearSellPrice, profXpForLevel,
+  BAG_SIZE_BASE, BAG_SIZE_CHAMPION, RESPEC_GOLD_COST, MAX_ACTIVE_QUESTS, MATERIAL_STACK_SIZE,
+  gearSellPrice, profXpForLevel,
   IDLE_YIELDS, IDLE_SECONDS_PER_UNIT, IDLE_MAX_SECONDS, rollAffixes, rollGear, rollClassLegendary,
 } from "./data";
 import {
