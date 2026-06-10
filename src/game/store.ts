@@ -418,7 +418,8 @@ export const useGame = create<GameState>((set, get) => ({
     const s = get();
     const champBonus = s.player.isChampion ? Math.floor(n * 0.5) : 0;
     const echo = echoStart(s.meta);
-    const total = Math.floor((n + champBonus) * echo.goldMult * (s.player.buffGoldMult || 1));
+    const oathMult = s.player.activeOaths.includes("greedy") ? 1.3 : 1;
+    const total = Math.floor((n + champBonus) * echo.goldMult * (s.player.buffGoldMult || 1) * oathMult);
     const nextMeta: MetaState = {
       ...s.meta,
       lifetime: { ...s.meta.lifetime, goldEarned: s.meta.lifetime.goldEarned + total },
