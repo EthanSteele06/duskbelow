@@ -27,6 +27,9 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   const devGrantRandomEpic = useGame((s) => s.devGrantRandomEpic);
   const devGrantGold = useGame((s) => s.devGrantGold);
   const devGrantAllMaterials = useGame((s) => s.devGrantAllMaterials);
+  const devUnlockDemonHunter = useGame((s) => s.devUnlockDemonHunter);
+  const devGrantFelResidue = useGame((s) => s.devGrantFelResidue);
+  const devResetChronicles = useGame((s) => s.devResetChronicles);
   const [devOpen, setDevOpen] = useState(false);
 
   useEffect(() => subscribeAudioSettings(setAudio), []);
@@ -137,6 +140,15 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
               </button>
               <button onClick={() => devGrantAllMaterials()} className="pixel-btn w-full !text-[9px]">
                 + 10 of Every Material
+              </button>
+              <button onClick={() => devGrantFelResidue()} className="pixel-btn w-full !text-[9px]">
+                + 10 Fel Residue (DH chain)
+              </button>
+              <button onClick={() => devUnlockDemonHunter()} className="pixel-btn w-full !text-[9px]">
+                ✦ Unlock Demon Hunter
+              </button>
+              <button onClick={() => devResetChronicles()} className="pixel-btn w-full !text-[9px]">
+                ↻ Reset Chronicle Progress
               </button>
             </div>
           )}
