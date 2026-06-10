@@ -185,6 +185,7 @@ interface GameState {
   devUnlockDemonHunter: () => void;
   devGrantFelResidue: () => void;
   devResetChronicles: () => void;
+  setOption: <K extends keyof MetaOptions>(key: K, value: MetaOptions[K]) => void;
 }
 
 const emptyPlayer = (): PlayerState => ({
