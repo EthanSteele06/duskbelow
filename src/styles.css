@@ -239,4 +239,56 @@
       0 0 10px var(--weapon-glow, transparent),
       inset 0 0 8px color-mix(in oklab, var(--weapon-glow, transparent) 50%, transparent);
   }
+
+  /* ── Descent loading overlay ───────────────────────────────────── */
+  .descent-fade-in { animation: descentFadeIn 0.55s ease-out both; }
+  @keyframes descentFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .descent-line-swap { animation: descentLineSwap 0.45s ease-out both; }
+  @keyframes descentLineSwap {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Combat turn telegraph ─────────────────────────────────────── */
+  .fx-enemy-windup {
+    animation: enemyWindup 0.85s ease-in-out infinite;
+    filter: drop-shadow(0 0 12px var(--color-blood));
+  }
+  @keyframes enemyWindup {
+    0%, 100% { transform: scale(1) translateX(0); }
+    45% { transform: scale(1.04) translateX(-4px); }
+    55% { transform: scale(1.06) translateX(-6px); }
+  }
+  .combat-telegraph-active {
+    animation: telegraphPulse 0.55s ease-in-out infinite;
+    box-shadow: 0 0 0 3px var(--color-blood), 0 0 18px var(--color-blood);
+  }
+  .combat-telegraph-defensive {
+    animation: telegraphPulse 0.55s ease-in-out infinite;
+    box-shadow: 0 0 0 3px var(--color-allies), 0 0 14px var(--color-allies);
+  }
+  .combat-telegraph-heal {
+    animation: telegraphPulse 0.55s ease-in-out infinite;
+    box-shadow: 0 0 0 3px var(--color-divine), 0 0 14px var(--color-divine);
+  }
+  @keyframes telegraphPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.03); opacity: 0.92; }
+  }
+  .fx-arena-flash {
+    animation: arenaFlash 0.35s ease-out;
+  }
+  @keyframes arenaFlash {
+    0% { background-color: rgba(255, 60, 60, 0.22); }
+    100% { background-color: transparent; }
+  }
+  .turn-busy-overlay {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, transparent 60%, rgba(0,0,0,0.15));
+  }
 }

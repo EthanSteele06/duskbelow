@@ -16,12 +16,16 @@ import { playMusic, playSfx } from "@/game/audio";
 import { TutorialTip } from "@/game/Tutorial";
 import { SettingsButton } from "@/game/Settings";
 import { GearCompare } from "@/game/GearCompare";
+import { DungeonDescentOverlay } from "@/game/DungeonDescentOverlay";
 import chestImg from "@/assets/dungeon-chest.jpg";
 import shrineImg from "@/assets/dungeon-shrine.png";
 import trapSpikesImg from "@/assets/trap-spikes.png";
 import trapGasImg from "@/assets/trap-gas.png";
 
 const vibrate = (ms: number | number[]) => { try { (navigator as Navigator & { vibrate?: (p: number | number[]) => boolean }).vibrate?.(ms); } catch { /* noop */ } };
+
+type TurnPhase = "idle" | "telegraph" | "resolving";
+const TURN_TELEGRAPH_MS = 900;
 
 interface Loot {
   enemy: EnemyDef;
@@ -205,7 +209,18 @@ export function DungeonScreen() {
   const [attackFx, setAttackFx] = useState<{ kind: "melee" | "spell"; key: number; tint?: string } | null>(null);
   const [forkBias, setForkBias] = useState<ForkBias>("onward");
   const [bossIntro, setBossIntro] = useState<{ id: string; intro: string } | null>(null);
+  const [showDescent, setShowDescent] = useState(true);
+  const [turnPhase, setTurnPhase] = useState<TurnPhase>("idle");
+  const [arenaFlash, setArenaFlash] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+  const turnTimersRef = useRef<number[]>([]);
+
+  const clearTurnTimers = () => {
+    turnTimersRef.current.forEach((id) => clearTimeout(id));
+    turnTimersRef.current = [];
+  };
+
+  useEffect(() => () => clearTurnTimers(), []);
 
   const classColor = player.classId ? CLASSES.find((c) => c.id === player.classId)?.color : undefined;
 
@@ -290,6 +305,14 @@ export function DungeonScreen() {
       case "heal": return "HEALING";
       default: return null;
     }
+  };
+
+  const telegraphBannerClass = (intent: EnemyIntent, phase: TurnPhase) => {
+    if (phase !== "telegraph") return "";
+    const kind = intent.kind ?? "attack";
+    if (kind === "guard" || kind === "parry") return "combat-telegraph-defensive";
+    if (kind === "heal") return "combat-telegraph-heal";
+    return "combat-telegraph-active";
   };
 
   // Apply Renew (player HoT) — called at end of every player action turn
@@ -377,6 +400,8 @@ export function DungeonScreen() {
     if (e.shieldReduce > 0) dmg = Math.max(1, Math.floor(dmg * (1 - e.shieldReduce)));
     const taken = damage(dmg);
     if (taken > 0) {
+      playSfx("enemy-hit");
+      vibrate(18);
       addFloater("enemy", taken);
       setHit(true); setTimeout(() => setHit(false), 350);
     }
@@ -488,23 +513,49 @@ export function DungeonScreen() {
     };
   };
 
-  const endPlayerTurn = (e: CombatEnc, usedAbilityId?: string, usedCooldown = 0) => {
+  const beginEnemyPhase = (e: CombatEnc, usedAbilityId?: string, usedCooldown = 0) => {
+    clearTurnTimers();
     advanceAbilityCooldowns(usedAbilityId, usedCooldown);
-    let stepped = tickPlayerEffects(e);
-    setEnc(enemyTurn(stepped));
+    const stepped = tickPlayerEffects(e);
+    setEnc(stepped);
+    setArmedAbility(null);
+
+    if (stepped.enemyHp <= 0) {
+      finishKill(stepped);
+      return;
+    }
+
+    const intent = stepped.nextIntent;
+    const kind = intent.kind ?? "attack";
+    setTurnPhase("telegraph");
+    if (intent.telegraphable || kind === "attack") {
+      playSfx("ui-tap");
+      vibrate(kind === "attack" ? 14 : 8);
+    }
+
+    const resolveId = window.setTimeout(() => {
+      setTurnPhase("resolving");
+      if (kind === "attack") {
+        setArenaFlash(true);
+        const flashId = window.setTimeout(() => setArenaFlash(false), 350);
+        turnTimersRef.current.push(flashId);
+      }
+      const after = enemyTurn(stepped);
+      setEnc(after);
+      const idleId = window.setTimeout(() => setTurnPhase("idle"), kind === "attack" ? 420 : 280);
+      turnTimersRef.current.push(idleId);
+    }, TURN_TELEGRAPH_MS);
+    turnTimersRef.current.push(resolveId);
   };
 
   const passTurn = () => {
-    if (enc.kind !== "combat") return;
-    setArmedAbility(null);
+    if (enc.kind !== "combat" || turnPhase !== "idle") return;
     addLog(`${player.name} holds, reading the foe's rhythm.`);
-    advanceAbilityCooldowns();
-    let stepped = tickPlayerEffects(enc);
-    setEnc(enemyTurn(stepped));
+    beginEnemyPhase(enc);
   };
 
   const useAbility = (ab: Ability) => {
-    if (enc.kind !== "combat") return;
+    if (enc.kind !== "combat" || turnPhase !== "idle") return;
     if ((player.abilityCooldowns?.[ab.id] ?? 0) > 0) return;
     // Tap-to-confirm on mobile/touch: first tap arms; second confirms.
     if (armedAbility !== ab.id) {
@@ -521,7 +572,7 @@ export function DungeonScreen() {
         playSfx("hit");
         const after = applyAttack(e, ab as Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> });
         if (after.enemyHp <= 0) { finishKill(after); return; }
-        endPlayerTurn(after, ab.id, ab.cooldown);
+        beginEnemyPhase(after, ab.id, ab.cooldown);
         return;
       }
       case "heal": {
@@ -529,14 +580,14 @@ export function DungeonScreen() {
         heal(amt);
         addFloater("heal", amt);
         addLog(`${flavor} — restored ${amt} HP.`);
-        endPlayerTurn(e, ab.id, ab.cooldown);
+        beginEnemyPhase(e, ab.id, ab.cooldown);
         return;
       }
       case "hot": {
         const power = ab.effect.healPerTurn > 0 ? ab.effect.healPerTurn : Math.max(2, Math.floor(player.mag * 0.8));
         addLog(`${flavor}.`);
         const fresh = e.playerEffects.filter((x) => x.kind !== "renew").concat({ kind: "renew", turns: ab.effect.turns, power });
-        endPlayerTurn({ ...e, playerEffects: fresh }, ab.id, ab.cooldown);
+        beginEnemyPhase({ ...e, playerEffects: fresh }, ab.id, ab.cooldown);
         return;
       }
       case "stun": {
@@ -556,13 +607,13 @@ export function DungeonScreen() {
           heal(healed); addFloater("heal", healed);
           addLog(`${player.name} steels themselves — restored ${healed} HP.`);
         }
-        endPlayerTurn({ ...e, shieldReduce: ab.effect.reduce }, ab.id, ab.cooldown);
+        beginEnemyPhase({ ...e, shieldReduce: ab.effect.reduce }, ab.id, ab.cooldown);
         return;
       }
       case "buff_next": {
         armNextAttack(ab.effect.mult);
         addLog(`${flavor}. Next attack will hit for ×${ab.effect.mult}.`);
-        endPlayerTurn(e, ab.id, ab.cooldown);
+        beginEnemyPhase(e, ab.id, ab.cooldown);
         return;
       }
       case "flee": {
@@ -595,6 +646,8 @@ export function DungeonScreen() {
   };
 
   const finishKill = (e: CombatEnc) => {
+    clearTurnTimers();
+    setTurnPhase("idle");
     // Fork bias: Left favors gold, Right favors XP & material drops.
     const goldMult = forkBias === "left" ? 1.25 : 1;
     const xpMult = forkBias === "right" ? 1.3 : 1;
@@ -688,12 +741,15 @@ export function DungeonScreen() {
     <div className="flex min-h-full flex-col">
       <div className={`relative h-64 overflow-hidden border-b-2 border-black ${hit ? "shake" : ""}`}>
         <img src={dungeonBgForDepth(enc.depth)} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        {arenaFlash && enc.kind === "combat" && (
+          <div className="fx-arena-flash absolute inset-0 z-[5] pointer-events-none" />
+        )}
         {showEnemyOverlay && enemyOverlay && (
           <img
             key={(enc.kind === "combat" ? enc.enemy.id : "v_" + enc.loot.enemy.id) + enc.depth}
             src={enemyOverlay}
             alt=""
-            className={`absolute inset-0 m-auto h-[88%] w-auto max-w-[88%] object-contain fade-in-up drop-shadow-[0_8px_0_rgba(0,0,0,0.7)] ${enc.kind === "victory" ? "grayscale opacity-60" : ""} ${hit && enc.kind === "combat" ? "fx-recoil" : ""}`}
+            className={`absolute inset-0 m-auto h-[88%] w-auto max-w-[88%] object-contain fade-in-up drop-shadow-[0_8px_0_rgba(0,0,0,0.7)] ${enc.kind === "victory" ? "grayscale opacity-60" : ""} ${hit && enc.kind === "combat" ? "fx-recoil" : ""} ${enc.kind === "combat" && turnPhase === "telegraph" ? "fx-enemy-windup" : ""}`}
           />
         )}
         {showChestOverlay && (
@@ -729,19 +785,28 @@ export function DungeonScreen() {
         {enc.kind === "combat" && (
           <div className="absolute left-2 right-2 bottom-2 flex justify-center">
             <div className={`pixel text-[10px] font-bold px-3 py-1.5 border-2 border-black text-shadow-pixel ${
-              enc.nextIntent.telegraphable
+              turnPhase === "telegraph"
                 ? (enc.nextIntent.kind === "guard" || enc.nextIntent.kind === "parry")
-                  ? "bg-allies text-white animate-pulse"
+                  ? "bg-allies text-white"
                   : enc.nextIntent.kind === "heal"
-                    ? "bg-divine text-black animate-pulse"
-                    : "bg-blood text-white animate-pulse"
-                : "bg-background/95 text-gold"
-            }`}>
-              {enc.nextIntent.telegraphable ? "⚠ INCOMING — " : "» "}
+                    ? "bg-divine text-black"
+                    : "bg-blood text-white"
+                : enc.nextIntent.telegraphable
+                  ? (enc.nextIntent.kind === "guard" || enc.nextIntent.kind === "parry")
+                    ? "bg-allies text-white animate-pulse"
+                    : enc.nextIntent.kind === "heal"
+                      ? "bg-divine text-black animate-pulse"
+                      : "bg-blood text-white animate-pulse"
+                  : "bg-background/95 text-gold"
+            } ${telegraphBannerClass(enc.nextIntent, turnPhase)}`}>
+              {turnPhase === "telegraph" ? "▶ NOW — " : enc.nextIntent.telegraphable ? "⚠ INCOMING — " : "» "}
               {intentKindLabel(enc.nextIntent.kind) ? `${intentKindLabel(enc.nextIntent.kind)} · ` : ""}
               {enc.enemy.name}: {enc.nextIntent.label}
             </div>
           </div>
+        )}
+        {enc.kind === "combat" && turnPhase !== "idle" && (
+          <div className="turn-busy-overlay z-[6]" />
         )}
         {enc.kind === "victory" && (
           <div className="absolute inset-0 flex items-center justify-center">
@@ -1007,7 +1072,7 @@ export function DungeonScreen() {
                     onClick={() => useAbility(ab)}
                     onMouseEnter={() => setHoveredAbility(ab)}
                     onFocus={() => setHoveredAbility(ab)}
-                    disabled={cd > 0}
+                    disabled={cd > 0 || turnPhase !== "idle"}
                     className={`pixel-btn !text-[8px] !p-2 disabled:opacity-40 ${weaponGlow ? "weapon-glow-btn" : ""} ${armed ? "pixel-btn-gold ring-2 ring-gold" : ab.id === abilities[0].id ? "pixel-btn-primary" : ""}`}
                     style={weaponGlow ? ({ ["--weapon-glow" as string]: weaponGlow } as CSSProperties) : undefined}
                   >
@@ -1059,9 +1124,10 @@ export function DungeonScreen() {
             )}
             <button
               onClick={passTurn}
-              className="pixel-btn !text-[8px] w-full border-l-4 border-l-muted-foreground"
+              disabled={turnPhase !== "idle"}
+              className="pixel-btn !text-[8px] w-full border-l-4 border-l-muted-foreground disabled:opacity-40"
             >
-              ◌ Pass — hold your turn (CDs tick)
+              {turnPhase === "telegraph" ? "▶ Enemy winding up…" : turnPhase === "resolving" ? "▶ Resolving…" : "◌ Pass — hold your turn (CDs tick)"}
             </button>
           </div>
         )}
@@ -1088,6 +1154,18 @@ export function DungeonScreen() {
         body="Tap an ability to arm it, then confirm. Pass to wait — ability cooldowns tick and carry between rooms. Foes guard, parry, and heal; read their telegraphs (⚠)."
         position="top"
       />
+
+      {showDescent && (
+        <DungeonDescentOverlay
+          faction={player.faction}
+          classId={player.classId}
+          name={player.name}
+          mode={player.dungeonMode}
+          depth={player.dungeonDepth}
+          oaths={player.activeOaths ?? []}
+          onComplete={() => setShowDescent(false)}
+        />
+      )}
 
       {bossIntro && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">

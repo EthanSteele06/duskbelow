@@ -1082,6 +1082,61 @@ export function buildIntro(faction: FactionId, classId: ClassId, name: string): 
   ];
 }
 
+// ── Dungeon descent loading flavor ───────────────────────────────────────────
+
+const DESCENT_OPENERS: Record<FactionId, string[]> = {
+  allies: [
+    "The gate groans. Torchlight dies at the third stair.",
+    "Oath-keepers watch from the wall. None follow you down.",
+    "Cold air climbs out like a held breath.",
+  ],
+  brigade: [
+    "Boots on stone. The march continues below.",
+    "No drums. The Brigade learned silence the hard way.",
+    "Ash and old iron. The descent accepts no banners.",
+  ],
+};
+
+const DESCENT_CURSED: string[] = [
+  "The wards remember your name — and do not forgive it.",
+  "Cursed Depths. The stone sweats black.",
+  "Something below is already counting your steps.",
+];
+
+const DESCENT_OATH: Record<string, string> = {
+  greedy: "You swore to bleed gold from the dark. It heard you.",
+  silent: "No potions. Only the pact and the dark.",
+  deep: "You asked to start deeper. The dungeon obliged.",
+};
+
+export interface DescentFlavor {
+  title: string;
+  lines: string[];
+}
+
+export function buildDescentFlavor(opts: {
+  faction: FactionId | null;
+  classId: ClassId | null;
+  name: string;
+  mode: DungeonMode;
+  depth: number;
+  oaths: OathId[];
+}): DescentFlavor {
+  const lines: string[] = [];
+  const faction = opts.faction ?? "allies";
+  const opener = DESCENT_OPENERS[faction];
+  lines.push(opener[Math.floor(Math.random() * opener.length)]);
+  if (opts.classId) lines.push(CLASS_INTRO[opts.classId]);
+  if (opts.mode === "cursed") lines.push(DESCENT_CURSED[Math.floor(Math.random() * DESCENT_CURSED.length)]);
+  for (const o of opts.oaths) {
+    if (DESCENT_OATH[o]) lines.push(DESCENT_OATH[o]);
+  }
+  if (opts.depth > 1) lines.push(`The oath carries you to floor ${opts.depth}. No turning back.`);
+  lines.push(`${opts.name} steps below.`);
+  const title = opts.mode === "cursed" ? "☠ Cursed Descent" : opts.depth > 1 ? `▼ Floor ${opts.depth}` : "▼ Into Dusk Below";
+  return { title, lines };
+}
+
 // ── Trainers & Skill Trees ───────────────────────────────────────────────────
 
 export type SkillEffect =
