@@ -12,11 +12,11 @@ import purchaseSfx from "@/assets/audio/purchase.mp3";
 import uiTapSfx from "@/assets/audio/ui-tap.mp3";
 import uiConfirmSfx from "@/assets/audio/ui-confirm.mp3";
 
-import musicTitle from "@/assets/audio/music-title.mp3.asset.json";
-import musicCityKingdom from "@/assets/audio/music-city-kingdom.mp3.asset.json";
-import musicCityBrigade from "@/assets/audio/music-city-brigade.mp3.asset.json";
-import musicDungeon from "@/assets/audio/music-dungeon.mp3.asset.json";
-import musicBoss from "@/assets/audio/music-boss.mp3.asset.json";
+import musicTitle from "@/assets/audio/music-title.mp3";
+import musicCityKingdom from "@/assets/audio/music-city-kingdom.mp3";
+import musicCityBrigade from "@/assets/audio/music-city-brigade.mp3";
+import musicDungeon from "@/assets/audio/music-dungeon.mp3";
+import musicBoss from "@/assets/audio/music-boss.mp3";
 
 export type SfxName =
   | "hit" | "crit" | "enemy-hit" | "death"
@@ -32,11 +32,11 @@ const SFX_URLS: Record<SfxName, string> = {
 };
 
 const MUSIC_URLS: Record<Exclude<MusicTrack, null>, string> = {
-  "title": musicTitle.url,
-  "city-kingdom": musicCityKingdom.url,
-  "city-brigade": musicCityBrigade.url,
-  "dungeon": musicDungeon.url,
-  "boss": musicBoss.url,
+  "title": musicTitle,
+  "city-kingdom": musicCityKingdom,
+  "city-brigade": musicCityBrigade,
+  "dungeon": musicDungeon,
+  "boss": musicBoss,
 };
 
 // --- Settings (persisted) ---
@@ -119,7 +119,9 @@ export function playMusic(track: MusicTrack, opts: { force?: boolean } = {}) {
   el.preload = "auto";
   musicEl = el;
   applyMusicVolume();
-  void el.play().catch(() => { /* blocked */ });
+  void el.play().catch((err) => {
+    if (import.meta.env.DEV) console.warn("[audio] music play failed:", track, err);
+  });
 }
 
 export function stopMusic() { playMusic(null); }
