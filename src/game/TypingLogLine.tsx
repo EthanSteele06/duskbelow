@@ -7,7 +7,7 @@ interface Props {
   charMs?: number;
 }
 
-export function TypingLogLine({ text, active, className = "", charMs = 16 }: Props) {
+export function TypingLogLine({ text, active, className = "", charMs = 38 }: Props) {
   const [visible, setVisible] = useState(active ? 0 : text.length);
 
   useEffect(() => {

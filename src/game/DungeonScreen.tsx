@@ -248,6 +248,7 @@ export function DungeonScreen() {
   const turnTimersRef = useRef<number[]>([]);
   const roomTimersRef = useRef<number[]>([]);
   const victoryTimerRef = useRef<number | null>(null);
+  const finishingKillRef = useRef(false);
   const prevCdsRef = useRef<Record<string, number>>({});
 
   const clearTurnTimers = () => {
@@ -330,6 +331,12 @@ export function DungeonScreen() {
     const id = window.setTimeout(() => setRoomTransition("idle"), ROOM_FADE_IN_MS);
     roomTimersRef.current.push(id);
   };
+
+  useEffect(() => {
+    if (enc.kind !== "combat" && enc.kind !== "victory") {
+      finishingKillRef.current = false;
+    }
+  }, [enc.kind]);
 
   const finishRun = useGame((s) => s.finishRun);
   const recordKill = useGame((s) => s.recordKill);
@@ -738,8 +745,11 @@ export function DungeonScreen() {
   };
 
   const finishKill = (e: CombatEnc) => {
+    if (finishingKillRef.current || victoryBeat) return;
+    finishingKillRef.current = true;
     clearTurnTimers();
     setTurnPhase("idle");
+    setArmedAbility(null);
     // Fork bias: Left favors gold, Right favors XP & material drops.
     const goldMult = forkBias === "left" ? 1.25 : 1;
     const xpMult = forkBias === "right" ? 1.3 : 1;
@@ -799,7 +809,10 @@ export function DungeonScreen() {
     if (victoryTimerRef.current !== null) clearTimeout(victoryTimerRef.current);
     victoryTimerRef.current = window.setTimeout(() => {
       setVictoryBeat(null);
-      transitionToEnc({ kind: "victory", depth: e.depth, loot });
+      setEnc({ kind: "victory", depth: e.depth, loot });
+      setRoomTransition("in");
+      const inId = window.setTimeout(() => setRoomTransition("idle"), ROOM_FADE_IN_MS);
+      roomTimersRef.current.push(inId);
       playSfx("loot");
       victoryTimerRef.current = null;
     }, VICTORY_BEAT_MS);
@@ -848,9 +861,14 @@ export function DungeonScreen() {
   const lootGear = enc.kind === "victory" ? enc.loot.gear : undefined;
   const equippedForSlot = lootGear ? player.equipment[lootGear.slot] : undefined;
 
+  const dungeonReady = !showDescent;
+
   return (
     <div className="flex min-h-full flex-col">
-      <div className={`relative h-64 overflow-hidden border-b-2 border-black ${hit ? "shake" : ""} ${roomAnimClass}`}>
+      <div
+        className={`relative h-64 overflow-hidden border-b-2 border-black ${hit ? "shake" : ""} ${dungeonReady ? roomAnimClass : "opacity-0"}`}
+        aria-hidden={!dungeonReady}
+      >
         <img
           src={dungeonBgForDepth(enc.depth)}
           alt=""
@@ -925,9 +943,9 @@ export function DungeonScreen() {
         {enc.kind === "combat" && turnPhase !== "idle" && !inVictoryBeat && (
           <div className="turn-busy-overlay z-[6]" />
         )}
-        {(inVictoryBeat || enc.kind === "victory") && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/25">
-            <p className={`pixel text-2xl text-gold text-shadow-pixel ${inVictoryBeat ? "victory-beat-text" : ""}`}>VICTORY</p>
+        {inVictoryBeat && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/35">
+            <p className="pixel text-2xl text-gold text-shadow-pixel victory-beat-text">VICTORY</p>
           </div>
         )}
         {enc.kind === "shrine" && (
@@ -946,7 +964,10 @@ export function DungeonScreen() {
       </div>
 
 
-      <div className={`p-3 space-y-3 ${roomAnimClass}`}>
+      <div
+        className={`p-3 space-y-3 ${dungeonReady ? roomAnimClass : "invisible pointer-events-none h-0 overflow-hidden opacity-0"}`}
+        aria-hidden={!dungeonReady}
+      >
         <div ref={logRef} className="border-2 border-black bg-card/80 p-2 h-24 overflow-y-auto font-body text-sm leading-tight">
           {combatLog.length === 0 && <p className="text-muted-foreground italic">The dungeon is silent.</p>}
           {combatLog.map((l, i) => (
@@ -955,6 +976,7 @@ export function DungeonScreen() {
               text={l.text}
               active={i === combatLog.length - 1}
               className={logLineClass(l.text)}
+              charMs={42}
             />
           ))}
         </div>
@@ -1022,7 +1044,7 @@ export function DungeonScreen() {
           </div>
         )}
 
-        {enc.kind === "victory" && (
+        {enc.kind === "victory" && !inVictoryBeat && (
           <div className="border-2 border-black bg-card p-3 fade-in-up space-y-2">
             <p className="pixel text-[10px] text-gold">☠ {enc.loot.enemy.name} slain</p>
             <p className="font-body text-sm">+<span className="text-gold">{enc.loot.gold}g</span> · +<span className="text-divine">{enc.loot.xp}xp</span></p>

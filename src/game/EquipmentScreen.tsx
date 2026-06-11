@@ -1,5 +1,5 @@
 import { useGame, bagCap, bagSlotsUsed } from "@/game/store";
-import { SLOT_LABEL, SLOT_ICON, RARITY_CLASS, RARITY_LABEL, MATERIALS, MATERIAL_STACK_SIZE, gearSellPrice, type GearSlot, type GearItem } from "@/game/data";
+import { SLOT_LABEL, SLOT_ICON, RARITY_CLASS, RARITY_LABEL, MATERIALS, MATERIAL_STACK_SIZE, VENDOR_ITEMS, gearSellPrice, type GearSlot, type GearItem } from "@/game/data";
 import { GearCompare } from "./GearCompare";
 import { StatBar } from "./StatBar";
 
@@ -27,6 +27,10 @@ export function EquipmentScreen() {
   const cap = bagCap(player, meta);
   const used = bagSlotsUsed(player);
   const matEntries = Object.entries(player.materials).filter(([, n]) => n > 0);
+  const potionEntries = VENDOR_ITEMS
+    .filter((v) => v.kind === "potion")
+    .map((v) => ({ def: v, count: player.inventory.filter((id) => id === v.id).length }))
+    .filter((x) => x.count > 0);
 
   return (
     <div className="flex min-h-full flex-col p-3 gap-3">
@@ -67,7 +71,20 @@ export function EquipmentScreen() {
       </div>
 
       <h3 className="pixel text-[10px] text-gold mt-1">▣ Bag ({used}/{cap} slots)</h3>
-      <p className="font-body text-xs text-muted-foreground -mt-1">Gear and stacks of {MATERIAL_STACK_SIZE} share the same slots.</p>
+      <p className="font-body text-xs text-muted-foreground -mt-1">Gear, potions (1 slot each), and material stacks of {MATERIAL_STACK_SIZE} share bag space.</p>
+
+      {potionEntries.length > 0 && (
+        <div className="border-2 border-black bg-card/60 p-2">
+          <p className="pixel text-[8px] text-gold mb-1">Potions</p>
+          <div className="flex flex-wrap gap-1">
+            {potionEntries.map(({ def, count }) => (
+              <span key={def.id} className="pixel text-[7px] border border-black bg-background/60 px-1.5 py-1">
+                {def.name} ×{count} <span className="text-muted-foreground">({count} slot{count > 1 ? "s" : ""})</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {matEntries.length > 0 && (
         <div className="border-2 border-black bg-card/60 p-2">
@@ -86,7 +103,7 @@ export function EquipmentScreen() {
         </div>
       )}
 
-      {player.bag.length === 0 && matEntries.length === 0 && (
+      {player.bag.length === 0 && matEntries.length === 0 && potionEntries.length === 0 && (
         <p className="font-body text-sm text-muted-foreground">Empty. Slay things to fill it.</p>
       )}
       <div className="space-y-2">

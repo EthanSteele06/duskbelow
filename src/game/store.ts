@@ -301,10 +301,20 @@ function bagCap(p: PlayerState, meta: MetaState) {
   return (p.isChampion ? BAG_SIZE_CHAMPION : BAG_SIZE_BASE) + echo.bonusBag;
 }
 
+/** Potions in inventory occupy bag slots (1 per draught). */
+function potionSlotsUsed(p: PlayerState) {
+  let slots = 0;
+  for (const id of p.inventory) {
+    const item = VENDOR_ITEMS.find((i) => i.id === id);
+    if (item?.kind === "potion") slots += 1;
+  }
+  return slots;
+}
+
 /** Count how many bag slots are currently in use — gear + material stacks (every
- *  MATERIAL_STACK_SIZE units of a given material id occupies one slot). */
+ *  MATERIAL_STACK_SIZE units of a given material id occupies one slot) + potions. */
 function bagSlotsUsed(p: PlayerState) {
-  let used = p.bag.length;
+  let used = p.bag.length + potionSlotsUsed(p);
   for (const n of Object.values(p.materials)) {
     if (n > 0) used += Math.ceil(n / MATERIAL_STACK_SIZE);
   }
@@ -644,6 +654,10 @@ export const useGame = create<GameState>((set, get) => ({
       get().pushLog(`Blessing queued: ${item.name}.`);
       return true;
     }
+    if (item.kind === "potion" && bagFreeSlots(p, get().meta) <= 0) {
+      get().pushLog("Bag full — no room for potions.");
+      return false;
+    }
     const next: PlayerState = { ...p, gold: p.gold - item.price, inventory: [...p.inventory, itemId] };
     if (item.kind === "weapon" && item.atk) next.baseAtk = p.baseAtk + item.atk;
     set({ player: recompute(next, get().meta) });
@@ -656,6 +670,10 @@ export const useGame = create<GameState>((set, get) => ({
     if (!item || !item.gemPrice) return false;
     const p = get().player;
     if (p.gems < item.gemPrice) return false;
+    if (item.kind === "potion" && bagFreeSlots(p, get().meta) <= 0) {
+      get().pushLog("Bag full — no room for potions.");
+      return false;
+    }
     set({ player: { ...p, gems: p.gems - item.gemPrice, inventory: [...p.inventory, itemId] } });
     get().pushLog(`Acquired ${item.name}.`);
     return true;
@@ -924,8 +942,12 @@ export const useGame = create<GameState>((set, get) => ({
     let gold = p.gold;
     const out = r.output;
     if (out.kind === "vendor") {
-      inv = [...inv, out.itemId];
       const it = VENDOR_ITEMS.find((v) => v.id === out.itemId);
+      if (it?.kind === "potion" && bagFreeSlots(p, get().meta) <= 0) {
+        get().pushLog("Bag full — no room for potions.");
+        return false;
+      }
+      inv = [...inv, out.itemId];
       get().pushLog(`Crafted ${it?.name ?? r.name}.`);
     } else {
       gold += out.gold;

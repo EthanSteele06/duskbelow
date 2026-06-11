@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useGame } from "@/game/store";
+import { useGame, bagFreeSlots } from "@/game/store";
 import { VENDOR_ITEMS, AUCTION_LISTINGS, rollRelicListings, RARITY_LABEL, SLOT_ICON, type GearItem } from "@/game/data";
 import { DAILY_ROTATION_MS } from "@/game/meta";
 import { StatBar } from "./StatBar";
@@ -21,8 +21,11 @@ export function VendorScreen() {
   const buy = useGame((s) => s.buy);
   const use = useGame((s) => s.use);
   const gold = useGame((s) => s.player.gold);
-  const inv = useGame((s) => s.player.inventory);
-  const activeBuffs = useGame((s) => s.player.activeBuffs);
+  const player = useGame((s) => s.player);
+  const meta = useGame((s) => s.meta);
+  const inv = player.inventory;
+  const activeBuffs = player.activeBuffs;
+  const bagFree = bagFreeSlots(player, meta);
 
   const buffSummary = activeBuffs.length
     ? activeBuffs.reduce<{ atk: number; mag: number; maxHp: number; goldMult: number }>(
@@ -61,7 +64,8 @@ export function VendorScreen() {
       <div className="space-y-2">
         {items.map((it) => {
           const owned = inv.filter((x) => x === it.id).length;
-          const canBuy = gold >= it.price;
+          const potionBlocked = it.kind === "potion" && bagFree <= 0;
+          const canBuy = gold >= it.price && !potionBlocked;
           return (
             <div key={it.id} className="border-2 border-black bg-card p-2">
               <div className="flex items-baseline justify-between gap-2">
@@ -71,7 +75,7 @@ export function VendorScreen() {
               <p className="font-body text-sm text-muted-foreground">{it.desc}</p>
               <div className="mt-2 flex gap-2">
                 <button onClick={() => buy(it.id)} disabled={!canBuy} className="pixel-btn pixel-btn-gold !text-[8px] disabled:opacity-40">
-                  {it.kind === "buff" ? "Buy Blessing" : "Buy"}
+                  {potionBlocked ? "Bag Full" : it.kind === "buff" ? "Buy Blessing" : "Buy"}
                 </button>
                 {it.kind === "potion" && owned > 0 && (
                   <button onClick={() => use(it.id)} className="pixel-btn !text-[8px]">Use ({owned})</button>

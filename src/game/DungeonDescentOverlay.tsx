@@ -12,7 +12,8 @@ interface Props {
   onComplete: () => void;
 }
 
-const DURATION_MS = 2400;
+const DURATION_MS = 2800;
+const LINE_CYCLE_MS = 1400;
 
 export function DungeonDescentOverlay({ faction, classId, name, mode, depth, oaths, onComplete }: Props) {
   const flavor = useMemo(
@@ -34,7 +35,7 @@ export function DungeonDescentOverlay({ faction, classId, name, mode, depth, oat
     }, 50);
     const cycle = window.setInterval(() => {
       setLineIdx((i) => (i + 1) % flavor.lines.length);
-    }, 720);
+    }, LINE_CYCLE_MS);
     const done = window.setTimeout(onComplete, DURATION_MS);
     return () => {
       clearInterval(tick);
@@ -46,11 +47,11 @@ export function DungeonDescentOverlay({ faction, classId, name, mode, depth, oat
   const line = flavor.lines[lineIdx] ?? flavor.lines[0];
 
   return (
-    <div className="descent-overlay fixed inset-0 z-50 flex flex-col">
-      <img src={bg} alt="" className="absolute inset-0 h-full w-full object-cover opacity-50" />
+    <div className="descent-overlay fixed inset-0 z-[60] flex flex-col bg-black">
+      <img src={bg} alt="" className="absolute inset-0 h-full w-full object-cover opacity-35" />
       <div className="absolute inset-0 vignette" />
-      <div className="absolute inset-0 scanlines" />
-      <div className="absolute inset-0 bg-black/55" />
+      <div className="absolute inset-0 scanlines opacity-60" />
+      <div className="absolute inset-0 bg-black/88" />
 
       <div className="relative z-10 flex min-h-full flex-col items-center justify-center p-6 text-center gap-5">
         {f && (
