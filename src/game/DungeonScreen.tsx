@@ -12,6 +12,10 @@ import {
   type PlayerThreatSnap, type ThreatKind, type ThreatTier,
 } from "@/game/data";
 import { bestiaryMasteryMult } from "@/game/meta";
+import {
+  resolveCombatAbilities, getTalentPassives,
+  abilityBonusCrit, abilityIgnoresGuard, abilityBonusVsBleed, stunBonusHealPct,
+} from "@/game/talentCombat";
 import { playMusic, playSfx } from "@/game/audio";
 import { TutorialTip } from "@/game/Tutorial";
 import { SettingsButton } from "@/game/Settings";
@@ -172,16 +176,22 @@ function chillMult(effects: StatusEffect[]) {
   return c ? c.power : 1;
 }
 
-function tickEffectsOnEnemy(e: CombatEnc, log: (m: string) => void): CombatEnc {
+function tickEffectsOnEnemy(
+  e: CombatEnc,
+  log: (m: string) => void,
+  dotAmp: { bleed?: number; burn?: number } = {},
+): CombatEnc {
   let hp = e.enemyHp;
   const next: StatusEffect[] = [];
   for (const ef of e.enemyEffects) {
     if (ef.kind === "bleed") {
-      hp = Math.max(0, hp - ef.power);
-      log(`${e.enemy.name} bleeds for ${ef.power}.`);
+      const dmg = ef.power + (dotAmp.bleed ?? 0);
+      hp = Math.max(0, hp - dmg);
+      log(`${e.enemy.name} bleeds for ${dmg}.`);
     } else if (ef.kind === "burn") {
-      hp = Math.max(0, hp - ef.power);
-      log(`${e.enemy.name} burns for ${ef.power}.`);
+      const dmg = ef.power + (dotAmp.burn ?? 0);
+      hp = Math.max(0, hp - dmg);
+      log(`${e.enemy.name} burns for ${dmg}.`);
     }
     if (ef.turns - 1 > 0) next.push({ ...ef, turns: ef.turns - 1 });
   }
@@ -207,9 +217,12 @@ export function DungeonScreen() {
   const equip = useGame((s) => s.equip);
 
   const armNextAttack = useGame((s) => s.armNextAttack);
-  const baseAbilities = player.classId ? CLASS_ABILITIES[player.classId] : [];
   const specAbility = player.specId ? SPEC_ABILITIES[player.specId] : null;
-  const abilities: Ability[] = specAbility ? [...baseAbilities, specAbility] : baseAbilities;
+  const abilities: Ability[] = player.classId
+    ? resolveCombatAbilities(CLASS_ABILITIES[player.classId], specAbility, player.specId, player.learnedTalents)
+    : [];
+  const talentPassives = getTalentPassives(player.specId, player.learnedTalents);
+  const dotAmp = { bleed: talentPassives.dot_amp_bleed, burn: talentPassives.dot_amp_burn };
   const inv = player.inventory;
   const faction = player.faction ? FACTIONS.find((f) => f.id === player.faction)! : null;
 
@@ -416,12 +429,14 @@ export function DungeonScreen() {
 
   // Apply Renew (player HoT) — called at end of every player action turn
   const tickPlayerEffects = (e: CombatEnc): CombatEnc => {
+    const hotBonus = talentPassives.hot_amp ?? 0;
     const next: StatusEffect[] = [];
     for (const ef of e.playerEffects) {
       if (ef.kind === "renew") {
-        heal(ef.power);
-        addFloater("heal", ef.power);
-        addLog(`Renew restores ${ef.power} HP.`);
+        const amt = ef.power + hotBonus;
+        heal(amt);
+        addFloater("heal", amt);
+        addLog(`Renew restores ${amt} HP.`);
       }
       if (ef.turns - 1 > 0) next.push({ ...ef, turns: ef.turns - 1 });
     }
@@ -447,7 +462,7 @@ export function DungeonScreen() {
       e = { ...e, enemyParryActive: false };
     }
     // Tick enemy DoTs first; check for kill
-    e = tickEffectsOnEnemy(e, addLog);
+    e = tickEffectsOnEnemy(e, addLog, dotAmp);
     if (e.enemyHp <= 0) {
       setTimeout(() => finishKill(e), 0);
       return e;
@@ -534,9 +549,22 @@ export function DungeonScreen() {
     // Roll damage in a ±20% range so hits feel less robotic.
     let dmg = rollDamage(base * ab.effect.mult * dmgMult * masteryMult);
     // Crit
-    const critChance = player.crit + bonusCritPct;
+    const critChance = player.crit + bonusCritPct + abilityBonusCrit(ab);
     const crit = critChance > 0 && Math.random() * 100 < critChance;
     if (crit) dmg = Math.floor(dmg * 1.5);
+    if (e.enemyEffects.some((x) => x.kind === "bleed")) {
+      dmg = Math.floor(dmg * abilityBonusVsBleed(ab));
+      if (talentPassives.vs_bleeding) dmg = Math.floor(dmg * (1 + talentPassives.vs_bleeding / 100));
+    }
+    if (e.enemyEffects.some((x) => x.kind === "burn") && talentPassives.vs_burning) {
+      dmg = Math.floor(dmg * (1 + talentPassives.vs_burning / 100));
+    }
+    if (e.enemyEffects.some((x) => x.kind === "chill") && talentPassives.vs_chilled) {
+      dmg = Math.floor(dmg * (1 + talentPassives.vs_chilled / 100));
+    }
+    if (talentPassives.low_hp_dmg && player.hp / player.maxHp <= 0.4) {
+      dmg = Math.floor(dmg * (1 + talentPassives.low_hp_dmg / 100));
+    }
     // Frenzy / Rally next-attack multiplier
     if (player.nextAttackMult !== 1) {
       dmg = Math.floor(dmg * player.nextAttackMult);
@@ -552,10 +580,13 @@ export function DungeonScreen() {
 
     let guardPct = e.enemyGuardPct;
     let parryActive = e.enemyParryActive;
-    if (guardPct > 0) {
+    if (guardPct > 0 && !abilityIgnoresGuard(ab)) {
       const absorbed = Math.floor(dmg * guardPct);
       dmg = Math.max(1, dmg - absorbed);
       addLog(`${e.enemy.name}'s guard absorbs ${absorbed} damage!`);
+      guardPct = 0;
+    } else if (guardPct > 0 && abilityIgnoresGuard(ab)) {
+      addLog(`${e.enemy.name}'s guard shatters under your blow!`);
       guardPct = 0;
     }
     if (parryActive) {
@@ -580,7 +611,7 @@ export function DungeonScreen() {
     addLog(`${flavor} for ${dmg}${crit ? " CRIT" : ""}${legendary ? " ✦" : ""} damage!`);
 
     // Lifesteal
-    const effectiveLifesteal = (ab.effect.lifesteal ?? 0) * lifestealMult;
+    const effectiveLifesteal = ((ab.effect.lifesteal ?? 0) + (talentPassives.lifesteal_boost ?? 0) / 100) * lifestealMult;
     if (effectiveLifesteal > 0) {
       const healed = Math.max(1, Math.floor(dmg * effectiveLifesteal));
       heal(healed);
@@ -598,10 +629,23 @@ export function DungeonScreen() {
     let nextEffects = e.enemyEffects;
     if (ab.effect.applyStatus) {
       const s = ab.effect.applyStatus;
+      let power = s.power;
+      if (s.kind === "chill" && talentPassives.dot_amp_chill) power += talentPassives.dot_amp_chill * 0.1;
       const turns = s.kind === "chill" ? s.turns + extraChillTurns : s.turns;
-      // refresh or add
-      nextEffects = nextEffects.filter((x) => x.kind !== s.kind).concat({ kind: s.kind, turns, power: s.power });
+      nextEffects = nextEffects.filter((x) => x.kind !== s.kind).concat({ kind: s.kind, turns, power });
       addLog(`${e.enemy.name} is afflicted with ${s.kind}.`);
+    }
+    if (crit && talentPassives.crit_dot_bleed) {
+      nextEffects = nextEffects.filter((x) => x.kind !== "bleed").concat({
+        kind: "bleed", turns: 3, power: talentPassives.crit_dot_bleed,
+      });
+      addLog(`${e.enemy.name} is torn by a critical rend!`);
+    }
+    if (crit && talentPassives.crit_dot_burn) {
+      nextEffects = nextEffects.filter((x) => x.kind !== "burn").concat({
+        kind: "burn", turns: 3, power: talentPassives.crit_dot_burn,
+      });
+      addLog(`${e.enemy.name} ignites from the critical hit!`);
     }
     return {
       ...e,
@@ -650,6 +694,7 @@ export function DungeonScreen() {
   const passTurn = () => {
     if (enc.kind !== "combat" || turnPhase !== "idle" || victoryBeat) return;
     addLog(`${player.name} holds, reading the foe's rhythm.`);
+    if (talentPassives.pass_cd_tick) advanceAbilityCooldowns();
     beginEnemyPhase(enc);
   };
 
@@ -691,10 +736,17 @@ export function DungeonScreen() {
       }
       case "stun": {
         addLog(`${flavor}. ${e.enemy.name} is frozen!`);
+        const stunHeal = stunBonusHealPct(ab);
+        if (stunHeal > 0) {
+          const healed = Math.max(1, Math.floor(player.maxHp * stunHeal));
+          heal(healed);
+          addFloater("heal", healed);
+          addLog(`${player.name} focuses — restored ${healed} HP.`);
+        }
         advanceAbilityCooldowns(ab.id, ab.cooldown);
         let stepped: CombatEnc = { ...e, stunnedTurns: 1 };
         stepped = tickPlayerEffects(stepped);
-        stepped = tickEffectsOnEnemy(stepped, addLog);
+        stepped = tickEffectsOnEnemy(stepped, addLog, dotAmp);
         if (stepped.enemyHp <= 0) { finishKill(stepped); return; }
         setEnc({ ...stepped, stunnedTurns: stepped.stunnedTurns - 1, nextIntent: pickNextIntent(stepped) });
         return;
@@ -803,6 +855,10 @@ export function DungeonScreen() {
       loreId: bossLore ?? (Math.random() < 0.4 ? loreByEnemy[e.enemy.id] : undefined),
       itemDropId: gear?.baseId,
     });
+    if (talentPassives.kill_frenzy) {
+      armNextAttack(1 + talentPassives.kill_frenzy / 100);
+      addLog(`Blood sings — next attack empowered!`);
+    }
     const loot: Loot = { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material, gear };
     setEnc({ ...e, enemyHp: 0 });
     setVictoryBeat({ depth: e.depth, enemy: e.enemy, enemyMaxHp: e.enemyMaxHp, loot });

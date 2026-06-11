@@ -1347,64 +1347,14 @@ export const SPECS: SpecDef[] = [
   { id: "vengeance",     classId: "demonhunter", name: "Vengeance", tagline: "Bind the wound to feed.",color: "var(--color-blood)" },
 ];
 
-export interface TalentNode {
-  id: string;
-  name: string;
-  desc: string;
-  tier: 1 | 2 | 3 | 4 | 5;
-  requires?: string;
-  /** True for tier-5 capstones — only one capstone may be learned per spec. */
-  capstone?: boolean;
-  effect: { atk?: number; mag?: number; maxHp?: number; crit?: number; dodge?: number };
-}
-
-function tree(prefix: string, t: { atk?: number; mag?: number; maxHp?: number }): TalentNode[] {
-  const a = t.atk ?? 0;
-  const m = t.mag ?? 0;
-  const h = t.maxHp ?? 0;
-  return [
-    { id: `${prefix}_1`,  name: "Foundation",  desc: `+${4+h} Max HP, +${1+Math.floor(a/2)} ATK.`, tier: 1, effect: { maxHp: 4+h, atk: 1+Math.floor(a/2) } },
-    { id: `${prefix}_2a`, name: "Edge",        desc: `+${2+a} ATK.`,                                tier: 2, requires: `${prefix}_1`,  effect: { atk: 2+a } },
-    { id: `${prefix}_2b`, name: "Mind",        desc: `+${2+m} MAG.`,                                tier: 2, requires: `${prefix}_1`,  effect: { mag: 2+m } },
-    { id: `${prefix}_3a`, name: "Resilience",  desc: `+${8+h} Max HP, +3% dodge.`,                  tier: 3, requires: `${prefix}_2a`, effect: { maxHp: 8+h, dodge: 3 } },
-    { id: `${prefix}_3b`, name: "Precision",   desc: "+8% crit chance.",                            tier: 3, requires: `${prefix}_2b`, effect: { crit: 8 } },
-    { id: `${prefix}_4a`, name: "Capstone I",  desc: `+${5+a} ATK, +${5+h} Max HP.`,                tier: 4, requires: `${prefix}_3a`, effect: { atk: 5+a, maxHp: 5+h } },
-    { id: `${prefix}_4b`, name: "Capstone II", desc: `+${4+m} MAG, +10% crit.`,                     tier: 4, requires: `${prefix}_3b`, effect: { mag: 4+m, crit: 10 } },
-    // Capstone tier — pick ONE.
-    { id: `${prefix}_5a`, name: "Warlord's Edge",  desc: `Capstone (pick 1): +${10+a} ATK, +10% crit.`,    tier: 5, requires: `${prefix}_4a`, capstone: true, effect: { atk: 10+a, crit: 10 } },
-    { id: `${prefix}_5b`, name: "Archmage's Will", desc: `Capstone (pick 1): +${10+m} MAG, +${20+h} Max HP.`, tier: 5, requires: `${prefix}_4b`, capstone: true, effect: { mag: 10+m, maxHp: 20+h } },
-    { id: `${prefix}_5c`, name: "Bulwark Eternal", desc: `Capstone (pick 1): +${35+h} Max HP, +6% dodge.`, tier: 5, requires: `${prefix}_4a`, capstone: true, effect: { maxHp: 35+h, dodge: 6 } },
-  ];
-}
+export type { TalentNode } from "@/game/talents";
+export { TALENT_TREES } from "@/game/talents";
 
 /** Cap on active (accepted, not-yet-turned-in) quests. */
 export const MAX_ACTIVE_QUESTS = 3;
 
 /** Bag stacking: every N units of a single material/quest item id occupies one bag slot. */
 export const MATERIAL_STACK_SIZE = 20;
-
-export const TALENT_TREES: Record<string, TalentNode[]> = {
-  arms:          tree("arms",       { atk: 3 }),
-  fury:          tree("fury",       { atk: 2, maxHp: 2 }),
-  protection:    tree("protection", { maxHp: 6 }),
-  assassination: tree("assassin",   { atk: 2, mag: 1 }),
-  outlaw:        tree("outlaw",     { atk: 3 }),
-  subtlety:      tree("subtle",     { atk: 2, mag: 2 }),
-  frost:         tree("frost",      { mag: 3 }),
-  fire:          tree("fire",       { mag: 4 }),
-  arcane:        tree("arcane",     { mag: 3, maxHp: 2 }),
-  discipline:    tree("disc",       { mag: 2, maxHp: 4 }),
-  holy:          tree("holy",       { mag: 3, maxHp: 2 }),
-  shadow:        tree("shadow",     { mag: 3, atk: 1 }),
-  balance:       tree("balance",    { mag: 3, maxHp: 1 }),
-  feral:         tree("feral",      { atk: 3 }),
-  restoration:   tree("resto",      { mag: 2, maxHp: 4 }),
-  blood_dk:      tree("blood",      { atk: 2, maxHp: 4 }),
-  frost_dk:      tree("dkfrost",    { atk: 3 }),
-  unholy:        tree("unholy",     { atk: 2, mag: 2 }),
-  havoc:         tree("havoc",      { atk: 3, mag: 1 }),
-  vengeance:     tree("veng",       { atk: 2, maxHp: 4 }),
-};
 
 // ── Gear / Equipment ─────────────────────────────────────────────────────────
 

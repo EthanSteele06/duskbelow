@@ -45,7 +45,7 @@ export function TalentTreeScreen() {
           <>
             <div className="border-2 border-black bg-card p-3">
               <p className="font-body text-base leading-snug">"{t.greeting}"</p>
-              <p className="pixel text-[9px] text-gold mt-2">Choose a specialization — it shapes your tree.</p>
+              <p className="pixel text-[9px] text-gold mt-2">Choose a specialization — talents reshape your existing abilities.</p>
             </div>
             <div className="space-y-2">
               {classSpecs.map((s) => {

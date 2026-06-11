@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { ClassId, FactionId, Ability, ProfessionId, GearItem, GearSlot, TalentNode, BuffEffect, DungeonMode, AffixId, OathId } from "./data";
 import {
-  CLASSES, FACTIONS, VENDOR_ITEMS, QUESTS, TRAINERS, RECIPES, MATERIALS, SPECS, TALENT_TREES, COSMETICS,
+  CLASSES, FACTIONS, VENDOR_ITEMS, QUESTS, TRAINERS, RECIPES, MATERIALS, SPECS, COSMETICS,
   BAG_SIZE_BASE, BAG_SIZE_CHAMPION, RESPEC_GOLD_COST, MAX_ACTIVE_QUESTS, MATERIAL_STACK_SIZE,
   gearSellPrice, profXpForLevel,
   IDLE_YIELDS, IDLE_SECONDS_PER_UNIT, IDLE_MAX_SECONDS, rollAffixes, rollGear, rollClassLegendary,
@@ -13,6 +13,8 @@ import {
   echoStart, accountXpForLevel, ACCOUNT_LEVEL_CAP, stashCapacity, racialChargesForLevel,
   ECHO_TREE, hasEcho, DAILY_ROTATION_MS,
 } from "./meta";
+import { TALENT_TREES } from "./talents";
+import { sumTalentStatBonuses } from "./talentCombat";
 
 export type Screen =
   | "title" | "intro" | "city"
@@ -246,19 +248,7 @@ function sumGearStats(equipment: PlayerState["equipment"]) {
 }
 
 function sumTalentStats(learnedIds: string[], specId: string | null) {
-  const s = { atk: 0, mag: 0, maxHp: 0, crit: 0, dodge: 0 };
-  if (!specId) return s;
-  const tree = TALENT_TREES[specId];
-  if (!tree) return s;
-  for (const n of tree) {
-    if (!learnedIds.includes(n.id)) continue;
-    s.atk += n.effect.atk ?? 0;
-    s.mag += n.effect.mag ?? 0;
-    s.maxHp += n.effect.maxHp ?? 0;
-    s.crit += n.effect.crit ?? 0;
-    s.dodge += n.effect.dodge ?? 0;
-  }
-  return s;
+  return sumTalentStatBonuses(specId, learnedIds);
 }
 
 function sumBuffStats(buffs: BuffEffect[]) {
