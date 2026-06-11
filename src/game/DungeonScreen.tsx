@@ -4,10 +4,11 @@ import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumb
 import {
   CLASS_ABILITIES, SPEC_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
   RARITY_CLASS, RARITY_LABEL, rollDamage, damageRange,
-  MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth, rollClassLegendary, AFFIXES, BOSS_MOMENTS,
+  MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth, rollClassLegendary, AFFIXES, BOSS_MOMENTS, FACTION_SHRINES,
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
-  type StatusEffect, type EnemyIntent, type FactionId,
+  type StatusEffect, type EnemyIntent, type FactionId, type FactionShrineId,
 } from "@/game/data";
+import { bestiaryMasteryMult } from "@/game/meta";
 import { playMusic, playSfx } from "@/game/audio";
 import { TutorialTip } from "@/game/Tutorial";
 import { SettingsButton } from "@/game/Settings";
@@ -42,7 +43,7 @@ type CombatEnc = {
   bossPhase: 1 | 2;
 };
 
-type ShrineKind = "heal" | "blessing";
+type ShrineKind = "heal" | "blessing" | FactionShrineId;
 type TrapKind = "spikes" | "gas";
 type ForkBias = "left" | "onward" | "right";
 
@@ -64,7 +65,7 @@ function pickIntent(enemy: EnemyDef): EnemyIntent {
 
 function buildCombat(depth: number, faction?: FactionId | null, affixes: string[] = []): CombatEnc {
   const e = enemyForDepth(depth, faction);
-  let hp = e.hpBase + (depth >= 10 ? 0 : Math.floor(depth * 1.4));
+  let hp = e.hpBase + (depth >= 10 ? 0 : Math.floor(depth * 1.1));
   if (affixes.includes("fortified")) hp = Math.floor(hp * 1.3);
   return {
     kind: "combat", depth, enemy: e, enemyHp: hp, enemyMaxHp: hp,
@@ -80,13 +81,20 @@ function rollEncounter(depth: number, faction?: FactionId | null, affixes: strin
   // Bias bends the encounter weights: Left = more fights & less traps, Right = more traps & fewer fights.
   const combatW = 0.58 * (bias === "left" ? 1.6 : bias === "right" ? 0.7 : 1);
   const trapW = 0.12 * (bias === "left" ? 0.5 : bias === "right" ? 1.8 : 1);
-  const chestW = 0.20, shrineW = 0.04, pathW = 0.06;
+  const shrineW = 0.04 * (bias === "left" ? 0.5 : bias === "right" ? 1.8 : 1);
+  const chestW = 0.20, pathW = 0.06;
   const total = combatW + chestW + shrineW + trapW + pathW;
   const r = Math.random() * total;
   let acc = 0;
   if (r < (acc += combatW)) return buildCombat(depth, faction, affixes);
   if (r < (acc += chestW)) return { kind: "chest", depth, preview: rollChest(depth) };
-  if (r < (acc += shrineW)) return { kind: "shrine", depth, shrine: Math.random() < 0.6 ? "heal" : "blessing" };
+  if (r < (acc += shrineW)) {
+    if (faction) {
+      const def = FACTION_SHRINES.find((s) => s.faction === faction);
+      if (def && Math.random() < 0.5) return { kind: "shrine", depth, shrine: def.id };
+    }
+    return { kind: "shrine", depth, shrine: Math.random() < 0.6 ? "heal" : "blessing" };
+  }
   if (r < (acc += trapW)) return { kind: "trap", depth, trap: Math.random() < 0.5 ? "spikes" : "gas", sprung: false };
   return { kind: "path", depth };
 }
@@ -114,6 +122,7 @@ function tickEffectsOnEnemy(e: CombatEnc, log: (m: string) => void): CombatEnc {
 
 export function DungeonScreen() {
   const player = useGame((s) => s.player);
+  const meta = useGame((s) => s.meta);
   const damage = useGame((s) => s.damage);
   const rewardGold = useGame((s) => s.rewardGold);
   const rewardXp = useGame((s) => s.rewardXp);
@@ -180,6 +189,7 @@ export function DungeonScreen() {
   const useHearth = useGame((s) => s.useHearthstone);
   const markBossSeen = useGame((s) => s.markBossSeen);
   const bumpDailyFloor = useGame((s) => s.bumpDailyFloor);
+  const applyDungeonBuff = useGame((s) => s.applyDungeonBuff);
   const seenBossIntros = useGame((s) => s.meta.seenBossIntros);
 
   useEffect(() => {
@@ -259,7 +269,7 @@ export function DungeonScreen() {
     if (affixes.includes("bloodlust") && e.enemyHp / e.enemyMaxHp < 0.3) mult *= 1.5;
     if (moment && e.bossPhase === 2) mult *= moment.phaseDmgMult;
     if (player.activeOaths?.includes("deep")) mult *= 1.15;
-    const baseDmg = (e.enemy.atkBase + e.depth * 0.6) * mult;
+    const baseDmg = (e.enemy.atkBase + e.depth * 0.5) * mult;
     let dmg = rollDamage(baseDmg);
     if (e.shieldReduce > 0) dmg = Math.max(1, Math.floor(dmg * (1 - e.shieldReduce)));
     const taken = damage(dmg);
@@ -300,8 +310,9 @@ export function DungeonScreen() {
         case "deathknight": dmgMult = 1.35; lifestealMult = 2; break;
       }
     }
+    const masteryMult = bestiaryMasteryMult(meta.journal.enemyKills[e.enemy.id] ?? 0);
     // Roll damage in a ±20% range so hits feel less robotic.
-    let dmg = rollDamage(base * ab.effect.mult * dmgMult);
+    let dmg = rollDamage(base * ab.effect.mult * dmgMult * masteryMult);
     // Crit
     const critChance = player.crit + bonusCritPct;
     const crit = critChance > 0 && Math.random() * 100 < critChance;
@@ -692,26 +703,41 @@ export function DungeonScreen() {
           </div>
         )}
 
-        {enc.kind === "shrine" && (
-          <div className="border-2 border-divine bg-card p-3 fade-in-up">
-            <p className="pixel text-[10px] text-divine">✦ A forgotten shrine</p>
-            <p className="font-body text-sm text-muted-foreground mt-1">
-              {enc.shrine === "heal" ? "Cool water trickles from the stone. Drink and be mended." : "Embers swirl above the altar — kneel and be quickened."}
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button className="pixel-btn pixel-btn-gold !text-[8px]" onClick={() => {
-                if (enc.shrine === "heal") {
-                  const amt = Math.max(10, Math.floor(player.maxHp * 0.5));
-                  heal(amt); addFloater("heal", amt); addLog(`The shrine restores ${amt} HP.`); playSfx("ui-confirm");
-                } else {
-                  rewardXp(20 + enc.depth * 6); addLog("The shrine fills you with insight."); playSfx("ui-confirm");
-                }
-                setEnc({ kind: "path", depth: enc.depth });
-              }}>Pray</button>
-              <button className="pixel-btn !text-[8px]" onClick={() => setEnc({ kind: "path", depth: enc.depth })}>Move on</button>
+        {enc.kind === "shrine" && (() => {
+          const factionShrine = enc.shrine === "bulwark" || enc.shrine === "bloodlust"
+            ? FACTION_SHRINES.find((s) => s.id === enc.shrine)
+            : undefined;
+          return (
+            <div className="border-2 border-divine bg-card p-3 fade-in-up">
+              <p className="pixel text-[10px] text-divine">
+                {factionShrine ? `✦ ${factionShrine.name}` : "✦ A forgotten shrine"}
+              </p>
+              <p className="font-body text-sm text-muted-foreground mt-1">
+                {factionShrine
+                  ? factionShrine.desc
+                  : enc.shrine === "heal"
+                    ? "Cool water trickles from the stone. Drink and be mended."
+                    : "Embers swirl above the altar — kneel and be quickened."}
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button className="pixel-btn pixel-btn-gold !text-[8px]" onClick={() => {
+                  if (factionShrine) {
+                    applyDungeonBuff(factionShrine.buff);
+                    addLog(`You kneel at the shrine — ${factionShrine.name} answers.`);
+                    playSfx("ui-confirm");
+                  } else if (enc.shrine === "heal") {
+                    const amt = Math.max(10, Math.floor(player.maxHp * 0.5));
+                    heal(amt); addFloater("heal", amt); addLog(`The shrine restores ${amt} HP.`); playSfx("ui-confirm");
+                  } else {
+                    rewardXp(20 + enc.depth * 6); addLog("The shrine fills you with insight."); playSfx("ui-confirm");
+                  }
+                  setEnc({ kind: "path", depth: enc.depth });
+                }}>Pray</button>
+                <button className="pixel-btn !text-[8px]" onClick={() => setEnc({ kind: "path", depth: enc.depth })}>Move on</button>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {enc.kind === "trap" && (
           <div className="border-2 border-blood bg-card p-3 fade-in-up">
@@ -728,7 +754,7 @@ export function DungeonScreen() {
                 <button className="pixel-btn !text-[8px]" onClick={() => {
                   const trapMult = forkBias === "left" ? 0.5 : forkBias === "right" ? 1.8 : 1;
                   const oathMult = player.activeOaths?.includes("greedy") ? 1.5 : 1;
-                  const dmg = Math.max(3, Math.floor(player.maxHp * (enc.trap === "spikes" ? 0.22 : 0.15) * trapMult * oathMult));
+                  const dmg = Math.max(3, Math.floor(player.maxHp * (enc.trap === "spikes" ? 0.18 : 0.12) * trapMult * oathMult));
                   const taken = damage(dmg);
                   addFloater("enemy", taken);
                   setHit(true); setTimeout(() => setHit(false), 350);

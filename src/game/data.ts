@@ -501,6 +501,13 @@ export function dungeonBgForDepth(depth: number): string {
   return DUNGEON_BGS[idx];
 }
 
+/** The attack line revealed at bestiary tier 1 (3 kills): telegraphed tell, else heaviest hit. */
+export function signatureIntent(e: EnemyDef): EnemyIntent {
+  const teleg = e.intents.find((i) => i.telegraphable);
+  if (teleg) return teleg;
+  return e.intents.reduce((best, i) => (i.mult > best.mult ? i : best), e.intents[0]);
+}
+
 export function enemyForDepth(depth: number, faction?: FactionId | null): EnemyDef {
   // Boss floors are deterministic.
   const boss = BOSS_FLOORS[depth];
@@ -530,6 +537,8 @@ export interface BuffEffect {
   atk?: number;
   mag?: number;
   maxHp?: number;
+  crit?: number;
+  dodge?: number;
   goldMult?: number;
 }
 
@@ -962,7 +971,7 @@ export interface FactionShrineDef {
 }
 
 export const FACTION_SHRINES: FactionShrineDef[] = [
-  { id: "bulwark",   faction: "allies",  name: "Shrine of the Bulwark Oath", desc: "Stand and be steadied. +12 Max HP and +3% dodge for the rest of this descent.", buff: { maxHp: 12 } },
+  { id: "bulwark",   faction: "allies",  name: "Shrine of the Bulwark Oath", desc: "Stand and be steadied. +12 Max HP and +3% dodge for the rest of this descent.", buff: { maxHp: 12, dodge: 3 } },
   { id: "bloodlust", faction: "brigade", name: "Shrine of Bloodlust",        desc: "Bleed and be answered. +3 ATK for the rest of this descent.", buff: { atk: 3 } },
 ];
 

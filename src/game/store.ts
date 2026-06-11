@@ -96,6 +96,8 @@ interface PlayerState {
   weaknessTurns: number;
   /** Pre-descent Oaths active for this run. Cleared on finishRun/exitDungeon. */
   activeOaths: OathId[];
+  /** Shrine buffs applied during the current descent. Cleared on exit/finish. */
+  dungeonBuffs: BuffEffect[];
 }
 
 export interface RunSummary {
@@ -109,6 +111,8 @@ export interface RunSummary {
   bag: GearItem[];
   /** snapshot of equipment at run end (also stashable) */
   equipment: GearItem[];
+  /** Oaths sworn at the start of this run (for recap before they're cleared). */
+  oaths: OathId[];
   date: number;
   isFirstRun: boolean;
 }
@@ -197,6 +201,7 @@ interface GameState {
   purchaseRelic: (idx: number) => boolean;
   markBossSeen: (bossId: string) => void;
   bumpDailyFloor: (floor: number) => void;
+  applyDungeonBuff: (buff: BuffEffect) => void;
 }
 
 const emptyPlayer = (): PlayerState => ({
@@ -213,6 +218,7 @@ const emptyPlayer = (): PlayerState => ({
   activeBuffs: [], buffGoldMult: 1, firstHitCritArmed: false,
   dungeonMode: "normal", affixes: [], weaknessTurns: 0,
   activeOaths: [],
+  dungeonBuffs: [],
 });
 
 const xpForLevel = (lvl: number) => lvl * 25;
@@ -246,14 +252,38 @@ function sumTalentStats(learnedIds: string[], specId: string | null) {
   return s;
 }
 
-function recompute(p: PlayerState): PlayerState {
+function sumBuffStats(buffs: BuffEffect[]) {
+  const s = { atk: 0, mag: 0, maxHp: 0, crit: 0, dodge: 0 };
+  for (const b of buffs) {
+    s.atk += b.atk ?? 0;
+    s.mag += b.mag ?? 0;
+    s.maxHp += b.maxHp ?? 0;
+    s.crit += b.crit ?? 0;
+    s.dodge += b.dodge ?? 0;
+  }
+  return s;
+}
+
+function echoCombatBonuses(meta: MetaState | undefined, faction: FactionId | null) {
+  if (!meta || !faction) return { crit: 0, dodge: 0 };
+  const perFive = Math.floor(meta.account.level / 5);
+  return {
+    dodge: hasEcho(meta, "oath_bulwark") && faction === "allies" ? perFive : 0,
+    crit: hasEcho(meta, "oath_warmarch") && faction === "brigade" ? perFive : 0,
+  };
+}
+
+function recompute(p: PlayerState, meta?: MetaState): PlayerState {
   const gear = sumGearStats(p.equipment);
   const tal = sumTalentStats(p.learnedTalents, p.specId);
-  const maxHp = p.baseMaxHp + gear.maxHp + tal.maxHp;
-  const atk = p.baseAtk + gear.atk + tal.atk;
-  const mag = p.baseMag + gear.mag + tal.mag;
-  const crit = gear.crit + tal.crit;
-  const dodge = gear.dodge + tal.dodge;
+  const fp = p.faction ? FACTIONS.find((x) => x.id === p.faction)?.passives : undefined;
+  const db = sumBuffStats(p.dungeonBuffs ?? []);
+  const echo = echoCombatBonuses(meta, p.faction);
+  const maxHp = p.baseMaxHp + gear.maxHp + tal.maxHp + db.maxHp;
+  const atk = p.baseAtk + gear.atk + tal.atk + db.atk;
+  const mag = p.baseMag + gear.mag + tal.mag + db.mag;
+  const crit = (fp?.crit ?? 0) + gear.crit + tal.crit + db.crit + echo.crit;
+  const dodge = (fp?.dodge ?? 0) + gear.dodge + tal.dodge + db.dodge + echo.dodge;
   return { ...p, maxHp, atk, mag, crit, dodge, hp: Math.min(p.hp, maxHp) };
 }
 
@@ -324,7 +354,7 @@ function buildFreshPlayer(
     racialMax: racialChargesForLevel(meta.account.level),
     equipment, bag,
   };
-  return recompute(base);
+  return recompute(base, meta);
 }
 
 function persistMeta(meta: MetaState) { saveMeta(meta); }
@@ -464,7 +494,7 @@ export const useGame = create<GameState>((set, get) => ({
       ...p, xp, level, baseMaxHp, baseAtk, baseMag, talentPoints, earnedSkillForLevel,
       hp: Math.min(p.hp + 5, baseMaxHp),
       runXp: p.runXp + total,
-    });
+    }, meta);
     set({ player: next });
     // Account XP trickles in too
     const nextMeta = grantAccountXp(meta, Math.max(1, Math.floor(total * 0.25)));
@@ -607,7 +637,7 @@ export const useGame = create<GameState>((set, get) => ({
     }
     const next: PlayerState = { ...p, gold: p.gold - item.price, inventory: [...p.inventory, itemId] };
     if (item.kind === "weapon" && item.atk) next.baseAtk = p.baseAtk + item.atk;
-    set({ player: recompute(next) });
+    set({ player: recompute(next, get().meta) });
     get().pushLog(`Bought ${item.name}.`);
     return true;
   },
@@ -664,7 +694,8 @@ export const useGame = create<GameState>((set, get) => ({
         affixes,
         weaknessTurns: 0,
         activeOaths: oaths,
-      });
+        dungeonBuffs: [],
+      }, s.meta);
       return { screen: "dungeon", player: p };
     });
     if ((get().player.activeBuffs ?? []).length > 0) get().pushLog("✦ Town blessings infuse your gear.");
@@ -688,8 +719,9 @@ export const useGame = create<GameState>((set, get) => ({
         activeBuffs: [],
         buffGoldMult: 1,
         activeOaths: [],
+        dungeonBuffs: [],
       });
-      return { screen: "city", player: p };
+      return { screen: "city", player: recompute(p, s.meta) };
     });
     get().pushLog("You return to the city.");
   },
@@ -713,7 +745,7 @@ export const useGame = create<GameState>((set, get) => ({
     const next = recompute({
       ...p, gold: p.gold - cost, specId: null, learnedTalents: [],
       talentPoints: p.talentPoints + refund,
-    });
+    }, get().meta);
     set({ player: next });
     get().pushLog(`Respec'd. ${refund} point${refund===1?"":"s"} refunded${cost ? ` for ${cost}g` : " (free)"}.`);
     return true;
@@ -731,7 +763,7 @@ export const useGame = create<GameState>((set, get) => ({
       const hasCapstone = tree.some((n) => n.capstone && p.learnedTalents.includes(n.id));
       if (hasCapstone) { get().pushLog("Only one capstone may be chosen. Respec to change."); return false; }
     }
-    const next = recompute({ ...p, talentPoints: p.talentPoints - 1, learnedTalents: [...p.learnedTalents, node.id] });
+    const next = recompute({ ...p, talentPoints: p.talentPoints - 1, learnedTalents: [...p.learnedTalents, node.id] }, get().meta);
     set({ player: next });
     get().pushLog(`Learned talent: ${node.name}.`);
     return true;
@@ -751,7 +783,7 @@ export const useGame = create<GameState>((set, get) => ({
     const next = recompute({
       ...p, skillPoints: p.skillPoints - node.cost,
       learnedSkills: [...p.learnedSkills, node.id], baseMaxHp, baseAtk, baseMag,
-    });
+    }, get().meta);
     set({ player: next });
     const trainer = p.classId ? TRAINERS[p.classId] : null;
     get().pushLog(`Learned ${(node as { name?: string }).name ?? "skill"}${trainer ? ` from ${trainer.name}` : ""}.`);
@@ -794,7 +826,7 @@ export const useGame = create<GameState>((set, get) => ({
     const prev = p.equipment[item.slot];
     if (prev) bag.push(prev);
     const equipment = { ...p.equipment, [item.slot]: item };
-    set({ player: recompute({ ...p, bag, equipment }) });
+    set({ player: recompute({ ...p, bag, equipment }, get().meta) });
     get().pushLog(`Equipped ${item.name}.`);
   },
 
@@ -806,7 +838,7 @@ export const useGame = create<GameState>((set, get) => ({
     if (bagFreeSlots(p, meta) <= 0) { get().pushLog("Bag full."); return; }
     const equipment = { ...p.equipment };
     delete equipment[slot];
-    set({ player: recompute({ ...p, bag: [...p.bag, item], equipment }) });
+    set({ player: recompute({ ...p, bag: [...p.bag, item], equipment }, get().meta) });
     get().pushLog(`Unequipped ${item.name}.`);
   },
 
@@ -949,7 +981,7 @@ export const useGame = create<GameState>((set, get) => ({
   restoreBetweenRooms: () => {
     const p = get().player;
     const starved = p.affixes?.includes("starved") ? 0.5 : 1;
-    const amt = Math.max(2, Math.floor(p.maxHp * 0.10 * starved));
+    const amt = Math.max(2, Math.floor(p.maxHp * 0.12 * starved));
     const hp = Math.min(p.maxHp, p.hp + amt);
     if (hp > p.hp) {
       set({ player: { ...p, hp } });
@@ -1083,7 +1115,7 @@ export const useGame = create<GameState>((set, get) => ({
     const nextMeta: MetaState = { ...meta, stash: [...meta.stash, item] };
     persistMeta(nextMeta);
     // recompute so stats drop the stashed equipment immediately.
-    set({ meta: nextMeta, player: recompute({ ...p, equipment: nextEquipment, bag: nextBag }) });
+    set({ meta: nextMeta, player: recompute({ ...p, equipment: nextEquipment, bag: nextBag }, nextMeta) });
     return true;
   },
 
@@ -1211,6 +1243,7 @@ export const useGame = create<GameState>((set, get) => ({
       equipment: outcome === "victory"
         ? (Object.values(p.equipment).filter(Boolean) as GearItem[])
         : [],
+      oaths: [...p.activeOaths],
       date: Date.now(),
       isFirstRun,
     };
@@ -1228,7 +1261,8 @@ export const useGame = create<GameState>((set, get) => ({
       activeBuffs: [],
       buffGoldMult: 1,
       activeOaths: [],
-    });
+      dungeonBuffs: [],
+    }, meta);
     set({ meta: nextMeta, lastRun: summary, screen: "run_summary", player: cleanedPlayer });
   },
 
@@ -1437,6 +1471,13 @@ export const useGame = create<GameState>((set, get) => ({
     if (dc.progress >= 1) return;
     const nextMeta: MetaState = { ...meta, dailyContract: { ...dc, progress: 1 } };
     persistMeta(nextMeta); set({ meta: nextMeta });
+  },
+
+  applyDungeonBuff: (buff) => {
+    const meta = get().meta;
+    const p = get().player;
+    const dungeonBuffs = [...(p.dungeonBuffs ?? []), buff];
+    set({ player: recompute({ ...p, dungeonBuffs }, meta) });
   },
 }));
 

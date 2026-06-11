@@ -1,15 +1,8 @@
 import { useState } from "react";
 import { useGame } from "@/game/store";
 import { LORE_FRAGMENTS } from "@/game/meta";
-import { ENEMIES, damageRange, type EnemyDef } from "@/game/data";
-
-function tierFor(kills: number) {
-  if (kills >= 25) return 3;
-  if (kills >= 10) return 2;
-  if (kills >= 3) return 1;
-  if (kills >= 1) return 0;
-  return -1;
-}
+import { ENEMIES, damageRange, signatureIntent, type EnemyDef } from "@/game/data";
+import { bestiaryTier } from "@/game/meta";
 
 const TIER_BADGE: Record<number, string> = {
   3: "MASTERED",
@@ -41,7 +34,7 @@ export function JournalScreen() {
       <div className="border-2 border-black bg-card p-2 space-y-1.5">
         {Object.entries(ENEMIES).map(([id, e]) => {
           const kills = j.enemyKills[id] ?? 0;
-          const tier = tierFor(kills);
+          const tier = bestiaryTier(kills);
           const unseen = tier < 0;
           const open = openId === id;
           const canExpand = tier >= 2; // need at least "studied" to show the full kit panel
@@ -65,6 +58,15 @@ export function JournalScreen() {
                     HP ≈ {e.hpBase} · ATK ≈ {e.atkBase}
                   </p>
                 )}
+                {tier === 1 && (() => {
+                  const sig = signatureIntent(e);
+                  return (
+                    <p className="font-body text-xs text-foreground/80 mt-0.5">
+                      {sig.telegraphable && <span className="text-blood">⚠ </span>}
+                      Tell: {sig.label}
+                    </p>
+                  );
+                })()}
                 {tier === 2 && !open && (
                   <p className="pixel text-[7px] text-allies mt-0.5 opacity-80">Tap to inspect tells →</p>
                 )}

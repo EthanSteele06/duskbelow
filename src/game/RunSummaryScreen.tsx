@@ -1,6 +1,6 @@
 import { useGame } from "@/game/store";
 import { stashCapacity, LORE_FRAGMENTS } from "@/game/meta";
-import { RARITY_CLASS, SLOT_LABEL, gearScore } from "@/game/data";
+import { RARITY_CLASS, SLOT_LABEL, gearScore, OATHS } from "@/game/data";
 
 export function RunSummaryScreen() {
   const run = useGame((s) => s.lastRun);
@@ -34,6 +34,22 @@ export function RunSummaryScreen() {
             Your hero falls — but the <span className="text-gold">Wanderer endures</span>.
             Spend Soul Shards. Recover heirlooms. Descend again.
           </p>
+        </div>
+      )}
+
+      {(run.oaths?.length ?? 0) > 0 && (
+        <div className="border-2 border-black bg-card/80 p-3">
+          <p className="pixel text-[9px] text-gold mb-2">✦ Oaths Sworn</p>
+          <div className="space-y-1">
+            {(run.oaths ?? []).map((id) => {
+              const oath = OATHS.find((o) => o.id === id);
+              return oath ? (
+                <p key={id} className="font-body text-xs text-muted-foreground">
+                  <span className="text-foreground">{oath.name}</span> — {oath.desc}
+                </p>
+              ) : null;
+            })}
+          </div>
         </div>
       )}
 

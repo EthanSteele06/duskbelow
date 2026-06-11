@@ -206,14 +206,27 @@ export const ECHO_TREE: EchoNode[] = [
   { id: "unlock_priest", name: "Awaken the Priest", desc: "Permanently unlock the Priest class on the title screen.", cost: 10, requires: "unlock_mage" },
   // Capstone
   { id: "ascendance",   name: "Ascendance",       desc: "New characters begin at level 2.",        cost: 8, requires: "shard_bonus" },
-  // Capstone
-  { id: "ascendance",   name: "Ascendance",       desc: "New characters begin at level 2.",        cost: 8, requires: "shard_bonus" },
   // ── Faction echoes (only visible to the matching banner) ──
   { id: "oath_bulwark", name: "Oathbound Bulwark", desc: "Allies-only. +1 dodge for every 5 Wanderer levels.", cost: 4, requiresFaction: "allies" },
   { id: "oath_warmarch", name: "Warmarch", desc: "Brigade-only. +1 crit for every 5 Wanderer levels.", cost: 4, requiresFaction: "brigade" },
 ];
 
 export function hasEcho(meta: MetaState, id: string) { return meta.echoLearned.includes(id); }
+
+// ── Bestiary tiers (kill-count reveal + mastery damage) ─────────────────────
+
+export function bestiaryTier(kills: number): number {
+  if (kills >= 25) return 3;
+  if (kills >= 10) return 2;
+  if (kills >= 3) return 1;
+  if (kills >= 1) return 0;
+  return -1;
+}
+
+/** +5% player damage vs this enemy id once the bestiary is mastered (25 kills). */
+export function bestiaryMasteryMult(kills: number): number {
+  return kills >= 25 ? 1.05 : 1;
+}
 
 export interface EchoStart {
   bonusMaxHp: number;
