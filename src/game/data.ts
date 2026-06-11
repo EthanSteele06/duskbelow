@@ -1478,6 +1478,97 @@ export function gearScore(item: GearItem): number {
   return (item.stats.atk ?? 0) * 2 + (item.stats.mag ?? 0) * 2 + (item.stats.maxHp ?? 0) + (item.stats.crit ?? 0) + (item.stats.dodge ?? 0);
 }
 
+export function equippedGearScore(equipment: Partial<Record<GearSlot, GearItem>>): number {
+  let total = 0;
+  for (const item of Object.values(equipment)) {
+    if (item) total += gearScore(item);
+  }
+  return total;
+}
+
+// ── Threat scaling (player power → enemy HP/damage, upward from depth baseline) ─
+
+export type ThreatKind = "trash" | "mini" | "major";
+export type ThreatTier = "none" | "stirring" | "awakened" | "enraged";
+
+export interface ThreatTierDef {
+  tier: ThreatTier;
+  label: string;
+  intro: string;
+}
+
+/** Snapshot of combat-relevant player power at encounter roll time. */
+export interface PlayerThreatSnap {
+  atk: number;
+  mag: number;
+  level: number;
+  gearScore: number;
+}
+
+export function playerThreat(snap: PlayerThreatSnap): number {
+  return Math.max(snap.atk, snap.mag) + Math.floor(snap.level * 1.5) + Math.floor(snap.gearScore / 8);
+}
+
+export function threatBaseline(depth: number): number {
+  return 8 + depth * 2;
+}
+
+/** HP multiplier from player power exceeding the floor baseline. Never below 1. */
+export function threatHpScale(threat: number, depth: number, kind: ThreatKind): number {
+  const excess = Math.max(0, threat - threatBaseline(depth));
+  const rate = kind === "trash" ? 0.05 : kind === "mini" ? 0.03 : 0.02;
+  return 1 + excess * rate;
+}
+
+/** Softer damage mirror of threat HP scale — avoids lethal spike when both apply. */
+export function threatAtkScale(hpScale: number): number {
+  return 1 + (hpScale - 1) * 0.55;
+}
+
+export function threatTierFor(hpScale: number): ThreatTier {
+  if (hpScale >= 1.35) return "enraged";
+  if (hpScale >= 1.18) return "awakened";
+  if (hpScale >= 1.06) return "stirring";
+  return "none";
+}
+
+export const THREAT_TIERS: Record<Exclude<ThreatTier, "none">, ThreatTierDef> = {
+  stirring: {
+    tier: "stirring",
+    label: "Stirring",
+    intro: "The foe stirs — it senses more than a pilgrim's strength.",
+  },
+  awakened: {
+    tier: "awakened",
+    label: "Awakened",
+    intro: "The dungeon awakens this foe to match your momentum.",
+  },
+  enraged: {
+    tier: "enraged",
+    label: "Enraged",
+    intro: "Enraged! The stone itself seems to bolster the enemy.",
+  },
+};
+
+/** Continuous depth HP bonus — no cliff at floor 10. */
+export function depthHpBonus(depth: number): number {
+  if (depth <= 9) return Math.floor(depth * 1.0);
+  return 9 + Math.floor((depth - 9) * 0.75);
+}
+
+/** Per-round enrage when a fight drags — punishes ability spam / stall. Caps at +40%. */
+export function turnEnrageMult(combatTurns: number): number {
+  if (combatTurns <= 4) return 1;
+  return Math.min(1.4, 1 + (combatTurns - 4) * 0.08);
+}
+
+export function turnEnrageLabel(combatTurns: number): string | null {
+  const mult = turnEnrageMult(combatTurns);
+  if (mult <= 1) return null;
+  const pct = Math.round((mult - 1) * 100);
+  return combatTurns >= 8 ? `Frenzied +${pct}%` : `Enrage +${pct}%`;
+}
+
 export function gearSellPrice(item: GearItem): number {
   return Math.max(2, Math.floor(gearScore(item) * (1 + RARITY_RANK[item.rarity])));
 }

@@ -5,8 +5,11 @@ import {
   CLASS_ABILITIES, SPEC_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
   RARITY_CLASS, RARITY_LABEL, rollDamage, damageRange,
   MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth, rollClassLegendary, AFFIXES, BOSS_MOMENTS, FACTION_SHRINES,
+  equippedGearScore, playerThreat, threatHpScale, threatAtkScale, threatTierFor, THREAT_TIERS, depthHpBonus,
+  turnEnrageMult, turnEnrageLabel,
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
   type StatusEffect, type EnemyIntent, type FactionId, type FactionShrineId,
+  type PlayerThreatSnap, type ThreatKind, type ThreatTier,
 } from "@/game/data";
 import { bestiaryMasteryMult } from "@/game/meta";
 import { playMusic, playSfx } from "@/game/audio";
@@ -41,6 +44,13 @@ type CombatEnc = {
   nextIntent: EnemyIntent;
   /** 1 = healthy boss / regular enemy, 2 = boss in phase 2 (≤50% HP). */
   bossPhase: 1 | 2;
+  /** HP multiplier from player power at fight start (visible threat tier). */
+  threatHpScale: number;
+  threatTier: ThreatTier;
+  /** Rounds elapsed — drives visible turn enrage after turn 4. */
+  combatTurns: number;
+  /** Highest turn-enrage tier we've already announced in the log. */
+  turnEnrageAnnounced: number;
 };
 
 type ShrineKind = "heal" | "blessing" | FactionShrineId;
@@ -63,21 +73,45 @@ function pickIntent(enemy: EnemyDef): EnemyIntent {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function buildCombat(depth: number, faction?: FactionId | null, affixes: string[] = []): CombatEnc {
+function threatKindForDepth(depth: number): ThreatKind {
+  if (MAJOR_BOSS_FLOORS.has(depth)) return "major";
+  if (MINI_BOSS_FLOORS.has(depth)) return "mini";
+  return "trash";
+}
+
+function buildCombat(
+  depth: number,
+  snap: PlayerThreatSnap,
+  faction?: FactionId | null,
+  affixes: string[] = [],
+): CombatEnc {
   const e = enemyForDepth(depth, faction);
-  let hp = e.hpBase + (depth >= 10 ? 0 : Math.floor(depth * 1.1));
+  const kind = threatKindForDepth(depth);
+  const hpScale = threatHpScale(playerThreat(snap), depth, kind);
+  let hp = Math.floor((e.hpBase + depthHpBonus(depth)) * hpScale);
   if (affixes.includes("fortified")) hp = Math.floor(hp * 1.3);
+  const tier = threatTierFor(hpScale);
   return {
     kind: "combat", depth, enemy: e, enemyHp: hp, enemyMaxHp: hp,
     stunnedTurns: 0, shieldReduce: 0, cooldowns: {},
     enemyEffects: [], playerEffects: [],
     nextIntent: pickIntent(e),
     bossPhase: 1,
+    threatHpScale: hpScale,
+    threatTier: tier,
+    combatTurns: 0,
+    turnEnrageAnnounced: 0,
   };
 }
 
-function rollEncounter(depth: number, faction?: FactionId | null, affixes: string[] = [], bias: ForkBias = "onward"): Encounter {
-  if (MAJOR_BOSS_FLOORS.has(depth) || MINI_BOSS_FLOORS.has(depth)) return buildCombat(depth, faction, affixes);
+function rollEncounter(
+  depth: number,
+  snap: PlayerThreatSnap,
+  faction?: FactionId | null,
+  affixes: string[] = [],
+  bias: ForkBias = "onward",
+): Encounter {
+  if (MAJOR_BOSS_FLOORS.has(depth) || MINI_BOSS_FLOORS.has(depth)) return buildCombat(depth, snap, faction, affixes);
   // Bias bends the encounter weights: Left = more fights & less traps, Right = more traps & fewer fights.
   const combatW = 0.58 * (bias === "left" ? 1.6 : bias === "right" ? 0.7 : 1);
   const trapW = 0.12 * (bias === "left" ? 0.5 : bias === "right" ? 1.8 : 1);
@@ -86,7 +120,7 @@ function rollEncounter(depth: number, faction?: FactionId | null, affixes: strin
   const total = combatW + chestW + shrineW + trapW + pathW;
   const r = Math.random() * total;
   let acc = 0;
-  if (r < (acc += combatW)) return buildCombat(depth, faction, affixes);
+  if (r < (acc += combatW)) return buildCombat(depth, snap, faction, affixes);
   if (r < (acc += chestW)) return { kind: "chest", depth, preview: rollChest(depth) };
   if (r < (acc += shrineW)) {
     if (faction) {
@@ -200,13 +234,20 @@ export function DungeonScreen() {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [combatLog]);
 
+  const playerThreatSnap = (): PlayerThreatSnap => ({
+    atk: player.atk,
+    mag: player.mag,
+    level: player.level,
+    gearScore: equippedGearScore(player.equipment),
+  });
+
   const advance = (bias: ForkBias = "onward") => {
     const newDepth = enc.depth + 1;
     if (newDepth > MAX_DEPTH) { finishRun("victory"); return; }
     restoreBetweenRooms();
     setForkBias(bias);
     bumpDailyFloor(newDepth);
-    const next = rollEncounter(newDepth, playerFaction, player.affixes ?? [], bias);
+    const next = rollEncounter(newDepth, playerThreatSnap(), playerFaction, player.affixes ?? [], bias);
     setEnc(next);
     // Boss intro banner: first time the player meets a major boss.
     if (next.kind === "combat") {
@@ -216,6 +257,10 @@ export function DungeonScreen() {
         markBossSeen(next.enemy.id);
       }
       addLog(`A ${next.enemy.name} blocks your path!`);
+      if (next.threatTier !== "none") {
+        const def = THREAT_TIERS[next.threatTier];
+        addLog(`⚠ ${def.label} — ${def.intro}`);
+      }
     }
     else if (next.kind === "chest") addLog(`You spot ${next.preview.label}.`);
     else addLog("The corridor opens further.");
@@ -241,8 +286,20 @@ export function DungeonScreen() {
     return { ...e, playerEffects: next };
   };
 
+  const bumpTurnEnrage = (e: CombatEnc): CombatEnc => {
+    const nextTurns = e.combatTurns + 1;
+    const mult = turnEnrageMult(nextTurns);
+    const announced = Math.max(e.turnEnrageAnnounced, 0);
+    if (mult > 1 && mult > announced) {
+      const label = turnEnrageLabel(nextTurns);
+      if (label) addLog(`★ ${e.enemy.name} ${label}!`);
+      return { ...e, combatTurns: nextTurns, turnEnrageAnnounced: mult };
+    }
+    return { ...e, combatTurns: nextTurns };
+  };
+
   const enemyTurn = (eIn: CombatEnc): CombatEnc => {
-    let e = eIn;
+    let e = bumpTurnEnrage(eIn);
     // Tick enemy DoTs first; check for kill
     e = tickEffectsOnEnemy(e, addLog);
     if (e.enemyHp <= 0) {
@@ -269,6 +326,7 @@ export function DungeonScreen() {
     if (affixes.includes("bloodlust") && e.enemyHp / e.enemyMaxHp < 0.3) mult *= 1.5;
     if (moment && e.bossPhase === 2) mult *= moment.phaseDmgMult;
     if (player.activeOaths?.includes("deep")) mult *= 1.15;
+    mult *= threatAtkScale(e.threatHpScale) * turnEnrageMult(e.combatTurns);
     const baseDmg = (e.enemy.atkBase + e.depth * 0.5) * mult;
     let dmg = rollDamage(baseDmg);
     if (e.shieldReduce > 0) dmg = Math.max(1, Math.floor(dmg * (1 - e.shieldReduce)));
@@ -577,8 +635,17 @@ export function DungeonScreen() {
         </div>
         <div className="absolute top-2 right-2 z-10"><SettingsButton /></div>
         {enc.kind === "combat" && (
-          <div className="absolute right-2 top-9 pixel text-[8px] text-blood text-shadow-pixel bg-background/80 px-1.5 py-0.5 border border-black">
-            {enc.enemy.name} {enc.enemyHp}/{enc.enemyMaxHp}
+          <div className="absolute right-2 top-9 flex flex-col items-end gap-0.5">
+            <div className="pixel text-[8px] text-blood text-shadow-pixel bg-background/80 px-1.5 py-0.5 border border-black">
+              {enc.enemy.name} {enc.enemyHp}/{enc.enemyMaxHp}
+            </div>
+            {enc.threatTier !== "none" && (
+              <div className={`pixel text-[7px] text-shadow-pixel bg-background/90 px-1.5 py-0.5 border border-black ${
+                enc.threatTier === "enraged" ? "text-blood" : enc.threatTier === "awakened" ? "text-ember" : "text-muted-foreground"
+              }`}>
+                ⚠ {THREAT_TIERS[enc.threatTier].label}
+              </div>
+            )}
           </div>
         )}
         {enc.kind === "combat" && (
@@ -632,6 +699,22 @@ export function DungeonScreen() {
               <div className="h-full bg-blood transition-all" style={{ width: `${Math.max(0, (enc.enemyHp / enc.enemyMaxHp) * 100)}%` }} />
             </div>
             <div className="mt-1 flex flex-wrap gap-1">
+              {enc.threatTier !== "none" && (
+                <span className={`pixel text-[7px] border px-1 ${
+                  enc.threatTier === "enraged"
+                    ? "border-blood text-blood animate-pulse"
+                    : enc.threatTier === "awakened"
+                      ? "border-ember text-ember"
+                      : "border-muted-foreground text-ember"
+                }`}>
+                  ⚠ {THREAT_TIERS[enc.threatTier].label}
+                </span>
+              )}
+              {turnEnrageLabel(enc.combatTurns) && (
+                <span className="pixel text-[7px] border border-blood text-blood px-1 animate-pulse">
+                  ★ {turnEnrageLabel(enc.combatTurns)}
+                </span>
+              )}
               {enc.stunnedTurns > 0 && <span className="pixel text-[7px] text-arcane border border-arcane px-1">❄ FROZEN</span>}
               {enc.shieldReduce > 0 && <span className="pixel text-[7px] text-gold border border-gold px-1">⛨ BRACED</span>}
               {enc.enemyEffects.map((ef) => (
