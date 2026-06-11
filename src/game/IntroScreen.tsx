@@ -44,7 +44,7 @@ export function IntroScreen() {
 
         <div className="mt-auto flex flex-col gap-2">
           <button onClick={() => setScreen("city")} className="pixel-btn pixel-btn-primary text-center">▶ Enter the City</button>
-          <button onClick={() => setScreen("dungeon")} className="pixel-btn text-center">⚔ Straight to the Dungeon</button>
+          <button onClick={() => enterDungeon()} className="pixel-btn text-center">⚔ Straight to the Dungeon</button>
         </div>
       </div>
     </div>
