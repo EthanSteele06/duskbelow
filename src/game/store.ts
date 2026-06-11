@@ -4,14 +4,15 @@ import {
   CLASSES, FACTIONS, VENDOR_ITEMS, QUESTS, TRAINERS, RECIPES, MATERIALS, SPECS, COSMETICS,
   BAG_SIZE_BASE, BAG_SIZE_CHAMPION, RESPEC_GOLD_COST, MAX_ACTIVE_QUESTS, MATERIAL_STACK_SIZE,
   gearSellPrice, profXpForLevel,
-  IDLE_YIELDS, IDLE_SECONDS_PER_UNIT, IDLE_MAX_SECONDS, rollAffixes, rollGear, rollClassLegendary,
+  IDLE_YIELDS, IDLE_SECONDS_PER_UNIT, IDLE_MAX_SECONDS,   rollAffixes, rollAscensionAffixes, rollGear, rollClassLegendary,
   DAILY_CONTRACTS, rollDailyContract, rollRelicListings,
+  CHRONICLE_BOONS, activeClassTrial, maxDepthForMode,
 } from "./data";
 import type { MetaOptions } from "./meta";
 import {
   type MetaState, type EchoNode, emptyMeta, loadMeta, saveMeta,
   echoStart, accountXpForLevel, ACCOUNT_LEVEL_CAP, stashCapacity, racialChargesForLevel,
-  ECHO_TREE, hasEcho, DAILY_ROTATION_MS,
+  ECHO_TREE, hasEcho, DAILY_ROTATION_MS, hasClassTrialUnlocked, zoneModsForLevel,
 } from "./meta";
 import { TALENT_TREES } from "./talents";
 import { sumTalentStatBonuses } from "./talentCombat";
@@ -119,6 +120,9 @@ export interface RunSummary {
   equipment: GearItem[];
   /** Oaths sworn at the start of this run (for recap before they're cleared). */
   oaths: OathId[];
+  /** Echo retention on defeat. */
+  retainedGold?: number;
+  hoarderKept?: GearItem;
   date: number;
   isFirstRun: boolean;
 }
@@ -152,7 +156,9 @@ interface GameState {
   buy: (itemId: string) => boolean;
   buyGem: (itemId: string) => boolean;
   use: (itemId: string) => void;
-  enterDungeon: (mode?: DungeonMode, oaths?: OathId[]) => void;
+  enterDungeon: (mode?: DungeonMode, oaths?: OathId[], chronicleBoonId?: string) => void;
+  armFirstHitCrit: () => void;
+  consumeFirstHitCrit: () => boolean;
   exitDungeon: () => void;
   reset: () => void;
   pickSpec: (specId: string) => void;
@@ -333,6 +339,9 @@ function buildFreshPlayer(
     if (!equipment[h.slot]) equipment[h.slot] = h;
     else bag.push(h);
   }
+  if (meta.pendingHoarderItem) {
+    bag.push(meta.pendingHoarderItem);
+  }
 
   // Default starting purse is 50g for a brand-new character. If this is a
   // wipe-respawn and Buried Coin is learned, carry a fraction of the prior
@@ -341,17 +350,23 @@ function buildFreshPlayer(
     ? Math.floor(prev.gold * echo.retainGoldPct)
     : 50;
 
+  const startLevel = echo.startLevel;
+  const levelBonusHp = (startLevel - 1) * 6;
+  const levelBonusAtk = startLevel - 1;
+  const levelBonusMag = startLevel - 1;
+
   const base: PlayerState = {
     ...emptyPlayer(),
     name: name || "Wanderer",
     faction, classId,
-    baseMaxHp: c.hp + (fp.maxHp ?? 0) + echo.bonusMaxHp,
-    baseAtk:   c.atk + (fp.atk ?? 0) + echo.bonusAtk,
-    baseMag:   c.mag + (fp.mag ?? 0),
-    hp:        c.hp + (fp.maxHp ?? 0) + echo.bonusMaxHp,
-    maxHp:     c.hp + (fp.maxHp ?? 0) + echo.bonusMaxHp,
-    atk:       c.atk + (fp.atk ?? 0) + echo.bonusAtk,
-    mag:       c.mag + (fp.mag ?? 0),
+    level: startLevel,
+    baseMaxHp: c.hp + (fp.maxHp ?? 0) + echo.bonusMaxHp + levelBonusHp,
+    baseAtk:   c.atk + (fp.atk ?? 0) + echo.bonusAtk + levelBonusAtk,
+    baseMag:   c.mag + (fp.mag ?? 0) + levelBonusMag,
+    hp:        c.hp + (fp.maxHp ?? 0) + echo.bonusMaxHp + levelBonusHp,
+    maxHp:     c.hp + (fp.maxHp ?? 0) + echo.bonusMaxHp + levelBonusHp,
+    atk:       c.atk + (fp.atk ?? 0) + echo.bonusAtk + levelBonusAtk,
+    mag:       c.mag + (fp.mag ?? 0) + levelBonusMag,
     crit:      fp.crit ?? 0,
     dodge:     fp.dodge ?? 0,
     inventory: [...echo.startingPotions],
@@ -370,13 +385,16 @@ function persistMeta(meta: MetaState) { saveMeta(meta); }
 
 function grantAccountXp(meta: MetaState, n: number): MetaState {
   if (meta.account.level >= ACCOUNT_LEVEL_CAP) return meta;
+  const prevLevel = meta.account.level;
   let { xp, level } = meta.account;
   xp += n;
   while (xp >= accountXpForLevel(level) && level < ACCOUNT_LEVEL_CAP) {
     xp -= accountXpForLevel(level);
     level += 1;
   }
-  return { ...meta, account: { xp, level } };
+  let echoRespecTokens = meta.echoRespecTokens ?? 0;
+  if (prevLevel < 13 && level >= 13) echoRespecTokens += 1;
+  return { ...meta, account: { xp, level }, echoRespecTokens };
 }
 
 // Start with emptyMeta on both server and first client render to avoid
@@ -411,11 +429,15 @@ export const useGame = create<GameState>((set, get) => ({
     };
     // Consume heirloom stash: items are moved into the new character below,
     // so clear it from meta so the next wipe doesn't duplicate them.
-    const nextMeta = { ...meta, unlockedClasses: unlocked, collection, stash: [] };
-    persistMeta(nextMeta);
-    // buildFreshPlayer needs the items it's about to consume; pass the
-    // pre-clear meta so it sees the stash, but persist the cleared meta.
     const player = buildFreshPlayer(faction, classId, name, meta);
+    const nextMeta = {
+      ...meta,
+      unlockedClasses: unlocked,
+      collection,
+      stash: [],
+      pendingHoarderItem: meta.pendingHoarderItem ? null : meta.pendingHoarderItem,
+    };
+    persistMeta(nextMeta);
     const f = FACTIONS.find((x) => x.id === faction)!;
     set({
       meta: nextMeta,
@@ -631,6 +653,20 @@ export const useGame = create<GameState>((set, get) => ({
         get().pushLog(`✦ A new path opens — return to the title screen to play the ${def.unlocksClass.toUpperCase()}.`);
       }
     }
+    if (def.storyId) {
+      const arcQuests = QUESTS.filter((q) => q.storyId === def.storyId);
+      const maxStep = Math.max(...arcQuests.map((q) => q.storyStep ?? 0));
+      if ((def.storyStep ?? 0) >= maxStep) {
+        const meta = get().meta;
+        if (!meta.completedChronicles.includes(def.storyId)) {
+          const boon = CHRONICLE_BOONS.find((b) => b.storyId === def.storyId);
+          const nextMeta = { ...meta, completedChronicles: [...meta.completedChronicles, def.storyId] };
+          persistMeta(nextMeta);
+          set({ meta: nextMeta });
+          if (boon) get().pushLog(`✦ Chronicle complete — ${boon.name} available before your next descent.`);
+        }
+      }
+    }
   },
 
   buy: (itemId) => {
@@ -685,15 +721,23 @@ export const useGame = create<GameState>((set, get) => ({
     get().pushLog(`Drank ${item.name}. +${item.heal} HP.`);
   },
 
-  enterDungeon: (mode = "normal", oaths = []) => {
+  enterDungeon: (mode = "normal", oaths = [], chronicleBoonId) => {
     set((s) => {
-      const buffs = s.player.activeBuffs ?? [];
-      const bAtk = buffs.reduce((a, b) => a + (b.atk ?? 0), 0);
-      const bMag = buffs.reduce((a, b) => a + (b.mag ?? 0), 0);
-      const bHp  = buffs.reduce((a, b) => a + (b.maxHp ?? 0), 0);
-      const bGold = 1 + buffs.reduce((a, b) => a + (b.goldMult ?? 0), 0);
+      const boonDef = chronicleBoonId
+        ? CHRONICLE_BOONS.find((b) => b.id === chronicleBoonId)
+        : undefined;
+      const boonBuff = boonDef?.buff;
+      const townBuffs = s.player.activeBuffs ?? [];
+      const descentBuffs = boonBuff ? [...townBuffs, boonBuff] : townBuffs;
+      const bAtk = descentBuffs.reduce((a, b) => a + (b.atk ?? 0), 0);
+      const bMag = descentBuffs.reduce((a, b) => a + (b.mag ?? 0), 0);
+      const bHp  = descentBuffs.reduce((a, b) => a + (b.maxHp ?? 0), 0);
+      const bDodge = descentBuffs.reduce((a, b) => a + (b.dodge ?? 0), 0);
+      const bGold = 1 + descentBuffs.reduce((a, b) => a + (b.goldMult ?? 0), 0);
       const ironWill = hasEcho(s.meta, "iron_will") ? 1 : 0;
-      const affixes = mode === "cursed" ? rollAffixes(2) : [];
+      const affixes = mode === "cursed" ? rollAffixes(2)
+        : mode === "ascension" ? rollAscensionAffixes()
+        : [];
       const startDepth = oaths.includes("deep") ? 3 : 1;
       const p = recompute({
         ...s.player,
@@ -701,6 +745,7 @@ export const useGame = create<GameState>((set, get) => ({
         racialUsed: 0,
         racialMax: racialChargesForLevel(s.meta.account.level) + ironWill,
         nextAttackMult: 1,
+        firstHitCritArmed: false,
         runKills: 0, runGold: 0, runXp: 0, runShards: 0,
         baseMaxHp: s.player.baseMaxHp + bHp,
         baseAtk:   s.player.baseAtk + bAtk,
@@ -714,21 +759,43 @@ export const useGame = create<GameState>((set, get) => ({
         dungeonBuffs: [],
         eliteRetreatUsed: false,
         abilityCooldowns: {},
+        activeBuffs: townBuffs,
       }, s.meta);
+      const withDodge = bDodge > 0 ? { ...p, dodge: p.dodge + bDodge } : p;
       // First descent: grant a free Hearthstone Charm so floor 5 isn't a dead end.
-      let nextPlayer = p;
-      if (!s.meta.hasCompletedFirstRun && !p.inventory.includes("hearth")) {
-        nextPlayer = { ...p, inventory: [...p.inventory, "hearth"] };
+      let nextPlayer = withDodge;
+      if (!s.meta.hasCompletedFirstRun && !withDodge.inventory.includes("hearth")) {
+        nextPlayer = { ...withDodge, inventory: [...withDodge.inventory, "hearth"] };
       }
       return { screen: "dungeon", player: nextPlayer };
     });
+    if (chronicleBoonId) {
+      const boon = CHRONICLE_BOONS.find((b) => b.id === chronicleBoonId);
+      if (boon) get().pushLog(`✦ Chronicle boon active: ${boon.name}.`);
+    }
     if ((get().player.activeBuffs ?? []).length > 0) get().pushLog("✦ Town blessings infuse your gear.");
     if (!get().meta.hasCompletedFirstRun && get().player.inventory.includes("hearth")) {
       get().pushLog("✦ A Hearthstone Charm is pressed into your palm — use it to bail out if the descent turns sour.");
     }
     if (mode === "cursed") get().pushLog(`☠ Cursed Depths — affixes rolled: ${get().player.affixes.join(", ")}.`);
+    if (mode === "ascension") get().pushLog(`☀ Ascension — lingering curses: ${get().player.affixes.join(", ")}.`);
     if (oaths.length > 0) get().pushLog(`✦ Oaths sworn: ${oaths.join(", ")}.`);
     get().pushLog("You descend into darkness...");
+  },
+
+  armFirstHitCrit: () => {
+    const meta = get().meta;
+    if (!echoStart(meta).echoLight) return;
+    const p = get().player;
+    if (p.firstHitCritArmed) return;
+    set({ player: { ...p, firstHitCritArmed: true } });
+  },
+
+  consumeFirstHitCrit: () => {
+    const p = get().player;
+    if (!p.firstHitCritArmed) return false;
+    set({ player: { ...p, firstHitCritArmed: false } });
+    return true;
   },
   exitDungeon: () => {
     set((s) => {
@@ -1230,6 +1297,7 @@ export const useGame = create<GameState>((set, get) => ({
   finishRun: (outcome) => {
     const p = get().player;
     const meta = get().meta;
+    const echo = echoStart(meta);
     const isFirstRun = !meta.hasCompletedFirstRun;
     const j = meta.journal;
     const newDeepest = Math.max(j.deepestFloor, p.dungeonDepth);
@@ -1243,24 +1311,55 @@ export const useGame = create<GameState>((set, get) => ({
       runs: lt.runs + 1,
       deepest: Math.max(lt.deepest, p.dungeonDepth),
       deepestCursed: p.dungeonMode === "cursed" ? Math.max(lt.deepestCursed, p.dungeonDepth) : lt.deepestCursed,
+      deepestAscension: p.dungeonMode === "ascension" ? Math.max(lt.deepestAscension ?? 0, p.dungeonDepth) : (lt.deepestAscension ?? 0),
     };
     // Codex: track which classes have cleared a full run (any mode).
     const classesCleared = outcome === "victory" && p.classId && !meta.collection.classesCleared.includes(p.classId)
       ? [...meta.collection.classesCleared, p.classId]
       : meta.collection.classesCleared;
+
+    let hoarderKept: GearItem | undefined;
+    let pendingHoarderItem = meta.pendingHoarderItem;
+    let retainedGold: number | undefined;
+    if (outcome === "defeat") {
+      if (echo.retainGoldPct > 0) retainedGold = Math.floor(p.gold * echo.retainGoldPct);
+      if (hasEcho(meta, "hoarder")) {
+        const pool = [
+          ...p.bag,
+          ...(Object.values(p.equipment).filter(Boolean) as GearItem[]),
+        ];
+        if (pool.length > 0) {
+          hoarderKept = pool[Math.floor(Math.random() * pool.length)];
+          pendingHoarderItem = hoarderKept;
+        }
+      }
+    }
+
     let nextMeta: MetaState = {
       ...meta,
       hasCompletedFirstRun: true,
       hasClearedNormal: meta.hasClearedNormal || (outcome === "victory" && p.dungeonMode === "normal"),
+      hasClearedAscension: meta.hasClearedAscension || (outcome === "victory" && p.dungeonMode === "ascension" && p.dungeonDepth >= maxDepthForMode("ascension")),
       journal: { ...j, deepestFloor: newDeepest, bestRun, runsCompleted: j.runsCompleted + 1 },
       lifetime,
       collection: { ...meta.collection, classesCleared },
+      pendingHoarderItem,
     };
     // Victory bonus shards + account XP
+    let victoryShards = 0;
     if (outcome === "victory") {
-      const echo = echoStart(meta);
-      const bonus = Math.floor(15 * echo.shardMult);
-      nextMeta = grantAccountXp({ ...nextMeta, shards: nextMeta.shards + bonus }, 50);
+      victoryShards = Math.floor(15 * echo.shardMult);
+      if (p.dungeonMode === "ascension") victoryShards += 25;
+      if (hasClassTrialUnlocked(meta.account.level)) {
+        const trial = activeClassTrial();
+        const trialMet =
+          (!trial.classId || p.classId === trial.classId) &&
+          (!trial.specId || p.specId === trial.specId) &&
+          (trial.id !== "trial_oath" || p.activeOaths.length > 0) &&
+          (trial.id !== "trial_deep" || p.dungeonDepth >= 25);
+        if (trialMet) victoryShards += trial.shardBonus;
+      }
+      nextMeta = grantAccountXp({ ...nextMeta, shards: nextMeta.shards + victoryShards }, 50);
     } else {
       nextMeta = grantAccountXp(nextMeta, Math.max(5, p.dungeonDepth * 3));
     }
@@ -1271,7 +1370,7 @@ export const useGame = create<GameState>((set, get) => ({
       kills: p.runKills,
       gold: p.runGold,
       xp: p.runXp,
-      shards: p.runShards + (outcome === "victory" ? Math.floor(15 * echoStart(meta).shardMult) : 0),
+      shards: p.runShards + victoryShards,
       loreFound: j.loreFound,
       // On defeat, gear is lost in the dungeon — only escapees keep loot.
       bag: outcome === "victory" ? [...p.bag] : [],
@@ -1279,6 +1378,8 @@ export const useGame = create<GameState>((set, get) => ({
         ? (Object.values(p.equipment).filter(Boolean) as GearItem[])
         : [],
       oaths: [...p.activeOaths],
+      retainedGold,
+      hoarderKept,
       date: Date.now(),
       isFirstRun,
     };

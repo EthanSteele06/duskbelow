@@ -161,6 +161,8 @@ function ProfileTab({
         <div>Runs completed</div><div className="text-right">{Math.max(lt.runs, j.runsCompleted)}</div>
         <div>Deepest floor</div><div className="text-right">{Math.max(lt.deepest, j.deepestFloor)}</div>
         <div>Deepest (cursed)</div><div className="text-right">{lt.deepestCursed}</div>
+        <div>Deepest (ascension)</div><div className="text-right">{lt.deepestAscension ?? 0}</div>
+        <div>Chronicles done</div><div className="text-right">{meta.completedChronicles?.length ?? 0}</div>
         <div>Bosses slain</div><div className="text-right">{lt.bossesKilled}</div>
         <div>Gold earned</div><div className="text-right">{lt.goldEarned}</div>
         <div>Legendaries found</div><div className="text-right text-rarity-legendary">{lt.legendariesFound}</div>

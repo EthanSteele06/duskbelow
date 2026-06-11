@@ -6,12 +6,12 @@ import {
   RARITY_CLASS, RARITY_LABEL, rollDamage, damageRange,
   MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth, depthAmbientStyle, rollClassLegendary, AFFIXES, BOSS_MOMENTS, FACTION_SHRINES,
   equippedGearScore, playerThreat, threatHpScale, threatAtkScale, threatTierFor, THREAT_TIERS, depthHpBonus,
-  threatLootBonus, turnEnrageMult, turnEnrageLabel,
+  threatLootBonus, turnEnrageMult, turnEnrageLabel, maxDepthForMode, bossFloorsForMode, isMajorBossFloor, isMiniBossFloor,
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
   type StatusEffect, type EnemyIntent, type EnemyIntentKind, type FactionId, type FactionShrineId,
-  type PlayerThreatSnap, type ThreatKind, type ThreatTier,
+  type PlayerThreatSnap, type ThreatKind, type ThreatTier, type ZoneContext, type DungeonMode,
 } from "@/game/data";
-import { bestiaryMasteryMult } from "@/game/meta";
+import { bestiaryMasteryMult, echoStart, zoneModsForLevel } from "@/game/meta";
 import {
   resolveCombatAbilities, getTalentPassives,
   abilityBonusCrit, abilityIgnoresGuard, abilityBonusVsBleed, stunBonusHealPct,
@@ -109,9 +109,9 @@ function pickIntent(enemy: EnemyDef): EnemyIntent {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function threatKindForDepth(depth: number): ThreatKind {
-  if (MAJOR_BOSS_FLOORS.has(depth)) return "major";
-  if (MINI_BOSS_FLOORS.has(depth)) return "mini";
+function threatKindForDepth(depth: number, mode: DungeonMode = "normal"): ThreatKind {
+  if (isMajorBossFloor(depth, mode)) return "major";
+  if (isMiniBossFloor(depth, mode)) return "mini";
   return "trash";
 }
 
@@ -120,11 +120,15 @@ function buildCombat(
   snap: PlayerThreatSnap,
   faction?: FactionId | null,
   affixes: string[] = [],
+  zones: ZoneContext = {},
+  mode: DungeonMode = "normal",
 ): CombatEnc {
-  const e = enemyForDepth(depth, faction);
-  const kind = threatKindForDepth(depth);
+  const e = enemyForDepth(depth, faction, zones, mode);
+  const kind = threatKindForDepth(depth, mode);
   const hpScale = threatHpScale(playerThreat(snap), depth, kind);
   let hp = Math.floor((e.hpBase + depthHpBonus(depth)) * hpScale);
+  if (zones.voidSanctum && depth >= 21 && depth <= 25) hp = Math.floor(hp * 1.08);
+  if (mode === "ascension" && depth > MAX_DEPTH) hp = Math.floor(hp * 1.15);
   if (affixes.includes("fortified")) hp = Math.floor(hp * 1.3);
   const tier = threatTierFor(hpScale);
   return {
@@ -148,17 +152,22 @@ function rollEncounter(
   faction?: FactionId | null,
   affixes: string[] = [],
   bias: ForkBias = "onward",
+  chestBias = 0,
+  zones: ZoneContext = {},
+  mode: DungeonMode = "normal",
 ): Encounter {
-  if (MAJOR_BOSS_FLOORS.has(depth) || MINI_BOSS_FLOORS.has(depth)) return buildCombat(depth, snap, faction, affixes);
+  const bosses = bossFloorsForMode(mode);
+  if (bosses[depth]) return buildCombat(depth, snap, faction, affixes, zones, mode);
   // Bias bends the encounter weights: Left = more fights & less traps, Right = more traps & fewer fights.
   const combatW = 0.58 * (bias === "left" ? 1.6 : bias === "right" ? 0.7 : 1);
   const trapW = 0.12 * (bias === "left" ? 0.5 : bias === "right" ? 1.8 : 1);
   const shrineW = 0.04 * (bias === "left" ? 0.5 : bias === "right" ? 1.8 : 1);
-  const chestW = 0.20, pathW = 0.06;
+  const chestW = 0.20 + chestBias;
+  const pathW = Math.max(0.03, 0.06 - chestBias * 0.25);
   const total = combatW + chestW + shrineW + trapW + pathW;
   const r = Math.random() * total;
   let acc = 0;
-  if (r < (acc += combatW)) return buildCombat(depth, snap, faction, affixes);
+  if (r < (acc += combatW)) return buildCombat(depth, snap, faction, affixes, zones, mode);
   if (r < (acc += chestW)) return { kind: "chest", depth, preview: rollChest(depth) };
   if (r < (acc += shrineW)) {
     if (faction) {
@@ -237,7 +246,7 @@ export function DungeonScreen() {
 
   // Music: swap to boss track when fighting a boss, dungeon ambient otherwise.
   useEffect(() => {
-    const isBoss = enc.kind === "combat" && (MAJOR_BOSS_FLOORS.has(enc.depth) || MINI_BOSS_FLOORS.has(enc.depth));
+    const isBoss = enc.kind === "combat" && (isMajorBossFloor(enc.depth, player.dungeonMode) || isMiniBossFloor(enc.depth, player.dungeonMode));
     playMusic(isBoss ? "boss" : "dungeon");
   }, [enc.kind, enc.kind === "combat" ? enc.enemy.id : null]);
   const playerFaction = player.faction;
@@ -281,15 +290,20 @@ export function DungeonScreen() {
   };
 
   const transitionToEnc = (next: Encounter, afterIn?: () => void) => {
-    if (!shouldRoomTransition(enc, next)) {
+    const applyEnc = () => {
       setEnc(next);
+      if (next.kind === "combat") armFirstHitCrit();
       afterIn?.();
+    };
+    if (!shouldRoomTransition(enc, next)) {
+      applyEnc();
       return;
     }
     clearRoomTimers();
     setRoomTransition("out");
     const outId = window.setTimeout(() => {
       setEnc(next);
+      if (next.kind === "combat") armFirstHitCrit();
       setRoomTransition("in");
       const inId = window.setTimeout(() => {
         setRoomTransition("idle");
@@ -359,6 +373,22 @@ export function DungeonScreen() {
   const applyDungeonBuff = useGame((s) => s.applyDungeonBuff);
   const markEliteRetreat = useGame((s) => s.markEliteRetreat);
   const seenBossIntros = useGame((s) => s.meta.seenBossIntros);
+  const armFirstHitCrit = useGame((s) => s.armFirstHitCrit);
+  const consumeFirstHitCrit = useGame((s) => s.consumeFirstHitCrit);
+
+  const zoneContext = (depth = enc.depth): ZoneContext => {
+    const mods = zoneModsForLevel(meta.account.level);
+    return {
+      boneHalls: mods.includes("bone_halls"),
+      voidSanctum: mods.includes("void_sanctum"),
+      ascension: player.dungeonMode === "ascension" && depth > MAX_DEPTH,
+    };
+  };
+  const encounterOpts = () => ({
+    chestBias: echoStart(meta).chestBias,
+    zones: zoneContext(),
+    mode: player.dungeonMode,
+  });
 
   useEffect(() => {
     if (player.hp <= 0) finishRun("defeat");
@@ -377,11 +407,16 @@ export function DungeonScreen() {
 
   const advance = (bias: ForkBias = "onward") => {
     const newDepth = enc.depth + 1;
-    if (newDepth > MAX_DEPTH) { finishRun("victory"); return; }
+    const maxDepth = maxDepthForMode(player.dungeonMode);
+    if (newDepth > maxDepth) { finishRun("victory"); return; }
     restoreBetweenRooms();
     setForkBias(bias);
     bumpDailyFloor(newDepth);
-    const next = rollEncounter(newDepth, playerThreatSnap(), playerFaction, player.affixes ?? [], bias);
+    const opts = encounterOpts();
+    const next = rollEncounter(
+      newDepth, playerThreatSnap(), playerFaction, player.affixes ?? [], bias,
+      opts.chestBias, opts.zones, opts.mode,
+    );
     let afterRoomIn: (() => void) | undefined;
     if (next.kind === "combat") {
       const moment = BOSS_MOMENTS[next.enemy.id];
@@ -549,9 +584,11 @@ export function DungeonScreen() {
     // Roll damage in a ±20% range so hits feel less robotic.
     let dmg = rollDamage(base * ab.effect.mult * dmgMult * masteryMult);
     // Crit
+    const echoCrit = consumeFirstHitCrit();
     const critChance = player.crit + bonusCritPct + abilityBonusCrit(ab);
-    const crit = critChance > 0 && Math.random() * 100 < critChance;
+    const crit = echoCrit || (critChance > 0 && Math.random() * 100 < critChance);
     if (crit) dmg = Math.floor(dmg * 1.5);
+    if (echoCrit) addLog("✦ Echo of Light — your first strike finds the mark!");
     if (e.enemyEffects.some((x) => x.kind === "bleed")) {
       dmg = Math.floor(dmg * abilityBonusVsBleed(ab));
       if (talentPassives.vs_bleeding) dmg = Math.floor(dmg * (1 + talentPassives.vs_bleeding / 100));
@@ -821,8 +858,15 @@ export function DungeonScreen() {
     let material: string | undefined;
     let gear: GearItem | undefined;
     if (e.enemy.questItemId && Math.random() < 0.6) { addQuestItem(e.enemy.questItemId); questItem = e.enemy.questItemId; }
-    if (e.enemy.materialDrop && Math.random() < e.enemy.materialDrop.chance * matChanceMult) { addMaterial(e.enemy.materialDrop.id); material = e.enemy.materialDrop.id; }
-    const isFinalBoss = e.depth >= MAX_DEPTH;
+    let matId = e.enemy.materialDrop?.id;
+    let matChance = (e.enemy.materialDrop?.chance ?? 0) * matChanceMult;
+    const zones = zoneContext(e.depth);
+    if (zones.boneHalls && e.depth >= 6 && e.depth <= 10 && ["skeleton", "ghoul", "stone_golem", "ogre"].includes(e.enemy.id)) {
+      matId = "bone_dust";
+      matChance = Math.max(matChance, 0.55);
+    }
+    if (matId && Math.random() < matChance) { addMaterial(matId); material = matId; }
+    const isFinalBoss = e.depth >= maxDepthForMode(player.dungeonMode);
     const isBossEnemy = !!BOSS_MOMENTS[e.enemy.id];
     const ownsLegendary =
       Object.values(player.equipment).some((g) => g?.rarity === "legendary") ||
@@ -835,8 +879,8 @@ export function DungeonScreen() {
     } else {
       const source: "trash" | "chest" | "mini_boss" | "major_boss" | "final_boss" =
         isFinalBoss ? "final_boss"
-        : MAJOR_BOSS_FLOORS.has(e.depth) ? "major_boss"
-        : MINI_BOSS_FLOORS.has(e.depth) ? "mini_boss"
+        : isMajorBossFloor(e.depth, player.dungeonMode) ? "major_boss"
+        : isMiniBossFloor(e.depth, player.dungeonMode) ? "mini_boss"
         : "trash";
       const gearChance = isFinalBoss ? 1 : Math.min(1, 0.35 + e.depth * 0.04 + gearChanceBonus + threatLoot.gear);
       if (Math.random() < gearChance) {
@@ -876,7 +920,7 @@ export function DungeonScreen() {
 
   const closeVictory = () => {
     if (enc.kind !== "victory") return;
-    if (enc.depth >= MAX_DEPTH) { finishRun("victory"); return; }
+    if (enc.depth >= maxDepthForMode(player.dungeonMode)) { finishRun("victory"); return; }
     restoreBetweenRooms();
     transitionToEnc({ kind: "path", depth: enc.depth });
   };
@@ -954,9 +998,9 @@ export function DungeonScreen() {
         <div className="absolute inset-0 vignette" />
         <div className="absolute inset-0 scanlines" />
         <div className="absolute left-2 top-2 pixel text-[8px] text-gold text-shadow-pixel bg-background/70 px-1.5 py-0.5 border border-black">
-          Depth {enc.depth}/{MAX_DEPTH}
-          {MAJOR_BOSS_FLOORS.has(enc.depth) && enc.kind === "combat" && <span className="ml-1 text-blood">⚑ BOSS</span>}
-          {MINI_BOSS_FLOORS.has(enc.depth) && enc.kind === "combat" && <span className="ml-1 text-ember">★ ELITE</span>}
+          Depth {enc.depth}/{maxDepthForMode(player.dungeonMode)}
+          {isMajorBossFloor(enc.depth, player.dungeonMode) && enc.kind === "combat" && <span className="ml-1 text-blood">⚑ BOSS</span>}
+          {isMiniBossFloor(enc.depth, player.dungeonMode) && enc.kind === "combat" && <span className="ml-1 text-ember">★ ELITE</span>}
         </div>
         <div className="absolute top-2 right-2 z-10"><SettingsButton /></div>
         {enc.kind === "combat" && !inVictoryBeat && (
@@ -1137,7 +1181,9 @@ export function DungeonScreen() {
               <p className="font-body text-sm text-muted-foreground">No drops this time.</p>
             )}
             <button onClick={closeVictory} className="pixel-btn pixel-btn-gold !text-[8px] w-full text-center">
-              {enc.depth >= MAX_DEPTH ? "Claim the Crown →" : lootGear ? "Move on ▸" : "Continue ▸"}
+              {enc.depth >= maxDepthForMode(player.dungeonMode)
+                ? (player.dungeonMode === "ascension" ? "Ascend Complete →" : "Claim the Crown →")
+                : lootGear ? "Move on ▸" : "Continue ▸"}
             </button>
           </div>
         )}

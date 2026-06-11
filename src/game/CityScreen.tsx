@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useGame } from "@/game/store";
-import { FACTIONS, TRAINERS, SPECS, OATHS, DAILY_CONTRACTS, type OathId } from "@/game/data";
-import { nextUnlock } from "@/game/meta";
+import { FACTIONS, TRAINERS, SPECS, OATHS, DAILY_CONTRACTS, CHRONICLE_BOONS, activeClassTrial, type OathId } from "@/game/data";
+import { nextUnlock, hasAscensionGate, hasChronicleBoonsUnlocked, hasClassTrialUnlocked } from "@/game/meta";
 import { playMusic } from "@/game/audio";
 import { SettingsButton } from "@/game/Settings";
 import { TutorialTip } from "@/game/Tutorial";
@@ -43,16 +43,23 @@ export function CityScreen() {
     ? dc?.claimed ? "Claimed — back tomorrow." : dcReady ? "Reward ready!" : dc?.accepted ? `${dc.progress}/${dcNeed} progress` : "New work posted."
     : "Check the board.";
 
-  const [oathModal, setOathModal] = useState<null | "normal" | "cursed">(null);
+  const [oathModal, setOathModal] = useState<null | "normal" | "cursed" | "ascension">(null);
   const [chosenOaths, setChosenOaths] = useState<OathId[]>([]);
+  const [chosenBoon, setChosenBoon] = useState<string | null>(null);
   const toggleOath = (id: OathId) =>
     setChosenOaths((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
 
+  const availableBoons = CHRONICLE_BOONS.filter((b) => meta.completedChronicles?.includes(b.storyId));
+  const showBoonPicker = hasChronicleBoonsUnlocked(meta.account.level) && availableBoons.length > 0;
+  const canAscend = meta.hasClearedNormal && hasAscensionGate(meta.account.level);
+  const classTrial = hasClassTrialUnlocked(meta.account.level) ? activeClassTrial() : null;
+
   const beginDescent = () => {
     if (!oathModal) return;
-    enter(oathModal, chosenOaths);
+    enter(oathModal, chosenOaths, chosenBoon ?? undefined);
     setOathModal(null);
     setChosenOaths([]);
+    setChosenBoon(null);
   };
 
   return (
@@ -120,14 +127,26 @@ export function CityScreen() {
         </Section>
 
         <button
-          onClick={() => { setChosenOaths([]); setOathModal("normal"); }}
+          onClick={() => { setChosenOaths([]); setChosenBoon(null); setOathModal("normal"); }}
           className="pixel-btn pixel-btn-primary w-full text-center !text-[12px] !py-4"
         >▼ DESCEND DUNGEON</button>
         {meta.hasClearedNormal && (
           <button
-            onClick={() => { setChosenOaths([]); setOathModal("cursed"); }}
+            onClick={() => { setChosenOaths([]); setChosenBoon(null); setOathModal("cursed"); }}
             className="pixel-btn pixel-btn-danger w-full text-center !text-[10px] !py-3"
           >☠ DESCEND CURSED DEPTHS (Hard)</button>
+        )}
+        {canAscend && (
+          <button
+            onClick={() => { setChosenOaths([]); setChosenBoon(null); setOathModal("ascension"); }}
+            className="pixel-btn pixel-btn-gold w-full text-center !text-[10px] !py-3"
+          >☀ ASCENSION — FLOORS 1–40</button>
+        )}
+        {classTrial && (
+          <p className="font-body text-xs text-center text-muted-foreground border border-black bg-card/60 p-2">
+            Weekly Trial: <span className="text-gold">{classTrial.name}</span> — {classTrial.desc}
+            <span className="block text-[10px] mt-0.5">Victory bonus: ✦ {classTrial.shardBonus} shards</span>
+          </p>
         )}
       </div>
 
@@ -156,6 +175,27 @@ export function CityScreen() {
             <p className="font-body text-sm text-muted-foreground">
               Optional vows that scar this descent. Take none, take all — each one cuts both ways.
             </p>
+            {showBoonPicker && (
+              <div className="space-y-2 border-2 border-divine p-2">
+                <p className="pixel text-[9px] text-gold">Chronicle Boon (optional)</p>
+                <button
+                  onClick={() => setChosenBoon(null)}
+                  className={`w-full text-left border-2 p-2 ${chosenBoon === null ? "border-gold bg-card" : "border-black bg-card/60"}`}
+                >
+                  <span className="pixel text-[8px]">None</span>
+                </button>
+                {availableBoons.map((b) => (
+                  <button
+                    key={b.id}
+                    onClick={() => setChosenBoon(b.id)}
+                    className={`w-full text-left border-2 p-2 ${chosenBoon === b.id ? "border-gold bg-card" : "border-black bg-card/60"}`}
+                  >
+                    <span className="pixel text-[9px] text-gold">{b.name}</span>
+                    <p className="font-body text-xs text-muted-foreground mt-1">{b.desc}</p>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="space-y-2">
               {OATHS.map((o) => {
                 const on = chosenOaths.includes(o.id);
@@ -178,7 +218,11 @@ export function CityScreen() {
               <button onClick={() => setOathModal(null)} className="pixel-btn !text-[9px]">Cancel</button>
               <button
                 onClick={beginDescent}
-                className={`pixel-btn !text-[9px] ${oathModal === "cursed" ? "pixel-btn-danger" : "pixel-btn-primary"}`}
+                className={`pixel-btn !text-[9px] ${
+                  oathModal === "cursed" ? "pixel-btn-danger"
+                  : oathModal === "ascension" ? "pixel-btn-gold"
+                  : "pixel-btn-primary"
+                }`}
               >
                 {chosenOaths.length === 0 ? "Descend (no oaths)" : `Descend with ${chosenOaths.length} oath${chosenOaths.length > 1 ? "s" : ""}`}
               </button>
