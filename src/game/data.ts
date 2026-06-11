@@ -220,13 +220,20 @@ export const SPEC_ABILITIES: Record<string, Ability> = {
 
 
 
+export type EnemyIntentKind = "attack" | "guard" | "parry" | "heal";
+
 export interface EnemyIntent {
   id: string;
   /** UI label shown above the enemy ("⚔ Bite", "🔥 Hellfire") */
   label: string;
-  /** damage multiplier on enemy.atkBase */
+  kind?: EnemyIntentKind;
+  /** damage multiplier on enemy.atkBase (attack intents) */
   mult: number;
-  /** narration line; supports {n} (name) and {d} (damage) */
+  /** guard: fraction of player damage absorbed on the next hit (0.5 = 50%) */
+  guardPct?: number;
+  /** heal: fraction of enemy max HP restored */
+  healPct?: number;
+  /** narration line; supports {n} name, {d} damage, {h} heal amount */
   line: string;
   /** if true, telegraphed — the enemy WILL use this next turn (shown before player acts) */
   telegraphable?: boolean;
@@ -263,6 +270,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     intents: [
       { id: "swing", label: "⚔ Rusted Swing", mult: 1.0, line: "The {n} swings a rusted sword for {d}!" },
       { id: "lunge", label: "🩸 Lunge", mult: 1.5, line: "{n} winds up — a brutal lunge for {d}!", telegraphable: true },
+      { id: "raise_shield", kind: "guard", label: "🛡 Raise Shield", mult: 0, guardPct: 0.4, line: "{n} raises a splintered shield!", telegraphable: true },
     ],
   },
   cultist: {
@@ -273,6 +281,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     intents: [
       { id: "stab",     label: "🗡 Stab",     mult: 1.0, line: "A jagged dagger bites for {d}!" },
       { id: "hellfire", label: "🔥 Hellfire", mult: 1.8, line: "Hellfire roars from the {n} for {d}!", telegraphable: true },
+      { id: "darkmend", kind: "heal", label: "🩹 Dark Mend", mult: 0, healPct: 0.14, line: "{n} stitches its wounds with shadow (+{h} HP).", telegraphable: true },
     ],
   },
   wraith: {
@@ -283,6 +292,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     intents: [
       { id: "drain", label: "👻 Soul Drain",  mult: 1.0, line: "The {n} drains your soul for {d}!" },
       { id: "wail",  label: "🌀 Wail",        mult: 1.6, line: "A spectral wail crushes you for {d}!", telegraphable: true },
+      { id: "siphon", kind: "heal", label: "💀 Siphon Essence", mult: 0, healPct: 0.12, line: "{n} siphons the air to mend itself (+{h} HP)." },
     ],
   },
   ogre: {
@@ -293,6 +303,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     intents: [
       { id: "club",  label: "🪵 Club",   mult: 1.0, line: "The {n} smashes a club down for {d}!" },
       { id: "stomp", label: "👣 Stomp",  mult: 1.7, line: "{n} stomps the floor for {d}!", telegraphable: true },
+      { id: "brace", kind: "guard", label: "🛡 Brace", mult: 0, guardPct: 0.35, line: "{n} braces behind its club!", telegraphable: true },
     ],
   },
   dragon: {
@@ -325,6 +336,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     intents: [
       { id: "rake",  label: "🪓 Rake",    mult: 1.0, line: "The {n} rakes you for {d}!" },
       { id: "feast", label: "🦴 Feast",   mult: 1.7, line: "{n} lunges to feast — {d} damage!", telegraphable: true },
+      { id: "gnaw",  kind: "heal", label: "🩸 Gnaw Remains", mult: 0, healPct: 0.16, line: "{n} gnaws old marrow to knit its flesh (+{h} HP)." },
     ],
   },
   // Faction-specific: only spawns when the player is on the OPPOSING faction.
@@ -336,6 +348,8 @@ export const ENEMIES: Record<string, EnemyDef> = {
     intents: [
       { id: "smite",  label: "⚔ Smite",    mult: 1.0, line: "The {n} smites you for {d}!" },
       { id: "bash",   label: "⛨ Shield Bash", mult: 1.5, line: "{n} bashes with their tower shield for {d}!", telegraphable: true },
+      { id: "bulwark", kind: "guard", label: "⛨ Bulwark", mult: 0, guardPct: 0.5, line: "{n} locks behind a tower shield!", telegraphable: true },
+      { id: "parry",  kind: "parry", label: "⚔ Parry Stance", mult: 0, line: "{n} settles into a parrying stance!", telegraphable: true },
     ],
   },
   brigade_marauder: {
@@ -357,6 +371,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     intents: [
       { id: "glaive",   label: "⚔ Glaive Swing", mult: 1.0, line: "The {n} swings its great glaive for {d}!" },
       { id: "marrow",   label: "🦴 Marrow Rend", mult: 1.5, line: "{n} rends marrow itself — {d} damage!", telegraphable: true },
+      { id: "boneguard", kind: "guard", label: "🛡 Boneguard", mult: 0, guardPct: 0.45, line: "{n} interlocks its ribs into a wall!", telegraphable: true },
     ],
   },
   crimson_reaver: {
@@ -462,6 +477,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     intents: [
       { id: "fist",  label: "🪨 Stone Fist", mult: 1.0, line: "A stone fist crashes for {d}!" },
       { id: "quake", label: "💢 Quake",      mult: 1.9, line: "{n} unleashes a quake for {d}!", telegraphable: true },
+      { id: "harden", kind: "guard", label: "🛡 Harden", mult: 0, guardPct: 0.55, line: "{n}'s stone skin thickens!", telegraphable: true },
     ],
   },
   // Demon Hunter unlock arc — rare mini-boss demon, drops fel residue.

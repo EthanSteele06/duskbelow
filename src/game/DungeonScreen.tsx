@@ -8,7 +8,7 @@ import {
   equippedGearScore, playerThreat, threatHpScale, threatAtkScale, threatTierFor, THREAT_TIERS, depthHpBonus,
   threatLootBonus, turnEnrageMult, turnEnrageLabel,
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
-  type StatusEffect, type EnemyIntent, type FactionId, type FactionShrineId,
+  type StatusEffect, type EnemyIntent, type EnemyIntentKind, type FactionId, type FactionShrineId,
   type PlayerThreatSnap, type ThreatKind, type ThreatTier,
 } from "@/game/data";
 import { bestiaryMasteryMult } from "@/game/meta";
@@ -38,7 +38,10 @@ type CombatEnc = {
   enemy: EnemyDef;
   enemyHp: number; enemyMaxHp: number;
   stunnedTurns: number; shieldReduce: number;
-  cooldowns: Record<string, number>;
+  /** Guard stance — reduces next player attack damage dealt to this foe. */
+  enemyGuardPct: number;
+  /** Parry stance — next player attack is heavily mitigated; riposte damage. */
+  enemyParryActive: boolean;
   enemyEffects: StatusEffect[];
   playerEffects: StatusEffect[];
   nextIntent: EnemyIntent;
@@ -93,7 +96,7 @@ function buildCombat(
   const tier = threatTierFor(hpScale);
   return {
     kind: "combat", depth, enemy: e, enemyHp: hp, enemyMaxHp: hp,
-    stunnedTurns: 0, shieldReduce: 0, cooldowns: {},
+    stunnedTurns: 0, shieldReduce: 0, enemyGuardPct: 0, enemyParryActive: false,
     enemyEffects: [], playerEffects: [],
     nextIntent: e.id === "bone_warden"
       ? (e.intents.find((i) => i.telegraphable) ?? pickIntent(e))
@@ -169,6 +172,7 @@ export function DungeonScreen() {
   const heal = useGame((s) => s.heal);
   const use = useGame((s) => s.use);
   const restoreBetweenRooms = useGame((s) => s.restoreBetweenRooms);
+  const advanceAbilityCooldowns = useGame((s) => s.advanceAbilityCooldowns);
   const useRacial = useGame((s) => s.useRacial);
   const consumeMult = useGame((s) => s.consumeNextAttackMult);
   const equip = useGame((s) => s.equip);
@@ -269,10 +273,23 @@ export function DungeonScreen() {
     else addLog("The corridor opens further.");
   };
 
-  const tickCooldowns = (e: CombatEnc) => {
-    const cds: Record<string, number> = {};
-    for (const [k, v] of Object.entries(e.cooldowns)) if (v > 1) cds[k] = v - 1;
-    return cds;
+  const pickNextIntent = (e: CombatEnc): EnemyIntent => {
+    const moment = BOSS_MOMENTS[e.enemy.id];
+    const pool = moment && e.bossPhase === 2 ? [...e.enemy.intents, moment.phaseIntent] : e.enemy.intents;
+    const teleg = pool.filter((i) => i.telegraphable);
+    const normal = pool.filter((i) => !i.telegraphable);
+    return teleg.length && Math.random() < 0.4
+      ? teleg[Math.floor(Math.random() * teleg.length)]
+      : (normal.length ? normal : pool)[Math.floor(Math.random() * (normal.length || pool.length))];
+  };
+
+  const intentKindLabel = (kind: EnemyIntentKind | undefined) => {
+    switch (kind ?? "attack") {
+      case "guard": return "DEFENSIVE";
+      case "parry": return "PARRY";
+      case "heal": return "HEALING";
+      default: return null;
+    }
   };
 
   // Apply Renew (player HoT) — called at end of every player action turn
@@ -303,14 +320,16 @@ export function DungeonScreen() {
 
   const enemyTurn = (eIn: CombatEnc): CombatEnc => {
     let e = bumpTurnEnrage(eIn);
+    if (e.enemyParryActive) {
+      addLog(`${e.enemy.name}'s parry stance fades.`);
+      e = { ...e, enemyParryActive: false };
+    }
     // Tick enemy DoTs first; check for kill
     e = tickEffectsOnEnemy(e, addLog);
     if (e.enemyHp <= 0) {
-      // Schedule kill in a microtask via finishKill replacement
       setTimeout(() => finishKill(e), 0);
       return e;
     }
-    // Boss phase transition: ≤50% HP triggers phase 2 once.
     const moment = BOSS_MOMENTS[e.enemy.id];
     if (moment && e.bossPhase === 1 && e.enemyHp <= e.enemyMaxHp / 2) {
       addLog(`★ ${moment.phaseLine}`);
@@ -318,11 +337,34 @@ export function DungeonScreen() {
     }
     if (e.stunnedTurns > 0) {
       addLog(`${e.enemy.name} is frozen and cannot act.`);
-      const pool = moment && e.bossPhase === 2 ? [...e.enemy.intents, moment.phaseIntent] : e.enemy.intents;
-      const nextI = pool[Math.floor(Math.random() * pool.length)];
-      return { ...e, stunnedTurns: e.stunnedTurns - 1, shieldReduce: 0, nextIntent: nextI };
+      return { ...e, stunnedTurns: e.stunnedTurns - 1, shieldReduce: 0, nextIntent: pickNextIntent(e) };
     }
+
     const intent = e.nextIntent;
+    const kind = intent.kind ?? "attack";
+    const nextIntent = pickNextIntent(e);
+
+    if (kind === "guard") {
+      addLog(intent.line.replace("{n}", e.enemy.name));
+      return {
+        ...e, shieldReduce: 0,
+        enemyGuardPct: intent.guardPct ?? 0.4,
+        nextIntent,
+      };
+    }
+    if (kind === "parry") {
+      addLog(intent.line.replace("{n}", e.enemy.name));
+      return { ...e, shieldReduce: 0, enemyParryActive: true, nextIntent };
+    }
+    if (kind === "heal") {
+      const amt = Math.max(1, Math.floor(e.enemyMaxHp * (intent.healPct ?? 0.12)));
+      const newHp = Math.min(e.enemyMaxHp, e.enemyHp + amt);
+      addLog(intent.line.replace("{n}", e.enemy.name).replace("{h}", String(amt)));
+      addFloater("heal", amt);
+      return { ...e, enemyHp: newHp, shieldReduce: 0, nextIntent };
+    }
+
+    // Attack intent
     const affixes = player.affixes ?? [];
     let mult = intent.mult;
     if (affixes.includes("sapping")) mult *= 1.2;
@@ -339,14 +381,7 @@ export function DungeonScreen() {
       setHit(true); setTimeout(() => setHit(false), 350);
     }
     addLog(intent.line.replace("{n}", e.enemy.name).replace("{d}", String(taken)) + (e.shieldReduce > 0 ? " (shielded!)" : ""));
-    // Pick next intent — include phase intent in pool if boss is in phase 2.
-    const pool = moment && e.bossPhase === 2 ? [...e.enemy.intents, moment.phaseIntent] : e.enemy.intents;
-    const teleg = pool.filter((i) => i.telegraphable);
-    const normal = pool.filter((i) => !i.telegraphable);
-    const nextI = teleg.length && Math.random() < 0.4
-      ? teleg[Math.floor(Math.random() * teleg.length)]
-      : (normal.length ? normal : pool)[Math.floor(Math.random() * (normal.length || pool.length))];
-    return { ...e, shieldReduce: 0, nextIntent: nextI };
+    return { ...e, shieldReduce: 0, nextIntent };
   };
 
   const applyAttack = (e: CombatEnc, ab: Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> }): CombatEnc => {
@@ -391,6 +426,27 @@ export function DungeonScreen() {
       dmg = Math.floor(dmg * ab.effect.bonusVsChill);
     }
 
+    let guardPct = e.enemyGuardPct;
+    let parryActive = e.enemyParryActive;
+    if (guardPct > 0) {
+      const absorbed = Math.floor(dmg * guardPct);
+      dmg = Math.max(1, dmg - absorbed);
+      addLog(`${e.enemy.name}'s guard absorbs ${absorbed} damage!`);
+      guardPct = 0;
+    }
+    if (parryActive) {
+      const mitigated = Math.max(1, Math.floor(dmg * 0.25));
+      const riposte = Math.max(2, Math.floor((e.enemy.atkBase + e.depth * 0.3) * 0.65));
+      addLog(`${e.enemy.name} parries — only ${mitigated} gets through!`);
+      const taken = damage(riposte);
+      if (taken > 0) {
+        addFloater("enemy", taken);
+        addLog(`${e.enemy.name} ripostes for ${taken}!`);
+      }
+      dmg = mitigated;
+      parryActive = false;
+    }
+
     // Trigger combat animation
     triggerFx(ab.effect.useMag ? "spell" : "melee");
     setHit(true); setTimeout(() => setHit(false), 350);
@@ -423,12 +479,33 @@ export function DungeonScreen() {
       nextEffects = nextEffects.filter((x) => x.kind !== s.kind).concat({ kind: s.kind, turns, power: s.power });
       addLog(`${e.enemy.name} is afflicted with ${s.kind}.`);
     }
-    return { ...e, enemyHp: e.enemyHp - dmg, enemyEffects: nextEffects };
+    return {
+      ...e,
+      enemyHp: e.enemyHp - dmg,
+      enemyEffects: nextEffects,
+      enemyGuardPct: guardPct,
+      enemyParryActive: parryActive,
+    };
+  };
+
+  const endPlayerTurn = (e: CombatEnc, usedAbilityId?: string, usedCooldown = 0) => {
+    advanceAbilityCooldowns(usedAbilityId, usedCooldown);
+    let stepped = tickPlayerEffects(e);
+    setEnc(enemyTurn(stepped));
+  };
+
+  const passTurn = () => {
+    if (enc.kind !== "combat") return;
+    setArmedAbility(null);
+    addLog(`${player.name} holds, reading the foe's rhythm.`);
+    advanceAbilityCooldowns();
+    let stepped = tickPlayerEffects(enc);
+    setEnc(enemyTurn(stepped));
   };
 
   const useAbility = (ab: Ability) => {
     if (enc.kind !== "combat") return;
-    if ((enc.cooldowns[ab.id] ?? 0) > 0) return;
+    if ((player.abilityCooldowns?.[ab.id] ?? 0) > 0) return;
     // Tap-to-confirm on mobile/touch: first tap arms; second confirms.
     if (armedAbility !== ab.id) {
       setArmedAbility(ab.id);
@@ -444,10 +521,7 @@ export function DungeonScreen() {
         playSfx("hit");
         const after = applyAttack(e, ab as Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> });
         if (after.enemyHp <= 0) { finishKill(after); return; }
-        const cds = tickCooldowns(after); cds[ab.id] = ab.cooldown;
-        let stepped: CombatEnc = { ...after, cooldowns: cds };
-        stepped = tickPlayerEffects(stepped);
-        setEnc(enemyTurn(stepped));
+        endPlayerTurn(after, ab.id, ab.cooldown);
         return;
       }
       case "heal": {
@@ -455,30 +529,24 @@ export function DungeonScreen() {
         heal(amt);
         addFloater("heal", amt);
         addLog(`${flavor} — restored ${amt} HP.`);
-        const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
-        let stepped: CombatEnc = { ...e, cooldowns: cds };
-        stepped = tickPlayerEffects(stepped);
-        setEnc(enemyTurn(stepped));
+        endPlayerTurn(e, ab.id, ab.cooldown);
         return;
       }
       case "hot": {
         const power = ab.effect.healPerTurn > 0 ? ab.effect.healPerTurn : Math.max(2, Math.floor(player.mag * 0.8));
         addLog(`${flavor}.`);
-        const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
         const fresh = e.playerEffects.filter((x) => x.kind !== "renew").concat({ kind: "renew", turns: ab.effect.turns, power });
-        let stepped: CombatEnc = { ...e, cooldowns: cds, playerEffects: fresh };
-        stepped = tickPlayerEffects(stepped);
-        setEnc(enemyTurn(stepped));
+        endPlayerTurn({ ...e, playerEffects: fresh }, ab.id, ab.cooldown);
         return;
       }
       case "stun": {
         addLog(`${flavor}. ${e.enemy.name} is frozen!`);
-        const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
-        let stepped: CombatEnc = { ...e, cooldowns: cds, stunnedTurns: 1 };
+        advanceAbilityCooldowns(ab.id, ab.cooldown);
+        let stepped: CombatEnc = { ...e, stunnedTurns: 1 };
         stepped = tickPlayerEffects(stepped);
         stepped = tickEffectsOnEnemy(stepped, addLog);
         if (stepped.enemyHp <= 0) { finishKill(stepped); return; }
-        setEnc({ ...stepped, stunnedTurns: stepped.stunnedTurns - 1, nextIntent: pickIntent(stepped.enemy) });
+        setEnc({ ...stepped, stunnedTurns: stepped.stunnedTurns - 1, nextIntent: pickNextIntent(stepped) });
         return;
       }
       case "shield": {
@@ -488,19 +556,13 @@ export function DungeonScreen() {
           heal(healed); addFloater("heal", healed);
           addLog(`${player.name} steels themselves — restored ${healed} HP.`);
         }
-        const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
-        let stepped: CombatEnc = { ...e, shieldReduce: ab.effect.reduce, cooldowns: cds };
-        stepped = tickPlayerEffects(stepped);
-        setEnc(enemyTurn(stepped));
+        endPlayerTurn({ ...e, shieldReduce: ab.effect.reduce }, ab.id, ab.cooldown);
         return;
       }
       case "buff_next": {
         armNextAttack(ab.effect.mult);
         addLog(`${flavor}. Next attack will hit for ×${ab.effect.mult}.`);
-        const cds = tickCooldowns(e); cds[ab.id] = ab.cooldown;
-        let stepped: CombatEnc = { ...e, cooldowns: cds };
-        stepped = tickPlayerEffects(stepped);
-        setEnc(enemyTurn(stepped));
+        endPlayerTurn(e, ab.id, ab.cooldown);
         return;
       }
       case "flee": {
@@ -666,8 +728,18 @@ export function DungeonScreen() {
         )}
         {enc.kind === "combat" && (
           <div className="absolute left-2 right-2 bottom-2 flex justify-center">
-            <div className={`pixel text-[10px] font-bold px-3 py-1.5 border-2 border-black text-shadow-pixel ${enc.nextIntent.telegraphable ? "bg-blood text-white animate-pulse" : "bg-background/95 text-gold"}`}>
-              {enc.nextIntent.telegraphable ? "⚠ INCOMING — " : "» "}{enc.enemy.name}: {enc.nextIntent.label}
+            <div className={`pixel text-[10px] font-bold px-3 py-1.5 border-2 border-black text-shadow-pixel ${
+              enc.nextIntent.telegraphable
+                ? (enc.nextIntent.kind === "guard" || enc.nextIntent.kind === "parry")
+                  ? "bg-allies text-white animate-pulse"
+                  : enc.nextIntent.kind === "heal"
+                    ? "bg-divine text-black animate-pulse"
+                    : "bg-blood text-white animate-pulse"
+                : "bg-background/95 text-gold"
+            }`}>
+              {enc.nextIntent.telegraphable ? "⚠ INCOMING — " : "» "}
+              {intentKindLabel(enc.nextIntent.kind) ? `${intentKindLabel(enc.nextIntent.kind)} · ` : ""}
+              {enc.enemy.name}: {enc.nextIntent.label}
             </div>
           </div>
         )}
@@ -730,6 +802,12 @@ export function DungeonScreen() {
                 <span className="pixel text-[7px] border border-blood text-blood px-1 animate-pulse">
                   ★ {turnEnrageLabel(enc.combatTurns)}
                 </span>
+              )}
+              {enc.enemyGuardPct > 0 && (
+                <span className="pixel text-[7px] text-allies border border-allies px-1">🛡 GUARDING</span>
+              )}
+              {enc.enemyParryActive && (
+                <span className="pixel text-[7px] text-gold border border-gold px-1">⚔ PARRY READY</span>
               )}
               {enc.stunnedTurns > 0 && <span className="pixel text-[7px] text-arcane border border-arcane px-1">❄ FROZEN</span>}
               {enc.shieldReduce > 0 && <span className="pixel text-[7px] text-gold border border-gold px-1">⛨ BRACED</span>}
@@ -921,7 +999,7 @@ export function DungeonScreen() {
           <div className="space-y-2">
             <div className={`grid gap-2 ${abilities.length >= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
               {abilities.map((ab) => {
-                const cd = enc.cooldowns[ab.id] ?? 0;
+                const cd = player.abilityCooldowns?.[ab.id] ?? 0;
                 const armed = armedAbility === ab.id;
                 return (
                   <button
@@ -979,6 +1057,12 @@ export function DungeonScreen() {
                 ↩ Fall Back to Floor 4 — flee this elite (once per run)
               </button>
             )}
+            <button
+              onClick={passTurn}
+              className="pixel-btn !text-[8px] w-full border-l-4 border-l-muted-foreground"
+            >
+              ◌ Pass — hold your turn (CDs tick)
+            </button>
           </div>
         )}
 
@@ -1001,7 +1085,7 @@ export function DungeonScreen() {
       <TutorialTip
         id="dungeon-combat"
         title="Into the Dark"
-        body="Tap an ability to use it. You can't retreat mid-fight — keep a Hearthstone Charm if you want a safe escape. Dying drops your loot."
+        body="Tap an ability to arm it, then confirm. Pass to wait — ability cooldowns tick and carry between rooms. Foes guard, parry, and heal; read their telegraphs (⚠)."
         position="top"
       />
 

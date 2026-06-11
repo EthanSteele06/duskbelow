@@ -100,6 +100,8 @@ interface PlayerState {
   dungeonBuffs: BuffEffect[];
   /** Used the once-per-run elite retreat (floor 5 Bone Warden). */
   eliteRetreatUsed: boolean;
+  /** Class/spec ability cooldowns — persist across rooms for the whole descent. */
+  abilityCooldowns: Record<string, number>;
 }
 
 export interface RunSummary {
@@ -205,6 +207,8 @@ interface GameState {
   bumpDailyFloor: (floor: number) => void;
   applyDungeonBuff: (buff: BuffEffect) => void;
   markEliteRetreat: () => void;
+  /** Tick all ability CDs down by 1; optionally arm one ability's full cooldown. */
+  advanceAbilityCooldowns: (usedId?: string, turns?: number) => void;
 }
 
 const emptyPlayer = (): PlayerState => ({
@@ -223,6 +227,7 @@ const emptyPlayer = (): PlayerState => ({
   activeOaths: [],
   dungeonBuffs: [],
   eliteRetreatUsed: false,
+  abilityCooldowns: {},
 });
 
 const xpForLevel = (lvl: number) => lvl * 25;
@@ -700,6 +705,7 @@ export const useGame = create<GameState>((set, get) => ({
         activeOaths: oaths,
         dungeonBuffs: [],
         eliteRetreatUsed: false,
+        abilityCooldowns: {},
       }, s.meta);
       // First descent: grant a free Hearthstone Charm so floor 5 isn't a dead end.
       let nextPlayer = p;
@@ -733,6 +739,7 @@ export const useGame = create<GameState>((set, get) => ({
         buffGoldMult: 1,
         activeOaths: [],
         dungeonBuffs: [],
+        abilityCooldowns: {},
       });
       return { screen: "city", player: recompute(p, s.meta) };
     });
@@ -996,10 +1003,13 @@ export const useGame = create<GameState>((set, get) => ({
     const starved = p.affixes?.includes("starved") ? 0.5 : 1;
     const amt = Math.max(2, Math.floor(p.maxHp * 0.12 * starved));
     const hp = Math.min(p.maxHp, p.hp + amt);
-    if (hp > p.hp) {
-      set({ player: { ...p, hp } });
-      get().pushLog(`You catch your breath. +${hp - p.hp} HP.`);
+    const cds: Record<string, number> = {};
+    for (const [k, v] of Object.entries(p.abilityCooldowns ?? {})) {
+      if (v > 1) cds[k] = v - 1;
     }
+    const healed = hp - p.hp;
+    set({ player: { ...p, hp, abilityCooldowns: cds } });
+    if (healed > 0) get().pushLog(`You catch your breath. +${healed} HP.`);
   },
 
   useRacial: () => {
@@ -1275,6 +1285,7 @@ export const useGame = create<GameState>((set, get) => ({
       buffGoldMult: 1,
       activeOaths: [],
       dungeonBuffs: [],
+      abilityCooldowns: {},
     }, meta);
     set({ meta: nextMeta, lastRun: summary, screen: "run_summary", player: cleanedPlayer });
   },
@@ -1494,6 +1505,16 @@ export const useGame = create<GameState>((set, get) => ({
   },
 
   markEliteRetreat: () => set((s) => ({ player: { ...s.player, eliteRetreatUsed: true } })),
+
+  advanceAbilityCooldowns: (usedId, turns = 0) => {
+    const p = get().player;
+    const next: Record<string, number> = {};
+    for (const [k, v] of Object.entries(p.abilityCooldowns ?? {})) {
+      if (v > 1) next[k] = v - 1;
+    }
+    if (usedId && turns > 0) next[usedId] = turns;
+    set({ player: { ...p, abilityCooldowns: next } });
+  },
 }));
 
 export { xpForLevel, bagCap, bagSlotsUsed, bagFreeSlots };
