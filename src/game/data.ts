@@ -351,12 +351,12 @@ export const ENEMIES: Record<string, EnemyDef> = {
   // ── Bosses ────────────────────────────────────────────────────────────────
   bone_warden: {
     id: "bone_warden", name: "Bone Warden", image: boneWardenImg,
-    hpBase: 90, atkBase: 10,
+    hpBase: 72, atkBase: 9,
     materialDrop: { id: "bone_dust", chance: 1.0 },
     attackLines: ["The {n} swings its great glaive for {d}!"],
     intents: [
       { id: "glaive",   label: "⚔ Glaive Swing", mult: 1.0, line: "The {n} swings its great glaive for {d}!" },
-      { id: "marrow",   label: "🦴 Marrow Rend", mult: 1.7, line: "{n} rends marrow itself — {d} damage!", telegraphable: true },
+      { id: "marrow",   label: "🦴 Marrow Rend", mult: 1.5, line: "{n} rends marrow itself — {d} damage!", telegraphable: true },
     ],
   },
   crimson_reaver: {
@@ -1550,10 +1550,21 @@ export const THREAT_TIERS: Record<Exclude<ThreatTier, "none">, ThreatTierDef> = 
   },
 };
 
-/** Continuous depth HP bonus — no cliff at floor 10. */
+/** Continuous depth HP bonus — ramps through early floors, accelerates after depth 10. */
 export function depthHpBonus(depth: number): number {
-  if (depth <= 9) return Math.floor(depth * 1.0);
-  return 9 + Math.floor((depth - 9) * 0.75);
+  const early = Math.floor(depth * 1.1);
+  const late = Math.max(0, depth - 10) * 1.1;
+  return Math.floor(early + late);
+}
+
+/** Small loot bonus for power-attuned (Stirring+) foes. */
+export function threatLootBonus(tier: ThreatTier): { gold: number; xp: number; gear: number } {
+  switch (tier) {
+    case "stirring":  return { gold: 1.12, xp: 1.1,  gear: 0.06 };
+    case "awakened":  return { gold: 1.22, xp: 1.18, gear: 0.1 };
+    case "enraged":   return { gold: 1.32, xp: 1.25, gear: 0.14 };
+    default:          return { gold: 1,    xp: 1,    gear: 0 };
+  }
 }
 
 /** Per-round enrage when a fight drags — punishes ability spam / stall. Caps at +40%. */

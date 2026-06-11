@@ -6,7 +6,7 @@ import {
   RARITY_CLASS, RARITY_LABEL, rollDamage, damageRange,
   MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth, rollClassLegendary, AFFIXES, BOSS_MOMENTS, FACTION_SHRINES,
   equippedGearScore, playerThreat, threatHpScale, threatAtkScale, threatTierFor, THREAT_TIERS, depthHpBonus,
-  turnEnrageMult, turnEnrageLabel,
+  threatLootBonus, turnEnrageMult, turnEnrageLabel,
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
   type StatusEffect, type EnemyIntent, type FactionId, type FactionShrineId,
   type PlayerThreatSnap, type ThreatKind, type ThreatTier,
@@ -95,7 +95,9 @@ function buildCombat(
     kind: "combat", depth, enemy: e, enemyHp: hp, enemyMaxHp: hp,
     stunnedTurns: 0, shieldReduce: 0, cooldowns: {},
     enemyEffects: [], playerEffects: [],
-    nextIntent: pickIntent(e),
+    nextIntent: e.id === "bone_warden"
+      ? (e.intents.find((i) => i.telegraphable) ?? pickIntent(e))
+      : pickIntent(e),
     bossPhase: 1,
     threatHpScale: hpScale,
     threatTier: tier,
@@ -224,6 +226,7 @@ export function DungeonScreen() {
   const markBossSeen = useGame((s) => s.markBossSeen);
   const bumpDailyFloor = useGame((s) => s.bumpDailyFloor);
   const applyDungeonBuff = useGame((s) => s.applyDungeonBuff);
+  const markEliteRetreat = useGame((s) => s.markEliteRetreat);
   const seenBossIntros = useGame((s) => s.meta.seenBossIntros);
 
   useEffect(() => {
@@ -520,16 +523,29 @@ export function DungeonScreen() {
   const learnRecipe = useGame((s) => s.learnRecipe);
   const addToBag = useGame((s) => s.addToBag);
 
+  const retreatFromBoneWarden = () => {
+    if (enc.kind !== "combat" || enc.enemy.id !== "bone_warden" || enc.depth !== 5 || player.eliteRetreatUsed) return;
+    markEliteRetreat();
+    restoreBetweenRooms();
+    addLog("You fall back before the Warden's glaive finds bone. Live to descend again.");
+    setCombatLog([]);
+    setEnc({ kind: "path", depth: 4 });
+  };
+
   const finishKill = (e: CombatEnc) => {
     // Fork bias: Left favors gold, Right favors XP & material drops.
     const goldMult = forkBias === "left" ? 1.25 : 1;
     const xpMult = forkBias === "right" ? 1.3 : 1;
     const gearChanceBonus = forkBias === "left" ? 0.1 : 0;
     const matChanceMult = forkBias === "right" ? 1.3 : 1;
-    const goldDrop = Math.round((4 + e.depth * 3) * goldMult);
-    const xpDrop = Math.round((6 + e.depth * 4) * xpMult);
+    const threatLoot = threatLootBonus(e.threatTier);
+    const goldDrop = Math.round((4 + e.depth * 3) * goldMult * threatLoot.gold);
+    const xpDrop = Math.round((6 + e.depth * 4) * xpMult * threatLoot.xp);
     rewardGold(goldDrop); rewardXp(xpDrop);
     addLog(`${e.enemy.name} falls. +${goldDrop}g +${xpDrop}xp`);
+    if (e.threatTier !== "none") {
+      addLog(`✦ ${THREAT_TIERS[e.threatTier].label} foe — richer spoils.`);
+    }
     vibrate([20, 40, 60]);
     playSfx("death");
     let questItem: string | undefined;
@@ -553,7 +569,7 @@ export function DungeonScreen() {
         : MAJOR_BOSS_FLOORS.has(e.depth) ? "major_boss"
         : MINI_BOSS_FLOORS.has(e.depth) ? "mini_boss"
         : "trash";
-      const gearChance = isFinalBoss ? 1 : Math.min(1, 0.35 + e.depth * 0.04 + gearChanceBonus);
+      const gearChance = isFinalBoss ? 1 : Math.min(1, 0.35 + e.depth * 0.04 + gearChanceBonus + threatLoot.gear);
       if (Math.random() < gearChance) {
         const rolled = rollGear(e.depth, { source });
         if (addToBag(rolled)) gear = rolled;
@@ -954,6 +970,14 @@ export function DungeonScreen() {
             )}
             {player.nextAttackMult !== 1 && (
               <p className="pixel text-[8px] text-blood text-center">FRENZY — next hit ×{player.nextAttackMult}</p>
+            )}
+            {enc.enemy.id === "bone_warden" && enc.depth === 5 && !player.eliteRetreatUsed && (
+              <button
+                onClick={retreatFromBoneWarden}
+                className="pixel-btn !text-[8px] w-full border-l-4 border-l-muted-foreground"
+              >
+                ↩ Fall Back to Floor 4 — flee this elite (once per run)
+              </button>
             )}
           </div>
         )}

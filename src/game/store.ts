@@ -98,6 +98,8 @@ interface PlayerState {
   activeOaths: OathId[];
   /** Shrine buffs applied during the current descent. Cleared on exit/finish. */
   dungeonBuffs: BuffEffect[];
+  /** Used the once-per-run elite retreat (floor 5 Bone Warden). */
+  eliteRetreatUsed: boolean;
 }
 
 export interface RunSummary {
@@ -202,6 +204,7 @@ interface GameState {
   markBossSeen: (bossId: string) => void;
   bumpDailyFloor: (floor: number) => void;
   applyDungeonBuff: (buff: BuffEffect) => void;
+  markEliteRetreat: () => void;
 }
 
 const emptyPlayer = (): PlayerState => ({
@@ -219,6 +222,7 @@ const emptyPlayer = (): PlayerState => ({
   dungeonMode: "normal", affixes: [], weaknessTurns: 0,
   activeOaths: [],
   dungeonBuffs: [],
+  eliteRetreatUsed: false,
 });
 
 const xpForLevel = (lvl: number) => lvl * 25;
@@ -695,10 +699,19 @@ export const useGame = create<GameState>((set, get) => ({
         weaknessTurns: 0,
         activeOaths: oaths,
         dungeonBuffs: [],
+        eliteRetreatUsed: false,
       }, s.meta);
-      return { screen: "dungeon", player: p };
+      // First descent: grant a free Hearthstone Charm so floor 5 isn't a dead end.
+      let nextPlayer = p;
+      if (!s.meta.hasCompletedFirstRun && !p.inventory.includes("hearth")) {
+        nextPlayer = { ...p, inventory: [...p.inventory, "hearth"] };
+      }
+      return { screen: "dungeon", player: nextPlayer };
     });
     if ((get().player.activeBuffs ?? []).length > 0) get().pushLog("✦ Town blessings infuse your gear.");
+    if (!get().meta.hasCompletedFirstRun && get().player.inventory.includes("hearth")) {
+      get().pushLog("✦ A Hearthstone Charm is pressed into your palm — use it to bail out if the descent turns sour.");
+    }
     if (mode === "cursed") get().pushLog(`☠ Cursed Depths — affixes rolled: ${get().player.affixes.join(", ")}.`);
     if (oaths.length > 0) get().pushLog(`✦ Oaths sworn: ${oaths.join(", ")}.`);
     get().pushLog("You descend into darkness...");
@@ -1479,6 +1492,8 @@ export const useGame = create<GameState>((set, get) => ({
     const dungeonBuffs = [...(p.dungeonBuffs ?? []), buff];
     set({ player: recompute({ ...p, dungeonBuffs }, meta) });
   },
+
+  markEliteRetreat: () => set((s) => ({ player: { ...s.player, eliteRetreatUsed: true } })),
 }));
 
 export { xpForLevel, bagCap, bagSlotsUsed, bagFreeSlots };

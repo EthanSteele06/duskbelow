@@ -5,6 +5,7 @@ import titleBg from "@/assets/title-bg.jpg";
 export function IntroScreen() {
   const p = useGame((s) => s.player);
   const setScreen = useGame((s) => s.setScreen);
+  const enterDungeon = useGame((s) => s.enterDungeon);
   if (!p.faction || !p.classId) return null;
   const f = FACTIONS.find((x) => x.id === p.faction)!;
   const c = CLASSES.find((x) => x.id === p.classId)!;
