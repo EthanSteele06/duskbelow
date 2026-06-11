@@ -17,8 +17,11 @@ export function EchoTreeScreen() {
       <button onClick={() => setScreen("city")} className="pixel-btn !text-[8px] w-fit">← Back to City</button>
       <h1 className="pixel text-[14px] text-gold">✦ Echo Tree</h1>
       <p className="font-body text-sm text-muted-foreground">Persistent passives. Echoes survive every death.</p>
-      <div className="border-2 border-black bg-card p-2 text-center">
+      <div className="border-2 border-black bg-card p-2 text-center space-y-1">
         <span className="pixel text-[10px]" style={{ color: "var(--color-arcane)" }}>✦ {meta.shards} Soul Shards</span>
+        {(meta.echoRespecTokens ?? 0) > 0 && (
+          <p className="pixel text-[8px] text-gold">↺ {meta.echoRespecTokens} respec token{(meta.echoRespecTokens ?? 0) > 1 ? "s" : ""}</p>
+        )}
       </div>
 
       {available.length > 0 && (

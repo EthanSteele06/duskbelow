@@ -48,6 +48,7 @@ export interface LifetimeStats {
   goldEarned: number;
   deepest: number;
   deepestCursed: number;
+  deepestAscension?: number;
   legendariesFound: number;
 }
 
@@ -88,6 +89,14 @@ export interface MetaState {
   relicVendor: RelicVendorState | null;
   /** Boss ids whose first-encounter intro banner has already been shown. */
   seenBossIntros: string[];
+  /** Gear kept through a wipe via Hoarder echo — injected on next character. */
+  pendingHoarderItem: GearItem | null;
+  /** Story arc ids whose final step was turned in (unlocks chronicle boons). */
+  completedChronicles: string[];
+  /** Free Echo Tree respec tokens earned from Wanderer unlocks. */
+  echoRespecTokens: number;
+  /** Ever cleared floor 40 in Ascension mode. */
+  hasClearedAscension: boolean;
 }
 
 export const META_VERSION = 1;
@@ -115,6 +124,10 @@ export const emptyMeta = (): MetaState => ({
   dailyContract: null,
   relicVendor: null,
   seenBossIntros: [],
+  pendingHoarderItem: null,
+  completedChronicles: [],
+  echoRespecTokens: 0,
+  hasClearedAscension: false,
 });
 
 // ── Account leveling ─────────────────────────────────────────────────────────
@@ -128,8 +141,14 @@ export type UnlockKind =
   | { kind: "class"; classId: ClassId }
   | { kind: "stashSlot" }
   | { kind: "zone"; name: string }
+  | { kind: "zoneMod"; zone: "bone_halls" | "void_sanctum" }
   | { kind: "racialCharge" }
-  | { kind: "echoNode" };
+  | { kind: "echoNode" }
+  | { kind: "echoRespec" }
+  | { kind: "chronicleBoon" }
+  | { kind: "classTrial" }
+  | { kind: "ascensionGate" }
+  | { kind: "shardBonus"; pct: number };
 
 export interface AccountUnlock {
   level: number;
@@ -144,6 +163,15 @@ export const ACCOUNT_UNLOCKS: AccountUnlock[] = [
   { level: 8, label: "Second racial charge",       effect: { kind: "racialCharge" } },
   { level: 10, label: "Zone — Void Sanctum",       effect: { kind: "zone", name: "Void Sanctum" } },
   { level: 12, label: "Heirloom Stash slot 3",     effect: { kind: "stashSlot" } },
+  { level: 13, label: "Echo Respec Token",         effect: { kind: "echoRespec" } },
+  { level: 14, label: "Zone Modifier — Bone Halls", effect: { kind: "zoneMod", zone: "bone_halls" } },
+  { level: 16, label: "Third racial charge",       effect: { kind: "racialCharge" } },
+  { level: 18, label: "Zone Modifier — Void Sanctum", effect: { kind: "zoneMod", zone: "void_sanctum" } },
+  { level: 20, label: "Heirloom Stash slot 4",     effect: { kind: "stashSlot" } },
+  { level: 22, label: "Chronicle Boons",           effect: { kind: "chronicleBoon" } },
+  { level: 25, label: "Class Trials",              effect: { kind: "classTrial" } },
+  { level: 28, label: "Ascension Gate Key",        effect: { kind: "ascensionGate" } },
+  { level: 30, label: "Wanderer Capstone (+5% shards)", effect: { kind: "shardBonus", pct: 5 } },
 ];
 
 export function unlockedAtLevel<T extends UnlockKind["kind"]>(
@@ -170,6 +198,26 @@ export function unlockedClassesFor(level: number, baseUnlocks: ClassId[]): Class
 
 export function nextUnlock(level: number): AccountUnlock | null {
   return ACCOUNT_UNLOCKS.find((u) => u.level > level) ?? null;
+}
+
+export function zoneModsForLevel(level: number): Array<"bone_halls" | "void_sanctum"> {
+  return unlockedAtLevel(level, "zoneMod").map((u) => u.zone);
+}
+
+export function hasChronicleBoonsUnlocked(level: number): boolean {
+  return unlockedAtLevel(level, "chronicleBoon").length > 0;
+}
+
+export function hasAscensionGate(level: number): boolean {
+  return unlockedAtLevel(level, "ascensionGate").length > 0;
+}
+
+export function hasClassTrialUnlocked(level: number): boolean {
+  return unlockedAtLevel(level, "classTrial").length > 0;
+}
+
+export function accountShardBonusPct(level: number): number {
+  return unlockedAtLevel(level, "shardBonus").reduce((sum, u) => sum + u.pct, 0);
 }
 
 // ── Echo Tree (persistent passive nodes) ─────────────────────────────────────
@@ -237,6 +285,12 @@ export interface EchoStart {
   xpMult: number;
   shardMult: number;
   retainGoldPct: number;
+  /** Extra chest encounter weight from Grave Robber (added to base 0.20). */
+  chestBias: number;
+  /** Starting character level from Ascendance echo. */
+  startLevel: number;
+  /** First hit each fight is a guaranteed crit. */
+  echoLight: boolean;
 }
 
 export function echoStart(meta: MetaState): EchoStart {
@@ -244,6 +298,7 @@ export function echoStart(meta: MetaState): EchoStart {
   const pots: string[] = [];
   if (has("start_potion")) pots.push("p1");
   if (has("second_pot"))   pots.push("p2");
+  const accountShard = 1 + accountShardBonusPct(meta.account.level) / 100;
   return {
     bonusMaxHp:    has("start_hp") ? 8 : 0,
     bonusAtk:      has("start_atk") ? 1 : 0,
@@ -251,8 +306,11 @@ export function echoStart(meta: MetaState): EchoStart {
     startingPotions: pots,
     goldMult:      has("gold_bonus") ? 1.10 : 1.0,
     xpMult:        has("xp_bonus") ? 1.10 : 1.0,
-    shardMult:     has("shard_bonus") ? 1.25 : 1.0,
+    shardMult:     (has("shard_bonus") ? 1.25 : 1.0) * accountShard,
     retainGoldPct: has("retain_gold") ? 0.25 : 0,
+    chestBias:     has("grave_robber") ? 0.12 : 0,
+    startLevel:    has("ascendance") ? 2 : 1,
+    echoLight:     has("echo_light"),
   };
 }
 
@@ -302,6 +360,10 @@ export function loadMeta(): MetaState {
       dailyContract: parsed.dailyContract ?? null,
       relicVendor: parsed.relicVendor ?? null,
       seenBossIntros: parsed.seenBossIntros ?? [],
+      pendingHoarderItem: parsed.pendingHoarderItem ?? null,
+      completedChronicles: parsed.completedChronicles ?? [],
+      echoRespecTokens: parsed.echoRespecTokens ?? 0,
+      hasClearedAscension: parsed.hasClearedAscension ?? false,
     };
   } catch { return emptyMeta(); }
 }

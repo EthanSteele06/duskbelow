@@ -416,6 +416,17 @@ export const ENEMIES: Record<string, EnemyDef> = {
       { id: "ruin",     label: "💀 Worldending Ruin", mult: 2.8, line: "{n} speaks a word of ruin — {d} damage!", telegraphable: true },
     ],
   },
+  hollow_sealed_one: {
+    id: "hollow_sealed_one", name: "The Hollow Sealed One", image: sealedImg,
+    hpBase: 920, atkBase: 34,
+    materialDrop: { id: "dragon_scale", chance: 1.0 },
+    attackLines: ["The {n} speaks with a voice that isn't its own for {d}!"],
+    intents: [
+      { id: "hollow_grasp", label: "🖐 Hollow Grasp", mult: 1.3, line: "Hollow fingers rake through you for {d}!" },
+      { id: "echo_judge",   label: "⚖ Echo Judgment", mult: 2.0, line: "A thousand verdicts fall for {d}!" },
+      { id: "void_ruin",    label: "🌑 Void Ruin",    mult: 3.2, line: "{n} unseals the void itself — {d} damage!", telegraphable: true },
+    ],
+  },
   // ── Phase 1 additions ──
   spider_swarm: {
     id: "spider_swarm", name: "Spider Swarm", image: spiderSwarmImg,
@@ -495,6 +506,8 @@ export const ENEMIES: Record<string, EnemyDef> = {
 
 /** Final dungeon depth. Mini-bosses on 5/15/25, major bosses on 10/20/30. */
 export const MAX_DEPTH = 30;
+/** Ascension mode extends the ladder to floor 40. */
+export const MAX_ASCENSION_DEPTH = 40;
 
 /** Boss floors: maps depth → enemy id. Forced combat. */
 export const BOSS_FLOORS: Record<number, string> = {
@@ -506,8 +519,32 @@ export const BOSS_FLOORS: Record<number, string> = {
   30: "sealed_one",
 };
 
-export const MAJOR_BOSS_FLOORS = new Set([10, 20, 30]);
-export const MINI_BOSS_FLOORS = new Set([5, 15, 25]);
+export const ASCENSION_BOSS_FLOORS: Record<number, string> = {
+  ...BOSS_FLOORS,
+  35: "frostbound_lich",
+  40: "hollow_sealed_one",
+};
+
+export const MAJOR_BOSS_FLOORS = new Set([10, 20, 30, 40]);
+export const MINI_BOSS_FLOORS = new Set([5, 15, 25, 35]);
+
+export function maxDepthForMode(mode: DungeonMode): number {
+  return mode === "ascension" ? MAX_ASCENSION_DEPTH : MAX_DEPTH;
+}
+
+export function bossFloorsForMode(mode: DungeonMode): Record<number, string> {
+  return mode === "ascension" ? ASCENSION_BOSS_FLOORS : BOSS_FLOORS;
+}
+
+export function isMajorBossFloor(depth: number, mode: DungeonMode = "normal"): boolean {
+  if (mode === "ascension" && depth === 40) return true;
+  return MAJOR_BOSS_FLOORS.has(depth) && depth <= MAX_DEPTH;
+}
+
+export function isMiniBossFloor(depth: number, mode: DungeonMode = "normal"): boolean {
+  if (mode === "ascension" && depth === 35) return true;
+  return MINI_BOSS_FLOORS.has(depth);
+}
 
 /** Dungeon background image per 5-floor tier (depths 1-5, 6-10, ..., 26-30). */
 export const DUNGEON_BGS: string[] = [corridorImg, cryptImg, barracksImg, sanctumImg, vaultImg, throneImg];
@@ -538,23 +575,54 @@ export function signatureIntent(e: EnemyDef): EnemyIntent {
   return e.intents.reduce((best, i) => (i.mult > best.mult ? i : best), e.intents[0]);
 }
 
-export function enemyForDepth(depth: number, faction?: FactionId | null): EnemyDef {
-  // Boss floors are deterministic.
-  const boss = BOSS_FLOORS[depth];
+export interface ZoneContext {
+  boneHalls?: boolean;
+  voidSanctum?: boolean;
+  /** Ascension floors 31+ use endgame enemy tables. */
+  ascension?: boolean;
+}
+
+export function enemyForDepth(
+  depth: number,
+  faction?: FactionId | null,
+  zones: ZoneContext = {},
+  mode: DungeonMode = "normal",
+): EnemyDef {
+  const bosses = bossFloorsForMode(mode);
+  const boss = bosses[depth];
   if (boss) return ENEMIES[boss];
   // Rare mini-boss: the Shacklewarden Demon stalks mid floors (DH unlock arc target).
   if (depth >= 8 && depth <= 22 && Math.random() < 0.05) {
     return ENEMIES.shacklewarden;
   }
+  // Zone modifier — Bone Halls (floors 6-10): bone-themed elites.
+  if (zones.boneHalls && depth >= 6 && depth <= 10 && Math.random() < 0.14) {
+    const elites = ["stone_golem", "ogre", "skeleton"];
+    return ENEMIES[elites[Math.floor(Math.random() * elites.length)]];
+  }
+  // Zone modifier — Void Sanctum (floors 21-25): void-themed threats.
+  if (zones.voidSanctum && depth >= 21 && depth <= 25 && Math.random() < 0.12) {
+    const voidPool = ["wraith", "soulbinder", "cultist"];
+    return ENEMIES[voidPool[Math.floor(Math.random() * voidPool.length)]];
+  }
   // Faction-specific enemies — appear when player belongs to the OPPOSING side.
   const factionFoe = faction === "allies" ? "brigade_marauder" : faction === "brigade" ? "kingdom_knight" : null;
-  const pool: string[] =
+  let pool: string[] =
     depth <= 3  ? ["rat", "skeleton", "imp", "spider_swarm"] :
     depth <= 9  ? ["skeleton", "cultist", "wraith", "imp", "ghoul", "spider_swarm", "goblin_sapper"] :
     depth <= 14 ? ["wraith", "ogre", "cultist", "ghoul", "goblin_sapper", "mire_shambler"] :
     depth <= 19 ? ["ogre", "ghoul", "cultist", "wraith", "mire_shambler", "cinder_drake", "soulbinder"] :
     depth <= 24 ? ["wraith", "ogre", "cultist", "ghoul", "cinder_drake", "soulbinder", "stone_golem"] :
                   ["ogre", "ghoul", "wraith", "cultist", "soulbinder", "stone_golem", "cinder_drake"];
+  if (zones.boneHalls && depth >= 6 && depth <= 10) {
+    pool = [...pool, "skeleton", "ghoul", "stone_golem"];
+  }
+  if (zones.voidSanctum && depth >= 21 && depth <= 25) {
+    pool = [...pool, "wraith", "soulbinder", "cultist"];
+  }
+  if (zones.ascension || (mode === "ascension" && depth > MAX_DEPTH)) {
+    pool = ["wraith", "ogre", "soulbinder", "stone_golem", "cinder_drake", "voidspawn", "cultist"];
+  }
   if (factionFoe && depth >= 2) pool.push(factionFoe);
   return ENEMIES[pool[Math.floor(Math.random() * pool.length)]];
 }
@@ -1042,6 +1110,13 @@ export const BOSS_MOMENTS: Record<string, BossMomentDef> = {
     phaseIntent: { id: "shardbleed", label: "💀 Shard Summon", mult: 1.2, line: "A bone-shard erupts and rakes you for {d} — bleed!", telegraphable: true },
     firstKillLore: "lore_sealed",
   },
+  hollow_sealed_one: {
+    intro: "The Hollow Sealed One waits beyond the throne. It wears your victory like a mask.",
+    phaseLine: "The hollow splits — two mouths speak ruin at once.",
+    phaseDmgMult: 1.15,
+    phaseIntent: { id: "hollow_echo", label: "🌑 Hollow Echo", mult: 2.0, line: "A void echo of your last blow returns for {d}!", telegraphable: true },
+    firstKillLore: "lore_cursed",
+  },
 };
 
 // ── Rotating Relics vendor roller ────────────────────────────────────────────
@@ -1142,12 +1217,18 @@ export function buildDescentFlavor(opts: {
   lines.push(opener[Math.floor(Math.random() * opener.length)]);
   if (opts.classId) lines.push(CLASS_INTRO[opts.classId]);
   if (opts.mode === "cursed") lines.push(DESCENT_CURSED[Math.floor(Math.random() * DESCENT_CURSED.length)]);
+  if (opts.mode === "ascension") {
+    lines.push("Beyond the throne, the stone remembers your name — and hungers for it.");
+    lines.push("Ascension floors await. Each five steps, the dark adds another curse.");
+  }
   for (const o of opts.oaths) {
     if (DESCENT_OATH[o]) lines.push(DESCENT_OATH[o]);
   }
   if (opts.depth > 1) lines.push(`The oath carries you to floor ${opts.depth}. No turning back.`);
   lines.push(`${opts.name} steps below.`);
-  const title = opts.mode === "cursed" ? "☠ Cursed Descent" : opts.depth > 1 ? `▼ Floor ${opts.depth}` : "▼ Into Dusk Below";
+  const title = opts.mode === "ascension" ? "☀ Ascension Descent"
+    : opts.mode === "cursed" ? "☠ Cursed Descent"
+    : opts.depth > 1 ? `▼ Floor ${opts.depth}` : "▼ Into Dusk Below";
   return { title, lines };
 }
 
@@ -1736,7 +1817,39 @@ export const IDLE_MAX_SECONDS = 60 * 60 * 12; // cap at 12 hours
 
 // ── Dungeon modes & affixes (Cursed Depths) ──────────────────────────────────
 
-export type DungeonMode = "normal" | "cursed";
+export type DungeonMode = "normal" | "cursed" | "ascension";
+
+/** Pre-descent blessings earned by completing chronicle story arcs. */
+export const CHRONICLE_BOONS: { id: string; storyId: string; name: string; desc: string; buff: BuffEffect }[] = [
+  { id: "boon_dh",     storyId: "story_dh",     name: "Fel Hunger",      desc: "+2 ATK on your next descent.",                    buff: { atk: 2 } },
+  { id: "boon_sealed", storyId: "story_sealed", name: "Ward-Light",      desc: "+15 Max HP on your next descent.",                buff: { maxHp: 15 } },
+  { id: "boon_marrow", storyId: "story_marrow", name: "Marrow Strength", desc: "+2 MAG on your next descent.",                    buff: { mag: 2 } },
+  { id: "boon_moss",   storyId: "story_moss",   name: "Grove Vitality",  desc: "+10 Max HP and +5% dodge on your next descent.",  buff: { maxHp: 10, dodge: 5 } },
+];
+
+/** Rotating weekly class trials — bonus shards on victory when conditions met. */
+export interface ClassTrialDef {
+  id: string;
+  name: string;
+  desc: string;
+  classId?: ClassId;
+  specId?: string;
+  shardBonus: number;
+}
+
+export const CLASS_TRIALS: ClassTrialDef[] = [
+  { id: "trial_warrior", name: "Trial of Bone",     desc: "Clear a run as Warrior.",              classId: "warrior",     shardBonus: 8 },
+  { id: "trial_rogue",   name: "Trial of Shadows",  desc: "Clear a run as Rogue.",                classId: "rogue",       shardBonus: 8 },
+  { id: "trial_mage",    name: "Trial of Embers",   desc: "Clear a run as Mage.",                 classId: "mage",        shardBonus: 8 },
+  { id: "trial_priest",  name: "Trial of Light",    desc: "Clear a run as Priest.",                 classId: "priest",      shardBonus: 8 },
+  { id: "trial_oath",    name: "Trial of Oaths",    desc: "Clear a run with at least one Oath sworn.", shardBonus: 10 },
+  { id: "trial_deep",    name: "Trial of Depth",    desc: "Reach floor 25+ on any run.",          shardBonus: 12 },
+];
+
+export function activeClassTrial(at = Date.now()): ClassTrialDef {
+  const week = Math.floor(at / (7 * 24 * 60 * 60 * 1000));
+  return CLASS_TRIALS[week % CLASS_TRIALS.length];
+}
 
 export type AffixId =
   | "fortified" | "sapping" | "bloodlust" | "volatile"
@@ -1767,4 +1880,13 @@ export function rollAffixes(count = 2): AffixId[] {
     out.push(pool.splice(idx, 1)[0].id);
   }
   return out;
+}
+
+/** Lingering curses rolled at the start of an Ascension descent. */
+export const ASCENSION_CURSES: AffixId[] = ["echoes", "sapping", "volatile", "starved"];
+
+export function rollAscensionAffixes(): AffixId[] {
+  const curse = ASCENSION_CURSES[Math.floor(Math.random() * ASCENSION_CURSES.length)];
+  const extra = rollAffixes(2).filter((a) => a !== curse);
+  return [curse, ...extra];
 }

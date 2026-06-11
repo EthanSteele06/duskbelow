@@ -61,6 +61,22 @@ export function RunSummaryScreen() {
         <div>Soul Shards</div><div className="text-right" style={{ color: "var(--color-arcane)" }}>✦ {run.shards}</div>
       </div>
 
+      {run.outcome === "defeat" && (run.retainedGold || run.hoarderKept) && (
+        <div className="border-2 border-gold bg-card/80 p-3">
+          <p className="pixel text-[9px] text-gold mb-2">✦ Echo Retention</p>
+          {run.retainedGold ? (
+            <p className="font-body text-xs text-muted-foreground">
+              Buried Coin — <span className="text-gold">{run.retainedGold}g</span> waits for your next wanderer.
+            </p>
+          ) : null}
+          {run.hoarderKept ? (
+            <p className="font-body text-xs text-muted-foreground mt-1">
+              Hoarder — <span className="text-divine">{run.hoarderKept.name}</span> clings to your pack through the wipe.
+            </p>
+          ) : null}
+        </div>
+      )}
+
       {newLore && (
         <div className="border-2 border-arcane bg-card/70 p-2">
           <p className="pixel text-[9px] text-gold">✦ Lore Found — {newLore.title}</p>
