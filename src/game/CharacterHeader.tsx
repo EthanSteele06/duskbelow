@@ -1,5 +1,6 @@
 import { useGame } from "@/game/store";
 import { CLASSES, COSMETICS, SPECS, FACTIONS } from "@/game/data";
+import { TweenHpBar } from "@/game/TweenHpBar";
 
 /**
  * Persistent header showing the player's portrait, name, title, level, HP,
@@ -19,7 +20,6 @@ export function CharacterHeader() {
   const plateCos    = eq.namePlate     ? COSMETICS.find((c) => c.id === eq.namePlate)     : null;
   const petCos      = eq.pet           ? COSMETICS.find((c) => c.id === eq.pet)           : null;
 
-  const hpPct = Math.max(0, (p.hp / p.maxHp) * 100);
   const xpPct = Math.min(100, (p.xp / (p.level * 25)) * 100);
 
   const plateBorder = plateCos?.tint ?? "#000";
@@ -67,9 +67,11 @@ export function CharacterHeader() {
             <span>MAG {p.mag}</span>
             {p.isChampion && <span className="pixel text-[7px] text-gold ml-auto">★</span>}
           </div>
-          <div className="mt-0.5 h-1.5 w-full bg-stone border border-black">
-            <div className="h-full bg-blood transition-all" style={{ width: `${hpPct}%` }} />
-          </div>
+          <TweenHpBar
+            current={p.hp}
+            max={p.maxHp}
+            className="mt-0.5 h-1.5 w-full bg-stone border border-black overflow-hidden"
+          />
           <div className="flex items-center justify-between text-[10px] font-body leading-none mt-0.5">
             <span>{p.hp}/{p.maxHp}</span>
             <span className="text-gold">{p.gold}g</span>

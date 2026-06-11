@@ -517,6 +517,20 @@ export function dungeonBgForDepth(depth: number): string {
   return DUNGEON_BGS[idx];
 }
 
+/** Progressive darkening / desaturation as the player descends. */
+export function depthAmbientStyle(depth: number): { filter: string; overlay: string } {
+  const d = Math.max(1, depth);
+  const tier = Math.floor((d - 1) / 5);
+  const within = (d - 1) % 5;
+  const darken = Math.min(0.42, tier * 0.1 + within * 0.018);
+  const saturate = Math.max(0.52, 1 - tier * 0.11 - within * 0.02);
+  const hue = tier * 6 + (within > 2 ? 4 : 0);
+  return {
+    filter: `brightness(${1 - darken}) saturate(${saturate}) hue-rotate(${hue}deg)`,
+    overlay: `rgba(4, 2, 12, ${Math.min(0.38, tier * 0.07 + within * 0.012)})`,
+  };
+}
+
 /** The attack line revealed at bestiary tier 1 (3 kills): telegraphed tell, else heaviest hit. */
 export function signatureIntent(e: EnemyDef): EnemyIntent {
   const teleg = e.intents.find((i) => i.telegraphable);

@@ -4,7 +4,7 @@ import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumb
 import {
   CLASS_ABILITIES, SPEC_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
   RARITY_CLASS, RARITY_LABEL, rollDamage, damageRange,
-  MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth, rollClassLegendary, AFFIXES, BOSS_MOMENTS, FACTION_SHRINES,
+  MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth, depthAmbientStyle, rollClassLegendary, AFFIXES, BOSS_MOMENTS, FACTION_SHRINES,
   equippedGearScore, playerThreat, threatHpScale, threatAtkScale, threatTierFor, THREAT_TIERS, depthHpBonus,
   threatLootBonus, turnEnrageMult, turnEnrageLabel,
   type Ability, type EnemyDef, type ChestPreview, type GearItem,
@@ -17,6 +17,8 @@ import { TutorialTip } from "@/game/Tutorial";
 import { SettingsButton } from "@/game/Settings";
 import { GearCompare } from "@/game/GearCompare";
 import { DungeonDescentOverlay } from "@/game/DungeonDescentOverlay";
+import { TweenHpBar } from "@/game/TweenHpBar";
+import { TypingLogLine } from "@/game/TypingLogLine";
 import chestImg from "@/assets/dungeon-chest.jpg";
 import shrineImg from "@/assets/dungeon-shrine.png";
 import trapSpikesImg from "@/assets/trap-spikes.png";
@@ -25,7 +27,30 @@ import trapGasImg from "@/assets/trap-gas.png";
 const vibrate = (ms: number | number[]) => { try { (navigator as Navigator & { vibrate?: (p: number | number[]) => boolean }).vibrate?.(ms); } catch { /* noop */ } };
 
 type TurnPhase = "idle" | "telegraph" | "resolving";
+type RoomTransition = "idle" | "out" | "in";
+type LogEntry = { id: number; text: string };
+
 const TURN_TELEGRAPH_MS = 900;
+const VICTORY_BEAT_MS = 1300;
+const ROOM_FADE_OUT_MS = 280;
+const ROOM_FADE_IN_MS = 320;
+
+function encRoomKey(e: Encounter): string {
+  switch (e.kind) {
+    case "combat": return `combat-${e.depth}-${e.enemy.id}`;
+    case "victory": return `victory-${e.depth}`;
+    case "chest": return `chest-${e.depth}`;
+    case "shrine": return `shrine-${e.depth}-${e.shrine}`;
+    case "trap": return `trap-${e.depth}-${e.trap}-${e.sprung}`;
+    case "path": return `path-${e.depth}`;
+  }
+}
+
+function shouldRoomTransition(from: Encounter, to: Encounter): boolean {
+  if (from.kind === "combat" && to.kind === "combat") return false;
+  if (from.kind === "trap" && to.kind === "trap" && from.depth === to.depth) return false;
+  return encRoomKey(from) !== encRoomKey(to);
+}
 
 interface Loot {
   enemy: EnemyDef;
@@ -192,7 +217,10 @@ export function DungeonScreen() {
   const weaponGlow = eq.weaponGlow ? COSMETICS.find((c) => c.id === eq.weaponGlow)?.tint : undefined;
   const dmgSkin    = eq.damageSkin ? COSMETICS.find((c) => c.id === eq.damageSkin)?.tint : undefined;
 
-  const [enc, setEnc] = useState<Encounter>(() => ({ kind: "path", depth: 1 }));
+  const [enc, setEnc] = useState<Encounter>(() => ({
+    kind: "path",
+    depth: useGame.getState().player.dungeonDepth || 1,
+  }));
 
   // Music: swap to boss track when fighting a boss, dungeon ambient otherwise.
   useEffect(() => {
@@ -201,7 +229,7 @@ export function DungeonScreen() {
   }, [enc.kind, enc.kind === "combat" ? enc.enemy.id : null]);
   const playerFaction = player.faction;
   const [hit, setHit] = useState(false);
-  const [combatLog, setCombatLog] = useState<string[]>([]);
+  const [combatLog, setCombatLog] = useState<LogEntry[]>([]);
   const [hoveredAbility, setHoveredAbility] = useState<Ability | null>(null);
   const [armedAbility, setArmedAbility] = useState<string | null>(null);
   const [equippedFlash, setEquippedFlash] = useState<string | null>(null);
@@ -212,15 +240,65 @@ export function DungeonScreen() {
   const [showDescent, setShowDescent] = useState(true);
   const [turnPhase, setTurnPhase] = useState<TurnPhase>("idle");
   const [arenaFlash, setArenaFlash] = useState(false);
+  const [roomTransition, setRoomTransition] = useState<RoomTransition>("idle");
+  const [victoryBeat, setVictoryBeat] = useState<{ depth: number; enemy: EnemyDef; enemyMaxHp: number; loot: Loot } | null>(null);
+  const [readyPulse, setReadyPulse] = useState<Set<string>>(new Set());
   const logRef = useRef<HTMLDivElement>(null);
+  const logIdRef = useRef(0);
   const turnTimersRef = useRef<number[]>([]);
+  const roomTimersRef = useRef<number[]>([]);
+  const victoryTimerRef = useRef<number | null>(null);
+  const prevCdsRef = useRef<Record<string, number>>({});
 
   const clearTurnTimers = () => {
     turnTimersRef.current.forEach((id) => clearTimeout(id));
     turnTimersRef.current = [];
   };
 
-  useEffect(() => () => clearTurnTimers(), []);
+  useEffect(() => () => {
+    clearTurnTimers();
+    roomTimersRef.current.forEach((id) => clearTimeout(id));
+    if (victoryTimerRef.current !== null) clearTimeout(victoryTimerRef.current);
+  }, []);
+
+  const clearRoomTimers = () => {
+    roomTimersRef.current.forEach((id) => clearTimeout(id));
+    roomTimersRef.current = [];
+  };
+
+  const transitionToEnc = (next: Encounter, afterIn?: () => void) => {
+    if (!shouldRoomTransition(enc, next)) {
+      setEnc(next);
+      afterIn?.();
+      return;
+    }
+    clearRoomTimers();
+    setRoomTransition("out");
+    const outId = window.setTimeout(() => {
+      setEnc(next);
+      setRoomTransition("in");
+      const inId = window.setTimeout(() => {
+        setRoomTransition("idle");
+        afterIn?.();
+      }, ROOM_FADE_IN_MS);
+      roomTimersRef.current.push(inId);
+    }, ROOM_FADE_OUT_MS);
+    roomTimersRef.current.push(outId);
+  };
+
+  useEffect(() => {
+    const pulse = new Set<string>();
+    for (const ab of abilities) {
+      const cd = player.abilityCooldowns?.[ab.id] ?? 0;
+      const prev = prevCdsRef.current[ab.id] ?? 0;
+      if (prev > 0 && cd === 0) pulse.add(ab.id);
+      prevCdsRef.current[ab.id] = cd;
+    }
+    if (pulse.size === 0) return;
+    setReadyPulse(pulse);
+    const id = window.setTimeout(() => setReadyPulse(new Set()), 780);
+    return () => clearTimeout(id);
+  }, [player.abilityCooldowns, abilities]);
 
   const classColor = player.classId ? CLASSES.find((c) => c.id === player.classId)?.color : undefined;
 
@@ -235,8 +313,22 @@ export function DungeonScreen() {
   const removeFloater = (id: number) => setFloaters((f) => f.filter((x) => x.id !== id));
 
   const addLog = (msg: string) => {
-    setCombatLog((l) => [...l.slice(-20), msg]);
+    const id = ++logIdRef.current;
+    setCombatLog((l) => [...l.slice(-20), { id, text: msg }]);
     pushLog(msg);
+  };
+
+  const logLineClass = (text: string) =>
+    text.includes("damage!") && text.includes(player.name) ? "text-divine" :
+    text.startsWith("✓") || text.startsWith("★") ? "text-gold" :
+    text.includes("for") && text.includes("!") ? "text-blood" :
+    "text-foreground";
+
+  const onDescentComplete = () => {
+    setShowDescent(false);
+    setRoomTransition("in");
+    const id = window.setTimeout(() => setRoomTransition("idle"), ROOM_FADE_IN_MS);
+    roomTimersRef.current.push(id);
   };
 
   const finishRun = useGame((s) => s.finishRun);
@@ -270,13 +362,12 @@ export function DungeonScreen() {
     setForkBias(bias);
     bumpDailyFloor(newDepth);
     const next = rollEncounter(newDepth, playerThreatSnap(), playerFaction, player.affixes ?? [], bias);
-    setEnc(next);
-    // Boss intro banner: first time the player meets a major boss.
+    let afterRoomIn: (() => void) | undefined;
     if (next.kind === "combat") {
       const moment = BOSS_MOMENTS[next.enemy.id];
       if (moment && !seenBossIntros.includes(next.enemy.id)) {
-        setBossIntro({ id: next.enemy.id, intro: moment.intro });
         markBossSeen(next.enemy.id);
+        afterRoomIn = () => setBossIntro({ id: next.enemy.id, intro: moment.intro });
       }
       addLog(`A ${next.enemy.name} blocks your path!`);
       if (next.threatTier !== "none") {
@@ -286,6 +377,7 @@ export function DungeonScreen() {
     }
     else if (next.kind === "chest") addLog(`You spot ${next.preview.label}.`);
     else addLog("The corridor opens further.");
+    transitionToEnc(next, afterRoomIn);
   };
 
   const pickNextIntent = (e: CombatEnc): EnemyIntent => {
@@ -549,13 +641,13 @@ export function DungeonScreen() {
   };
 
   const passTurn = () => {
-    if (enc.kind !== "combat" || turnPhase !== "idle") return;
+    if (enc.kind !== "combat" || turnPhase !== "idle" || victoryBeat) return;
     addLog(`${player.name} holds, reading the foe's rhythm.`);
     beginEnemyPhase(enc);
   };
 
   const useAbility = (ab: Ability) => {
-    if (enc.kind !== "combat" || turnPhase !== "idle") return;
+    if (enc.kind !== "combat" || turnPhase !== "idle" || victoryBeat) return;
     if ((player.abilityCooldowns?.[ab.id] ?? 0) > 0) return;
     // Tap-to-confirm on mobile/touch: first tap arms; second confirms.
     if (armedAbility !== ab.id) {
@@ -619,7 +711,7 @@ export function DungeonScreen() {
       case "flee": {
         addLog(`${flavor}. You escape!`);
         setCombatLog([]);
-        setEnc({ kind: "path", depth: e.depth });
+        transitionToEnc({ kind: "path", depth: e.depth });
         return;
       }
     }
@@ -642,7 +734,7 @@ export function DungeonScreen() {
     restoreBetweenRooms();
     addLog("You fall back before the Warden's glaive finds bone. Live to descend again.");
     setCombatLog([]);
-    setEnc({ kind: "path", depth: 4 });
+    transitionToEnc({ kind: "path", depth: 4 });
   };
 
   const finishKill = (e: CombatEnc) => {
@@ -701,14 +793,23 @@ export function DungeonScreen() {
       loreId: bossLore ?? (Math.random() < 0.4 ? loreByEnemy[e.enemy.id] : undefined),
       itemDropId: gear?.baseId,
     });
-    setEnc({ kind: "victory", depth: e.depth, loot: { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material, gear } });
+    const loot: Loot = { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material, gear };
+    setEnc({ ...e, enemyHp: 0 });
+    setVictoryBeat({ depth: e.depth, enemy: e.enemy, enemyMaxHp: e.enemyMaxHp, loot });
+    if (victoryTimerRef.current !== null) clearTimeout(victoryTimerRef.current);
+    victoryTimerRef.current = window.setTimeout(() => {
+      setVictoryBeat(null);
+      transitionToEnc({ kind: "victory", depth: e.depth, loot });
+      playSfx("loot");
+      victoryTimerRef.current = null;
+    }, VICTORY_BEAT_MS);
   };
 
   const closeVictory = () => {
     if (enc.kind !== "victory") return;
     if (enc.depth >= MAX_DEPTH) { finishRun("victory"); return; }
     restoreBetweenRooms();
-    setEnc({ kind: "path", depth: enc.depth });
+    transitionToEnc({ kind: "path", depth: enc.depth });
   };
 
   const openChest = () => {
@@ -724,13 +825,23 @@ export function DungeonScreen() {
       const rec = RECIPES.find((r) => r.id === enc.preview!.recipeId);
       if (rec) addLog(`Inside: recipe — ${rec.name}!`);
     }
-    setEnc({ kind: "path", depth: enc.depth });
+    transitionToEnc({ kind: "path", depth: enc.depth });
   };
+
+  const inVictoryBeat = victoryBeat !== null;
+  const ambient = depthAmbientStyle(enc.depth);
+  const roomAnimClass = roomTransition === "out" ? "room-transition-out" : roomTransition === "in" ? "room-transition-in" : "";
 
   // Always show the dungeon corridor as the background — enemy/chest sprites
   // overlay on top so the player can read where they are at a glance.
-  const showEnemyOverlay = enc.kind === "combat" || enc.kind === "victory";
-  const enemyOverlay = enc.kind === "combat" ? enc.enemy.image : enc.kind === "victory" ? enc.loot.enemy.image : null;
+  const showEnemyOverlay = enc.kind === "combat" || enc.kind === "victory" || inVictoryBeat;
+  const enemyOverlay = inVictoryBeat
+    ? victoryBeat.enemy.image
+    : enc.kind === "combat"
+      ? enc.enemy.image
+      : enc.kind === "victory"
+        ? enc.loot.enemy.image
+        : null;
   const showChestOverlay = enc.kind === "chest";
 
   // Equipped gear delta for inline equip
@@ -739,17 +850,23 @@ export function DungeonScreen() {
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className={`relative h-64 overflow-hidden border-b-2 border-black ${hit ? "shake" : ""}`}>
-        <img src={dungeonBgForDepth(enc.depth)} alt="" className="absolute inset-0 h-full w-full object-cover" />
+      <div className={`relative h-64 overflow-hidden border-b-2 border-black ${hit ? "shake" : ""} ${roomAnimClass}`}>
+        <img
+          src={dungeonBgForDepth(enc.depth)}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover transition-[filter] duration-700"
+          style={{ filter: ambient.filter }}
+        />
+        <div className="absolute inset-0 pointer-events-none transition-colors duration-700" style={{ backgroundColor: ambient.overlay }} />
         {arenaFlash && enc.kind === "combat" && (
           <div className="fx-arena-flash absolute inset-0 z-[5] pointer-events-none" />
         )}
         {showEnemyOverlay && enemyOverlay && (
           <img
-            key={(enc.kind === "combat" ? enc.enemy.id : "v_" + enc.loot.enemy.id) + enc.depth}
+            key={(inVictoryBeat ? victoryBeat.enemy.id : enc.kind === "combat" ? enc.enemy.id : "v_" + enc.loot.enemy.id) + enc.depth}
             src={enemyOverlay}
             alt=""
-            className={`absolute inset-0 m-auto h-[88%] w-auto max-w-[88%] object-contain fade-in-up drop-shadow-[0_8px_0_rgba(0,0,0,0.7)] ${enc.kind === "victory" ? "grayscale opacity-60" : ""} ${hit && enc.kind === "combat" ? "fx-recoil" : ""} ${enc.kind === "combat" && turnPhase === "telegraph" ? "fx-enemy-windup" : ""}`}
+            className={`absolute inset-0 m-auto h-[88%] w-auto max-w-[88%] object-contain fade-in-up drop-shadow-[0_8px_0_rgba(0,0,0,0.7)] ${enc.kind === "victory" || inVictoryBeat ? "grayscale opacity-60" : ""} ${hit && enc.kind === "combat" && !inVictoryBeat ? "fx-recoil" : ""} ${enc.kind === "combat" && turnPhase === "telegraph" && !inVictoryBeat ? "fx-enemy-windup" : ""}`}
           />
         )}
         {showChestOverlay && (
@@ -768,7 +885,7 @@ export function DungeonScreen() {
           {MINI_BOSS_FLOORS.has(enc.depth) && enc.kind === "combat" && <span className="ml-1 text-ember">★ ELITE</span>}
         </div>
         <div className="absolute top-2 right-2 z-10"><SettingsButton /></div>
-        {enc.kind === "combat" && (
+        {enc.kind === "combat" && !inVictoryBeat && (
           <div className="absolute right-2 top-9 flex flex-col items-end gap-0.5">
             <div className="pixel text-[8px] text-blood text-shadow-pixel bg-background/80 px-1.5 py-0.5 border border-black">
               {enc.enemy.name} {enc.enemyHp}/{enc.enemyMaxHp}
@@ -782,7 +899,7 @@ export function DungeonScreen() {
             )}
           </div>
         )}
-        {enc.kind === "combat" && (
+        {enc.kind === "combat" && !inVictoryBeat && (
           <div className="absolute left-2 right-2 bottom-2 flex justify-center">
             <div className={`pixel text-[10px] font-bold px-3 py-1.5 border-2 border-black text-shadow-pixel ${
               turnPhase === "telegraph"
@@ -805,12 +922,12 @@ export function DungeonScreen() {
             </div>
           </div>
         )}
-        {enc.kind === "combat" && turnPhase !== "idle" && (
+        {enc.kind === "combat" && turnPhase !== "idle" && !inVictoryBeat && (
           <div className="turn-busy-overlay z-[6]" />
         )}
-        {enc.kind === "victory" && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <p className="pixel text-2xl text-gold text-shadow-pixel">VICTORY</p>
+        {(inVictoryBeat || enc.kind === "victory") && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/25">
+            <p className={`pixel text-2xl text-gold text-shadow-pixel ${inVictoryBeat ? "victory-beat-text" : ""}`}>VICTORY</p>
           </div>
         )}
         {enc.kind === "shrine" && (
@@ -829,28 +946,30 @@ export function DungeonScreen() {
       </div>
 
 
-      <div className="p-3 space-y-3">
+      <div className={`p-3 space-y-3 ${roomAnimClass}`}>
         <div ref={logRef} className="border-2 border-black bg-card/80 p-2 h-24 overflow-y-auto font-body text-sm leading-tight">
           {combatLog.length === 0 && <p className="text-muted-foreground italic">The dungeon is silent.</p>}
           {combatLog.map((l, i) => (
-            <p key={i} className={
-              l.includes("damage!") && l.includes(player.name) ? "text-divine" :
-              l.startsWith("✓") || l.startsWith("★") ? "text-gold" :
-              l.includes("for") && l.includes("!") ? "text-blood" :
-              "text-foreground"
-            }>› {l}</p>
+            <TypingLogLine
+              key={l.id}
+              text={l.text}
+              active={i === combatLog.length - 1}
+              className={logLineClass(l.text)}
+            />
           ))}
         </div>
 
-        {enc.kind === "combat" && (
+        {enc.kind === "combat" && !inVictoryBeat && (
           <div className="border-2 border-black bg-card p-2">
             <div className="flex items-baseline justify-between">
               <span className="pixel text-[9px] text-blood">{enc.enemy.name}</span>
               <span className="font-body text-sm">{enc.enemyHp}/{enc.enemyMaxHp}</span>
             </div>
-            <div className="mt-1 h-2 w-full bg-stone border border-black">
-              <div className="h-full bg-blood transition-all" style={{ width: `${Math.max(0, (enc.enemyHp / enc.enemyMaxHp) * 100)}%` }} />
-            </div>
+            <TweenHpBar
+              current={enc.enemyHp}
+              max={enc.enemyMaxHp}
+              className="mt-1 h-2 w-full bg-stone border border-black overflow-hidden"
+            />
             <div className="mt-1 flex flex-wrap gap-1">
               {enc.threatTier !== "none" && (
                 <span className={`pixel text-[7px] border px-1 ${
@@ -898,7 +1017,7 @@ export function DungeonScreen() {
             </p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <button className="pixel-btn pixel-btn-gold !text-[8px]" onClick={openChest}>Open</button>
-              <button className="pixel-btn !text-[8px]" onClick={() => setEnc({ kind: "path", depth: enc.depth })}>Leave</button>
+              <button className="pixel-btn !text-[8px]" onClick={() => transitionToEnc({ kind: "path", depth: enc.depth })}>Leave</button>
             </div>
           </div>
         )}
@@ -973,9 +1092,9 @@ export function DungeonScreen() {
                   } else {
                     rewardXp(20 + enc.depth * 6); addLog("The shrine fills you with insight."); playSfx("ui-confirm");
                   }
-                  setEnc({ kind: "path", depth: enc.depth });
+                  transitionToEnc({ kind: "path", depth: enc.depth });
                 }}>Pray</button>
-                <button className="pixel-btn !text-[8px]" onClick={() => setEnc({ kind: "path", depth: enc.depth })}>Move on</button>
+                <button className="pixel-btn !text-[8px]" onClick={() => transitionToEnc({ kind: "path", depth: enc.depth })}>Move on</button>
               </div>
             </div>
           );
@@ -1008,12 +1127,12 @@ export function DungeonScreen() {
                   const back = Math.max(1, enc.depth - 3);
                   addLog(`You turn back. Retreated to floor ${back}.`);
                   restoreBetweenRooms();
-                  setEnc({ kind: "path", depth: back });
+                  transitionToEnc({ kind: "path", depth: back });
                 }}>↩ Turn back (−3 floors)</button>
               </div>
             )}
             {enc.sprung && (
-              <button className="pixel-btn pixel-btn-gold !text-[8px] w-full mt-3" onClick={() => setEnc({ kind: "path", depth: enc.depth })}>Press on ▸</button>
+              <button className="pixel-btn pixel-btn-gold !text-[8px] w-full mt-3" onClick={() => transitionToEnc({ kind: "path", depth: enc.depth })}>Press on ▸</button>
             )}
           </div>
         )}
@@ -1060,12 +1179,13 @@ export function DungeonScreen() {
         )}
 
 
-        {enc.kind === "combat" && (
+        {enc.kind === "combat" && !inVictoryBeat && (
           <div className="space-y-2">
             <div className={`grid gap-2 ${abilities.length >= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
               {abilities.map((ab) => {
                 const cd = player.abilityCooldowns?.[ab.id] ?? 0;
                 const armed = armedAbility === ab.id;
+                const pulsing = readyPulse.has(ab.id) && cd === 0;
                 return (
                   <button
                     key={ab.id}
@@ -1073,7 +1193,7 @@ export function DungeonScreen() {
                     onMouseEnter={() => setHoveredAbility(ab)}
                     onFocus={() => setHoveredAbility(ab)}
                     disabled={cd > 0 || turnPhase !== "idle"}
-                    className={`pixel-btn !text-[8px] !p-2 disabled:opacity-40 ${weaponGlow ? "weapon-glow-btn" : ""} ${armed ? "pixel-btn-gold ring-2 ring-gold" : ab.id === abilities[0].id ? "pixel-btn-primary" : ""}`}
+                    className={`pixel-btn !text-[8px] !p-2 disabled:opacity-40 ${weaponGlow ? "weapon-glow-btn" : ""} ${pulsing ? "cd-ready-pulse" : ""} ${armed ? "pixel-btn-gold ring-2 ring-gold" : ab.id === abilities[0].id ? "pixel-btn-primary" : ""}`}
                     style={weaponGlow ? ({ ["--weapon-glow" as string]: weaponGlow } as CSSProperties) : undefined}
                   >
                     {ab.name}
@@ -1139,13 +1259,13 @@ export function DungeonScreen() {
           {inv.includes("hearth") && <button onClick={useHearth} className="pixel-btn pixel-btn-gold !text-[8px]">⌂ Hearthstone — bail out</button>}
         </div>
 
-        {enc.kind === "combat" ? (
+        {enc.kind === "combat" && !inVictoryBeat ? (
           <p className="pixel text-[7px] text-blood text-center opacity-80 mt-1">
             ⚠ Locked in combat — use a Hearthstone Charm to bail out.
           </p>
-        ) : (
+        ) : enc.kind !== "combat" ? (
           <button onClick={exitDungeon} className="pixel-btn !text-[8px] w-full text-center">⌂ Retreat to City</button>
-        )}
+        ) : null}
       </div>
 
       <TutorialTip
@@ -1163,13 +1283,13 @@ export function DungeonScreen() {
           mode={player.dungeonMode}
           depth={player.dungeonDepth}
           oaths={player.activeOaths ?? []}
-          onComplete={() => setShowDescent(false)}
+          onComplete={onDescentComplete}
         />
       )}
 
       {bossIntro && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-          <div className="w-full max-w-md border-2 border-gold bg-background p-4 space-y-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 boss-intro-enter">
+          <div className="w-full max-w-md border-2 border-gold bg-background p-4 space-y-3 boss-intro-enter">
             <p className="pixel text-[10px] text-blood">⚑ MAJOR BOSS</p>
             <p className="font-body text-base italic leading-snug">"{bossIntro.intro}"</p>
             <button
