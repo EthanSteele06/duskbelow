@@ -1,15 +1,4 @@
-import { RARITY_CLASS, SLOT_ICON, gearScore, type GearItem } from "@/game/data";
-
-function statsLine(it: GearItem) {
-  const s = it.stats;
-  const parts: string[] = [];
-  if (s.atk) parts.push(`+${s.atk} ATK`);
-  if (s.mag) parts.push(`+${s.mag} MAG`);
-  if (s.maxHp) parts.push(`+${s.maxHp} HP`);
-  if (s.crit) parts.push(`+${s.crit}% crit`);
-  if (s.dodge) parts.push(`+${s.dodge}% dodge`);
-  return parts.join(" · ");
-}
+import { RARITY_CLASS, SLOT_ICON, gearScore, formatGearStatsLine, type GearItem } from "@/game/data";
 
 /** Compact comparison block for a gear pickup vs whatever's equipped in that slot.
  *  Used on the dungeon victory screen, the equipment bag, and anywhere else gear
@@ -22,14 +11,19 @@ export function GearCompare({ item, equipped, compact }: { item: GearItem; equip
     : delta > 0 ? `▲ +${delta} vs equipped`
     : delta < 0 ? `▼ ${delta} vs equipped`
     : "= same score";
+  const itemLine = formatGearStatsLine(item) || "—";
+  const equippedLine = equipped ? formatGearStatsLine(equipped) || "—" : "";
   return (
     <div className={compact ? "space-y-0.5" : "space-y-1"}>
       <p className={`pixel text-[7px] ${deltaCls}`}>{deltaLabel}</p>
       {equipped && (
         <p className="pixel text-[6px] text-muted-foreground leading-tight">
           {SLOT_ICON[equipped.slot]} <span className={RARITY_CLASS[equipped.rarity]}>{equipped.name}</span>
-          {" "}· iLvl {equipped.ilvl} · {statsLine(equipped) || "—"}
+          {" "}· iLvl {equipped.ilvl} · {equippedLine}
         </p>
+      )}
+      {!compact && itemLine !== "—" && (
+        <p className="pixel text-[6px] text-foreground/80 leading-tight">Pick up: {itemLine}</p>
       )}
     </div>
   );

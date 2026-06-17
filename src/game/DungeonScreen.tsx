@@ -3,7 +3,7 @@ import { useGame } from "@/game/store";
 import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumber";
 import {
   CLASS_ABILITIES, SPEC_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
-  RARITY_CLASS, RARITY_LABEL, rollDamage, damageRange,
+  RARITY_CLASS, RARITY_LABEL, rollDamage, damageRange, formatGearStatsLine,
   MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth, depthAmbientStyle, rollClassLegendary, AFFIXES, BOSS_MOMENTS, FACTION_SHRINES,
   equippedGearScore, playerThreat, threatHpScale, threatAtkScale, threatTierFor, THREAT_TIERS, depthHpBonus,
   threatLootBonus, turnEnrageMult, turnEnrageLabel, maxDepthForMode, bossFloorsForMode, isMajorBossFloor, isMiniBossFloor,
@@ -1154,14 +1154,7 @@ export function DungeonScreen() {
               <div className={`border-2 border-black p-2 rarity-frame-${lootGear.rarity} space-y-1`}>
                 <p className={`pixel text-[9px] ${RARITY_CLASS[lootGear.rarity]}`}>★ {lootGear.name}</p>
                 <p className="font-body text-xs text-muted-foreground">{RARITY_LABEL[lootGear.rarity]} · iLvl {lootGear.ilvl}</p>
-                <p className="font-body text-sm">
-                  {lootGear.stats.atk ? `+${lootGear.stats.atk} ATK ` : ""}
-                  {lootGear.stats.mag ? `+${lootGear.stats.mag} MAG ` : ""}
-                  {lootGear.stats.maxHp ? `+${lootGear.stats.maxHp} HP ` : ""}
-                  {lootGear.stats.crit ? `+${lootGear.stats.crit}% crit ` : ""}
-                  {lootGear.stats.dodge ? `+${lootGear.stats.dodge}% dodge` : ""}
-                  {lootGear.stats.dodge ? `+${lootGear.stats.dodge}% dodge` : ""}
-                </p>
+                <p className="font-body text-sm">{formatGearStatsLine(lootGear) || "—"}</p>
                 {lootGear.legendaryDesc && (
                   <p className="pixel text-[8px] text-rarity-legendary border-l-2 border-rarity-legendary pl-2">
                     ✦ {lootGear.legendaryDesc}

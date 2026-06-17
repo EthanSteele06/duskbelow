@@ -1,19 +1,12 @@
 import { useEffect } from "react";
 import { useGame, bagFreeSlots } from "@/game/store";
-import { VENDOR_ITEMS, AUCTION_LISTINGS, rollRelicListings, RARITY_LABEL, SLOT_ICON, type GearItem } from "@/game/data";
+import { VENDOR_ITEMS, AUCTION_LISTINGS, rollRelicListings, RARITY_LABEL, SLOT_ICON, formatGearStatsLine, type GearItem } from "@/game/data";
 import { DAILY_ROTATION_MS } from "@/game/meta";
 import { StatBar } from "./StatBar";
 import { GearCompare } from "./GearCompare";
 
 function statsLine(it: GearItem) {
-  const s = it.stats;
-  const parts: string[] = [];
-  if (s.atk) parts.push(`+${s.atk} ATK`);
-  if (s.mag) parts.push(`+${s.mag} MAG`);
-  if (s.maxHp) parts.push(`+${s.maxHp} HP`);
-  if (s.crit) parts.push(`+${s.crit}% crit`);
-  if (s.dodge) parts.push(`+${s.dodge}% dodge`);
-  return parts.join(" · ") || "—";
+  return formatGearStatsLine(it) || "—";
 }
 
 export function VendorScreen() {

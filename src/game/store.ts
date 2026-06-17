@@ -6,7 +6,7 @@ import {
   gearSellPrice, profXpForLevel,
   IDLE_YIELDS, IDLE_SECONDS_PER_UNIT, IDLE_MAX_SECONDS,   rollAffixes, rollAscensionAffixes, rollGear, rollClassLegendary,
   DAILY_CONTRACTS, rollDailyContract, rollRelicListings,
-  CHRONICLE_BOONS, activeClassTrial, maxDepthForMode,
+  CHRONICLE_BOONS, activeClassTrial, maxDepthForMode, sumEquipmentBonuses,
 } from "./data";
 import type { MetaOptions } from "./meta";
 import {
@@ -46,6 +46,15 @@ interface PlayerState {
   mag: number;
   crit: number;
   dodge: number;
+  block: number;
+  maxMana: number;
+  hpRegen: number;
+  manaRegen: number;
+  xpGainPct: number;
+  armor: number;
+  weaponMin: number;
+  weaponMax: number;
+  attackSpeed: number;
   baseMaxHp: number;
   baseAtk: number;
   baseMag: number;
@@ -221,7 +230,8 @@ interface GameState {
 
 const emptyPlayer = (): PlayerState => ({
   name: "Wanderer", faction: null, classId: null, specId: null,
-  level: 1, xp: 0, hp: 30, maxHp: 30, atk: 5, mag: 1, crit: 0, dodge: 0,
+  level: 1, xp: 0, hp: 30, maxHp: 30, atk: 5, mag: 1, crit: 0, dodge: 0, block: 0,
+  maxMana: 0, hpRegen: 0, manaRegen: 0, xpGainPct: 0, armor: 0, weaponMin: 0, weaponMax: 0, attackSpeed: 0,
   baseMaxHp: 30, baseAtk: 5, baseMag: 1,
   gold: 50, gems: 0, inventory: [], questItems: {}, dungeonDepth: 0,
   skillPoints: 0, learnedSkills: [], talentPoints: 0, learnedTalents: [], earnedSkillForLevel: 0,
@@ -241,16 +251,7 @@ const emptyPlayer = (): PlayerState => ({
 const xpForLevel = (lvl: number) => lvl * 25;
 
 function sumGearStats(equipment: PlayerState["equipment"]) {
-  const s = { atk: 0, mag: 0, maxHp: 0, crit: 0, dodge: 0 };
-  for (const slot of Object.values(equipment)) {
-    if (!slot) continue;
-    s.atk += slot.stats.atk ?? 0;
-    s.mag += slot.stats.mag ?? 0;
-    s.maxHp += slot.stats.maxHp ?? 0;
-    s.crit += slot.stats.crit ?? 0;
-    s.dodge += slot.stats.dodge ?? 0;
-  }
-  return s;
+  return sumEquipmentBonuses(equipment);
 }
 
 function sumTalentStats(learnedIds: string[], specId: string | null) {
@@ -287,9 +288,27 @@ function recompute(p: PlayerState, meta?: MetaState): PlayerState {
   const maxHp = p.baseMaxHp + gear.maxHp + tal.maxHp + db.maxHp;
   const atk = p.baseAtk + gear.atk + tal.atk + db.atk;
   const mag = p.baseMag + gear.mag + tal.mag + db.mag;
-  const crit = (fp?.crit ?? 0) + gear.crit + tal.crit + db.crit + echo.crit;
-  const dodge = (fp?.dodge ?? 0) + gear.dodge + tal.dodge + db.dodge + echo.dodge;
-  return { ...p, maxHp, atk, mag, crit, dodge, hp: Math.min(p.hp, maxHp) };
+  const crit = Math.round((fp?.crit ?? 0) + gear.crit + tal.crit + db.crit + echo.crit);
+  const dodge = Math.round((fp?.dodge ?? 0) + gear.dodge + tal.dodge + db.dodge + echo.dodge);
+  const block = Math.round(gear.block);
+  return {
+    ...p,
+    maxHp,
+    atk,
+    mag,
+    crit,
+    dodge,
+    block,
+    maxMana: Math.floor(gear.maxMana),
+    hpRegen: gear.hpRegen,
+    manaRegen: gear.manaRegen,
+    xpGainPct: gear.xpGainPct,
+    armor: Math.floor(gear.armor),
+    weaponMin: gear.weaponMin,
+    weaponMax: gear.weaponMax,
+    attackSpeed: gear.attackSpeed,
+    hp: Math.min(p.hp, maxHp),
+  };
 }
 
 function bagCap(p: PlayerState, meta: MetaState) {
@@ -457,7 +476,12 @@ export const useGame = create<GameState>((set, get) => ({
       get().pushLog("✦ You dodge the blow!");
       return 0;
     }
-    const hpAfter = Math.max(0, p.hp - n);
+    let dmg = n;
+    if (p.block > 0 && Math.random() * 100 < p.block) {
+      dmg = Math.max(1, Math.floor(dmg * 0.5));
+      get().pushLog("⛨ Your shield blocks half the blow!");
+    }
+    const hpAfter = Math.max(0, p.hp - dmg);
     // Phoenix Feather intercept: if owned and damage would reach 0, consume one and revive at 50% maxHp.
     if (hpAfter <= 0) {
       const featherIdx = p.inventory.indexOf("phoenix");
@@ -500,7 +524,8 @@ export const useGame = create<GameState>((set, get) => ({
     const echo = echoStart(meta);
     const champBonus = p.isChampion ? Math.floor(n * 0.5) : 0;
     const oathXp = p.activeOaths.includes("deep") ? 1.2 : 1;
-    const total = Math.floor((n + champBonus) * echo.xpMult * oathXp);
+    const intXp = 1 + p.xpGainPct / 100;
+    const total = Math.floor((n + champBonus) * echo.xpMult * oathXp * intXp);
     let xp = p.xp + total;
     let level = p.level;
     let baseMaxHp = p.baseMaxHp;
@@ -1080,7 +1105,7 @@ export const useGame = create<GameState>((set, get) => ({
   restoreBetweenRooms: () => {
     const p = get().player;
     const starved = p.affixes?.includes("starved") ? 0.5 : 1;
-    const amt = Math.max(2, Math.floor(p.maxHp * 0.12 * starved));
+    const amt = Math.max(2, Math.floor(p.maxHp * 0.12 * starved)) + Math.floor(p.hpRegen);
     const hp = Math.min(p.maxHp, p.hp + amt);
     const cds: Record<string, number> = {};
     for (const [k, v] of Object.entries(p.abilityCooldowns ?? {})) {

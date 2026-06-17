@@ -18,6 +18,12 @@ export function StatBar() {
         <span>HP {p.hp}/{p.maxHp}</span>
         <span>ATK {p.atk} · MAG {p.mag}</span>
       </div>
+      {p.maxMana > 0 && (
+        <div className="mt-1 flex items-center justify-between text-[10px] font-body text-muted-foreground">
+          <span>Mana {p.maxMana}</span>
+          {p.block > 0 && <span>Block {p.block}%</span>}
+        </div>
+      )}
       {p.level < 10 && (
         <div className="mt-1 h-1 w-full bg-stone border border-black">
           <div className="h-full bg-gold" style={{ width: `${xpPct}%` }} />

@@ -44,6 +44,11 @@ import vaultImg from "@/assets/dungeon-vault.jpg";
 import throneImg from "@/assets/dungeon-throne.jpg";
 import npcAltruisImg from "@/assets/npc-altruis.jpg";
 
+import type { PrimaryStatId, PrimaryStats } from "./gearStats";
+import { gearScore, rollPrimaryAttrs } from "./gearStats";
+export { formatGearStatsLine, gearScore, sumEquipmentBonuses } from "./gearStats";
+export type { PrimaryStatId, PrimaryStats } from "./gearStats";
+
 export type ClassId = "warrior" | "rogue" | "mage" | "priest" | "druid" | "deathknight" | "demonhunter";
 export type FactionId = "allies" | "brigade";
 
@@ -1470,39 +1475,138 @@ export interface GearItem {
   slot: GearSlot;
   rarity: Rarity;
   ilvl: number;
-  stats: { atk?: number; mag?: number; maxHp?: number; crit?: number; dodge?: number };
+  /** Primary attributes (STR / AGI / STA / INT / SPI). */
+  attrs: PrimaryStats;
+  /** Weapon: damage range. */
+  weaponMin?: number;
+  weaponMax?: number;
+  /** Weapon: attacks per second (combat timing — Phase B). */
+  attackSpeed?: number;
+  /** Armor pieces: mitigation score. */
+  armor?: number;
+  /** @deprecated Pre–Phase A items only — migrated at read time in stat helpers. */
+  stats?: { atk?: number; mag?: number; maxHp?: number; crit?: number; dodge?: number };
+  variantId?: string;
   /** If set, this item is a class-signature legendary tied to that class. */
   classId?: ClassId;
-  /** Class ability id this legendary empowers (its basic attack). */
   empowersAbilityId?: string;
-  /** Short description of the unique on-hit buff. */
   legendaryDesc?: string;
 }
 
-interface GearTemplate {
-  baseId: string;
-  slot: GearSlot;
-  names: Partial<Record<Rarity, string>>;
-  focus: "atk" | "mag" | "hp" | "mixed";
+export interface GearVariantDef {
+  id: string;
+  suffix: string;
+  focus: PrimaryStatId[];
 }
 
-export const GEAR_TEMPLATES: GearTemplate[] = [
-  { baseId: "helm",    slot: "head",    focus: "hp",    names: { common: "Iron Cap",      uncommon: "Hardened Helm",  rare: "Wraithguard Helm",  epic: "Skullcrown of Dusk",       legendary: "Crown of the Dragon" } },
-  { baseId: "circlet", slot: "head",    focus: "mag",   names: { common: "Patched Hood",  uncommon: "Runed Hood",     rare: "Arcane Circlet",    epic: "Diadem of Stars",          legendary: "Halo of the Voidcaller" } },
-  { baseId: "plate",   slot: "chest",   focus: "hp",    names: { common: "Tattered Mail", uncommon: "Iron Cuirass",   rare: "Plate of the Wall", epic: "Bonecage Hauberk",         legendary: "Aegis of the Endless" } },
-  { baseId: "robe",    slot: "chest",   focus: "mag",   names: { common: "Coarse Robe",   uncommon: "Embroidered Robe", rare: "Robe of Whispers", epic: "Vestment of the Glass Tower", legendary: "Mantle of the First Mage" } },
-  { baseId: "greaves", slot: "legs",    focus: "mixed", names: { common: "Leather Pants", uncommon: "Iron Greaves",   rare: "Stoneward Greaves", epic: "Legguards of Dread",       legendary: "Striders of the Inferno" } },
-  { baseId: "sword",   slot: "weapon",  focus: "atk",   names: { common: "Notched Sword", uncommon: "Iron Sword",     rare: "Bloodbite",         epic: "Dawnreaver",               legendary: "Doomsong" } },
-  { baseId: "dagger",  slot: "weapon",  focus: "atk",   names: { common: "Rusty Dagger",  uncommon: "Twin Fang",      rare: "Nightveil",         epic: "Sliver of the Wraith",     legendary: "Heartrender" } },
-  { baseId: "staff",   slot: "weapon",  focus: "mag",   names: { common: "Cracked Staff", uncommon: "Runed Staff",    rare: "Frostspire",        epic: "Staff of the Quiet Light", legendary: "World-Splitter" } },
-  { baseId: "shield",  slot: "offhand", focus: "hp",    names: { common: "Wooden Buckler",uncommon: "Iron Bulwark",   rare: "Wardstone Shield",  epic: "Bastion of Ash",           legendary: "Aegis Eternal" } },
-  { baseId: "tome",    slot: "offhand", focus: "mag",   names: { common: "Torn Tome",     uncommon: "Bound Codex",    rare: "Tome of Echoes",    epic: "Liber Umbrae",             legendary: "Book of the Black Sun" } },
-  { baseId: "charm",   slot: "trinket", focus: "mixed", names: { common: "Bone Trinket",  uncommon: "Ember Charm",    rare: "Spectral Locket",   epic: "Phylactery Shard",         legendary: "Heart of the Dragon" } },
+export interface GearTemplateDef {
+  baseId: string;
+  slot: GearSlot;
+  kind: "weapon" | "armor";
+  names: Partial<Record<Rarity, string>>;
+  variants: GearVariantDef[];
+  weapon?: { minDmg: number; maxDmg: number; attackSpeed: number };
+  armorBase?: number;
+}
+
+export const GEAR_TEMPLATES: GearTemplateDef[] = [
+  {
+    baseId: "sword", slot: "weapon", kind: "weapon",
+    names: { common: "Shortsword", uncommon: "Iron Shortsword", rare: "Bloodbite", epic: "Dawnreaver", legendary: "Doomsong" },
+    weapon: { minDmg: 4, maxDmg: 7, attackSpeed: 2.0 },
+    variants: [
+      { id: "bear", suffix: " of the Bear", focus: ["str", "sta"] },
+      { id: "hawk", suffix: " of the Hawk", focus: ["agi", "str"] },
+      { id: "boar", suffix: " of the Boar", focus: ["sta", "str"] },
+    ],
+  },
+  {
+    baseId: "dagger", slot: "weapon", kind: "weapon",
+    names: { common: "Rusty Dagger", uncommon: "Twin Fang", rare: "Nightveil", epic: "Sliver of the Wraith", legendary: "Heartrender" },
+    weapon: { minDmg: 3, maxDmg: 5, attackSpeed: 1.6 },
+    variants: [
+      { id: "fox", suffix: " of the Fox", focus: ["agi", "spi"] },
+      { id: "viper", suffix: " of the Viper", focus: ["agi", "int"] },
+      { id: "crow", suffix: " of the Crow", focus: ["agi", "sta"] },
+    ],
+  },
+  {
+    baseId: "staff", slot: "weapon", kind: "weapon",
+    names: { common: "Cracked Staff", uncommon: "Runed Staff", rare: "Frostspire", epic: "Staff of the Quiet Light", legendary: "World-Splitter" },
+    weapon: { minDmg: 2, maxDmg: 4, attackSpeed: 2.2 },
+    variants: [
+      { id: "owl", suffix: " of the Owl", focus: ["int", "spi"] },
+      { id: "star", suffix: " of the Star", focus: ["int", "agi"] },
+      { id: "root", suffix: " of the Root", focus: ["int", "sta"] },
+    ],
+  },
+  {
+    baseId: "helm", slot: "head", kind: "armor", armorBase: 12,
+    names: { common: "Iron Cap", uncommon: "Hardened Helm", rare: "Wraithguard Helm", epic: "Skullcrown of Dusk", legendary: "Crown of the Dragon" },
+    variants: [
+      { id: "bear", suffix: " of the Bear", focus: ["str", "sta"] },
+      { id: "owl", suffix: " of the Owl", focus: ["int", "spi"] },
+    ],
+  },
+  {
+    baseId: "circlet", slot: "head", kind: "armor", armorBase: 8,
+    names: { common: "Patched Hood", uncommon: "Runed Hood", rare: "Arcane Circlet", epic: "Diadem of Stars", legendary: "Halo of the Voidcaller" },
+    variants: [
+      { id: "owl", suffix: " of the Owl", focus: ["int", "spi"] },
+      { id: "fox", suffix: " of the Fox", focus: ["agi", "int"] },
+    ],
+  },
+  {
+    baseId: "plate", slot: "chest", kind: "armor", armorBase: 28,
+    names: { common: "Tattered Mail", uncommon: "Iron Cuirass", rare: "Plate of the Wall", epic: "Bonecage Hauberk", legendary: "Aegis of the Endless" },
+    variants: [
+      { id: "bear", suffix: " of the Bear", focus: ["sta", "str"] },
+      { id: "boar", suffix: " of the Boar", focus: ["sta", "spi"] },
+    ],
+  },
+  {
+    baseId: "robe", slot: "chest", kind: "armor", armorBase: 10,
+    names: { common: "Coarse Robe", uncommon: "Embroidered Robe", rare: "Robe of Whispers", epic: "Vestment of the Glass Tower", legendary: "Mantle of the First Mage" },
+    variants: [
+      { id: "owl", suffix: " of the Owl", focus: ["int", "spi"] },
+      { id: "root", suffix: " of the Root", focus: ["int", "sta"] },
+    ],
+  },
+  {
+    baseId: "greaves", slot: "legs", kind: "armor", armorBase: 18,
+    names: { common: "Leather Pants", uncommon: "Iron Greaves", rare: "Stoneward Greaves", epic: "Legguards of Dread", legendary: "Striders of the Inferno" },
+    variants: [
+      { id: "boar", suffix: " of the Boar", focus: ["sta", "agi"] },
+      { id: "hawk", suffix: " of the Hawk", focus: ["agi", "sta"] },
+    ],
+  },
+  {
+    baseId: "shield", slot: "offhand", kind: "armor", armorBase: 22,
+    names: { common: "Wooden Buckler", uncommon: "Iron Bulwark", rare: "Wardstone Shield", epic: "Bastion of Ash", legendary: "Aegis Eternal" },
+    variants: [
+      { id: "bear", suffix: " of the Bear", focus: ["str", "sta"] },
+      { id: "boar", suffix: " of the Boar", focus: ["sta", "str"] },
+    ],
+  },
+  {
+    baseId: "tome", slot: "offhand", kind: "armor", armorBase: 6,
+    names: { common: "Torn Tome", uncommon: "Bound Codex", rare: "Tome of Echoes", epic: "Liber Umbrae", legendary: "Book of the Black Sun" },
+    variants: [
+      { id: "owl", suffix: " of the Owl", focus: ["int", "spi"] },
+      { id: "star", suffix: " of the Star", focus: ["int", "agi"] },
+    ],
+  },
+  {
+    baseId: "charm", slot: "trinket", kind: "armor", armorBase: 0,
+    names: { common: "Bone Trinket", uncommon: "Ember Charm", rare: "Spectral Locket", epic: "Phylactery Shard", legendary: "Heart of the Dragon" },
+    variants: [
+      { id: "fox", suffix: " of the Fox", focus: ["agi", "spi"] },
+      { id: "root", suffix: " of the Root", focus: ["sta", "int"] },
+      { id: "viper", suffix: " of the Viper", focus: ["agi", "int"] },
+    ],
+  },
 ];
 
-const RARITY_MULT: Record<Rarity, number> = { common: 1, uncommon: 1.5, rare: 2.2, epic: 3.0, legendary: 4.2 };
-
-let _itemSeq = 0;
 const newItemId = () => `g_${Date.now().toString(36)}_${(_itemSeq++).toString(36)}`;
 
 export type LootSource = "trash" | "chest" | "mini_boss" | "major_boss" | "final_boss";
@@ -1532,46 +1636,58 @@ export function rollGear(depth: number, opts?: { minRarity?: Rarity; source?: Lo
   if (opts?.minRarity && RARITY_RANK[rarity] < RARITY_RANK[opts.minRarity]) rarity = opts.minRarity;
 
   const template = GEAR_TEMPLATES[Math.floor(Math.random() * GEAR_TEMPLATES.length)];
+  const variant = template.variants[Math.floor(Math.random() * template.variants.length)];
   const ilvl = Math.max(1, Math.min(15, depth + Math.floor(Math.random() * 3)));
-  const mult = RARITY_MULT[rarity];
-  const base = Math.max(1, Math.floor(ilvl * 0.7 * mult));
-  const stats: GearItem["stats"] = {};
-  switch (template.focus) {
-    case "atk":   stats.atk = base; if (rarity !== "common") stats.crit = Math.floor(mult * 2); break;
-    case "mag":   stats.mag = base; if (rarity !== "common") stats.crit = Math.floor(mult * 2); break;
-    case "hp":    stats.maxHp = Math.floor(base * 2.5); if (rarity !== "common") stats.dodge = Math.floor(mult); break;
-    case "mixed": stats.atk = Math.floor(base * 0.6); stats.maxHp = Math.floor(base * 1.5); if (rarity === "epic" || rarity === "legendary") stats.mag = Math.floor(base * 0.4); break;
-  }
-  return {
+  const scale = 1 + (ilvl - 1) * 0.1;
+  const rarityArmorMult = 1 + RARITY_RANK[rarity] * 0.12;
+
+  const baseName = template.names[rarity] ?? template.names.common ?? "Curio";
+  const name = `${baseName}${variant.suffix}`;
+
+  const item: GearItem = {
     id: newItemId(),
     baseId: template.baseId,
-    name: template.names[rarity] ?? template.names.common ?? "Curio",
+    name,
     slot: template.slot,
-    rarity, ilvl, stats,
+    rarity,
+    ilvl,
+    attrs: rollPrimaryAttrs(rarity, ilvl, variant.focus),
+    variantId: variant.id,
   };
+
+  if (template.kind === "weapon" && template.weapon) {
+    item.weaponMin = Math.max(1, Math.floor(template.weapon.minDmg * scale));
+    item.weaponMax = Math.max(item.weaponMin, Math.floor(template.weapon.maxDmg * scale));
+    item.attackSpeed = template.weapon.attackSpeed;
+  } else if (template.armorBase != null) {
+    item.armor = Math.max(0, Math.floor(template.armorBase * scale * rarityArmorMult));
+  }
+
+  return item;
 }
 
-/** Build the class-signature legendary for a final-boss drop. One per class. */
 export interface ClassLegendaryDef {
   baseId: string;
   slot: GearSlot;
   name: string;
   flavor: string;
-  stats: GearItem["stats"];
-  /** Basic attack ability id this legendary empowers. */
+  attrs: PrimaryStats;
+  weaponMin?: number;
+  weaponMax?: number;
+  attackSpeed?: number;
+  armor?: number;
   empowersAbilityId: string;
-  /** Short description of the unique on-hit buff. */
   effectDesc: string;
 }
 
 export const CLASS_LEGENDARIES: Record<ClassId, ClassLegendaryDef> = {
-  warrior:     { baseId: "sword",  slot: "weapon",  name: "Worldcleaver",            flavor: "The blade that ended a god.",          stats: { atk: 22, crit: 12, maxHp: 20 }, empowersAbilityId: "strike",      effectDesc: "Strike deals +60% damage." },
-  rogue:       { baseId: "dagger", slot: "weapon",  name: "Whisper of the Vanished", flavor: "It was never here. Neither were you.", stats: { atk: 18, crit: 8,  dodge: 6 },  empowersAbilityId: "slash",       effectDesc: "Slash gains +35% crit chance." },
-  mage:        { baseId: "staff",  slot: "weapon",  name: "Aetheric Scepter",        flavor: "Cracks reality on contact.",           stats: { mag: 24, crit: 14 },             empowersAbilityId: "frostbolt",   effectDesc: "Frostbolt deals +50% damage and refreshes Chill for 1 extra turn." },
-  priest:      { baseId: "tome",   slot: "offhand", name: "Reliquary of Dawn",       flavor: "Holds a sunrise that never set.",      stats: { mag: 20, maxHp: 36 },            empowersAbilityId: "smite",       effectDesc: "Smite heals you for 40% of damage dealt." },
-  druid:       { baseId: "staff",  slot: "weapon",  name: "Heartwood Branch",        flavor: "Still living. Still listening.",       stats: { mag: 22, maxHp: 28 },            empowersAbilityId: "wrath",       effectDesc: "Wrath deals +40% damage and restores 6 HP." },
-  deathknight: { baseId: "sword",  slot: "weapon",  name: "Frostmourne Shard",       flavor: "Asks every kill for a little more.",   stats: { atk: 20, maxHp: 24, crit: 8 },   empowersAbilityId: "deathstrike", effectDesc: "Death Strike deals +35% damage and lifesteal is doubled." },
-  demonhunter: { baseId: "dagger", slot: "weapon",  name: "Twinblades of the Betrayer", flavor: "Two glaives. One hunger.",          stats: { atk: 20, crit: 14, mag: 8 },    empowersAbilityId: "chaosstrike", effectDesc: "Chaos Strike deals +45% damage and lifesteal is tripled." },
+  warrior:     { baseId: "sword",  slot: "weapon",  name: "Worldcleaver",            flavor: "The blade that ended a god.",          attrs: { str: 14, sta: 8, agi: 4 }, weaponMin: 12, weaponMax: 18, attackSpeed: 2.0, empowersAbilityId: "strike",      effectDesc: "Strike deals +60% damage." },
+  rogue:       { baseId: "dagger", slot: "weapon",  name: "Whisper of the Vanished", flavor: "It was never here. Neither were you.", attrs: { agi: 12, str: 6, spi: 4 },  weaponMin: 9, weaponMax: 14, attackSpeed: 1.6, empowersAbilityId: "slash",       effectDesc: "Slash gains +35% crit chance." },
+  mage:        { baseId: "staff",  slot: "weapon",  name: "Aetheric Scepter",        flavor: "Cracks reality on contact.",           attrs: { int: 16, spi: 8, agi: 3 },  weaponMin: 8, weaponMax: 12, attackSpeed: 2.2, empowersAbilityId: "frostbolt",   effectDesc: "Frostbolt deals +50% damage and refreshes Chill for 1 extra turn." },
+  priest:      { baseId: "tome",   slot: "offhand", name: "Reliquary of Dawn",       flavor: "Holds a sunrise that never set.",      attrs: { int: 12, sta: 10, spi: 8 }, armor: 8, empowersAbilityId: "smite",       effectDesc: "Smite heals you for 40% of damage dealt." },
+  druid:       { baseId: "staff",  slot: "weapon",  name: "Heartwood Branch",        flavor: "Still living. Still listening.",       attrs: { int: 14, sta: 8, spi: 6 },  weaponMin: 10, weaponMax: 15, attackSpeed: 2.2, empowersAbilityId: "wrath",       effectDesc: "Wrath deals +40% damage and restores 6 HP." },
+  deathknight: { baseId: "sword",  slot: "weapon",  name: "Frostmourne Shard",       flavor: "Asks every kill for a little more.",   attrs: { str: 12, sta: 10, int: 4 }, weaponMin: 11, weaponMax: 16, attackSpeed: 2.0, empowersAbilityId: "deathstrike", effectDesc: "Death Strike deals +35% damage and lifesteal is doubled." },
+  demonhunter: { baseId: "dagger", slot: "weapon",  name: "Twinblades of the Betrayer", flavor: "Two glaives. One hunger.",          attrs: { agi: 12, str: 8, int: 4 },  weaponMin: 10, weaponMax: 15, attackSpeed: 1.6, empowersAbilityId: "chaosstrike", effectDesc: "Chaos Strike deals +45% damage and lifesteal is tripled." },
 };
 
 export function rollClassLegendary(classId: ClassId, depth: number): GearItem {
@@ -1583,15 +1699,15 @@ export function rollClassLegendary(classId: ClassId, depth: number): GearItem {
     slot: def.slot,
     rarity: "legendary",
     ilvl: Math.max(15, depth),
-    stats: { ...def.stats },
+    attrs: { ...def.attrs },
+    weaponMin: def.weaponMin,
+    weaponMax: def.weaponMax,
+    attackSpeed: def.attackSpeed,
+    armor: def.armor,
     classId,
     empowersAbilityId: def.empowersAbilityId,
     legendaryDesc: def.effectDesc,
   };
-}
-
-export function gearScore(item: GearItem): number {
-  return (item.stats.atk ?? 0) * 2 + (item.stats.mag ?? 0) * 2 + (item.stats.maxHp ?? 0) + (item.stats.crit ?? 0) + (item.stats.dodge ?? 0);
 }
 
 export function equippedGearScore(equipment: Partial<Record<GearSlot, GearItem>>): number {

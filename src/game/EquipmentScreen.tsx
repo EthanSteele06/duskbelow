@@ -1,20 +1,9 @@
 import { useGame, bagCap, bagSlotsUsed } from "@/game/store";
-import { SLOT_LABEL, SLOT_ICON, RARITY_CLASS, RARITY_LABEL, MATERIALS, MATERIAL_STACK_SIZE, VENDOR_ITEMS, gearSellPrice, type GearSlot, type GearItem } from "@/game/data";
+import { SLOT_LABEL, SLOT_ICON, RARITY_CLASS, RARITY_LABEL, MATERIALS, MATERIAL_STACK_SIZE, VENDOR_ITEMS, gearSellPrice, formatGearStatsLine, type GearSlot, type GearItem } from "@/game/data";
 import { GearCompare } from "./GearCompare";
 import { StatBar } from "./StatBar";
 
 const SLOTS: GearSlot[] = ["head", "chest", "legs", "weapon", "offhand", "trinket"];
-
-function statsLine(it: GearItem) {
-  const s = it.stats;
-  const parts: string[] = [];
-  if (s.atk) parts.push(`+${s.atk} ATK`);
-  if (s.mag) parts.push(`+${s.mag} MAG`);
-  if (s.maxHp) parts.push(`+${s.maxHp} HP`);
-  if (s.crit) parts.push(`+${s.crit}% crit`);
-  if (s.dodge) parts.push(`+${s.dodge}% dodge`);
-  return parts.join(" · ");
-}
 
 export function EquipmentScreen() {
   const setScreen = useGame((s) => s.setScreen);
@@ -52,7 +41,7 @@ export function EquipmentScreen() {
               {it ? (
                 <>
                   <p className={`pixel text-[8px] mt-1 ${RARITY_CLASS[it.rarity]}`}>{it.name}</p>
-                  <p className="font-body text-xs opacity-80 leading-tight mt-1">{statsLine(it)}</p>
+                  <p className="font-body text-xs opacity-80 leading-tight mt-1">{formatGearStatsLine(it) || "—"}</p>
                   {it.legendaryDesc && (
                     <p className="pixel text-[6px] text-rarity-legendary mt-1 leading-tight">✦ {it.legendaryDesc}</p>
                   )}
@@ -67,7 +56,18 @@ export function EquipmentScreen() {
       </div>
 
       <div className="border-2 border-black bg-card/60 p-2">
-        <p className="pixel text-[9px] text-gold">Crit {player.crit}% · Dodge {player.dodge}%</p>
+        <p className="pixel text-[9px] text-gold">
+          ATK {player.atk} · MAG {player.mag} · Crit {player.crit}% · Dodge {player.dodge}% · Block {player.block}%
+        </p>
+        {(player.weaponMin > 0 || player.armor > 0) && (
+          <p className="font-body text-xs text-muted-foreground mt-1">
+            {player.weaponMin > 0 && `${player.weaponMin}–${player.weaponMax} weapon`}
+            {player.weaponMin > 0 && player.armor > 0 && " · "}
+            {player.armor > 0 && `${player.armor} armor`}
+            {player.hpRegen > 0 && ` · +${player.hpRegen.toFixed(1)} HP/r`}
+            {player.maxMana > 0 && ` · ${player.maxMana} mana`}
+          </p>
+        )}
       </div>
 
       <h3 className="pixel text-[10px] text-gold mt-1">▣ Bag ({used}/{cap} slots)</h3>
@@ -115,7 +115,7 @@ export function EquipmentScreen() {
                 <span className={`pixel text-[9px] ${RARITY_CLASS[it.rarity]}`}>{SLOT_ICON[it.slot]} {it.name}</span>
                 <span className="pixel text-[7px] text-muted-foreground">iLvl {it.ilvl} · {RARITY_LABEL[it.rarity]}</span>
               </div>
-              <p className="font-body text-sm opacity-90 mt-1">{statsLine(it)}</p>
+              <p className="font-body text-sm opacity-90 mt-1">{formatGearStatsLine(it) || "—"}</p>
               {it.legendaryDesc && (
                 <p className="pixel text-[7px] text-rarity-legendary mt-1">✦ {it.legendaryDesc}</p>
               )}
