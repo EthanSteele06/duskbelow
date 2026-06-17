@@ -1591,25 +1591,34 @@ export const useGame = create<GameState>((set, get) => ({
   ensureRelicRoll: () => {
     const meta = get().meta;
     const now = Date.now();
-    if (meta.relicVendor && now - meta.relicVendor.rolledAt < DAILY_ROTATION_MS) return;
+    const faction = get().player.faction ?? null;
     const seed = Math.floor(now / DAILY_ROTATION_MS) + 1;
-    const nextMeta: MetaState = { ...meta, relicVendor: { rolledAt: now, seed, sold: [] } };
+    const v = meta.relicVendor;
+    if (v && now - v.rolledAt < DAILY_ROTATION_MS && v.entries.length === 3) return;
+    const cycleSeed = v && now - v.rolledAt < DAILY_ROTATION_MS ? v.seed : seed;
+    const entries = rollRelicListings(cycleSeed, faction);
+    const nextMeta: MetaState = {
+      ...meta,
+      relicVendor: {
+        rolledAt: v && now - v.rolledAt < DAILY_ROTATION_MS ? v.rolledAt : now,
+        seed: cycleSeed,
+        entries,
+        sold: v && now - v.rolledAt < DAILY_ROTATION_MS ? (v.sold ?? []) : [],
+      },
+    };
     persistMeta(nextMeta); set({ meta: nextMeta });
   },
 
   purchaseRelic: (idx) => {
     const s = get();
     const v = s.meta.relicVendor;
-    if (!v) return false;
-    const listings = rollRelicListings(v.seed, s.player.faction ?? null);
-    const entry = listings[idx];
-    if (!entry) return false;
-    const key = `${idx}:${entry.listing.id}`;
-    if (v.sold.includes(key)) return false;
+    if (!v || !v.entries[idx]) return false;
+    if (v.sold.includes(idx)) return false;
+    const entry = v.entries[idx];
     if (s.player.gold < entry.price) { get().pushLog("Not enough gold."); return false; }
     if (!get().addToBag(entry.listing)) return false;
     const np = get().player;
-    const nextMeta: MetaState = { ...s.meta, relicVendor: { ...v, sold: [...v.sold, key] } };
+    const nextMeta: MetaState = { ...s.meta, relicVendor: { ...v, sold: [...v.sold, idx] } };
     persistMeta(nextMeta);
     set({ meta: nextMeta, player: { ...np, gold: np.gold - entry.price } });
     get().pushLog(`Acquired ${entry.listing.name} for ${entry.price}g.`);

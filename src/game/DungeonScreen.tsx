@@ -363,6 +363,9 @@ export function DungeonScreen() {
     if (enc.kind !== "combat" && enc.kind !== "victory") {
       finishingKillRef.current = false;
     }
+    if (enc.kind === "victory") {
+      finishingKillRef.current = false;
+    }
   }, [enc.kind]);
 
   const finishRun = useGame((s) => s.finishRun);
@@ -499,7 +502,7 @@ export function DungeonScreen() {
     // Tick enemy DoTs first; check for kill
     e = tickEffectsOnEnemy(e, addLog, dotAmp);
     if (e.enemyHp <= 0) {
-      setTimeout(() => finishKill(e), 0);
+      finishKill(e);
       return e;
     }
     const moment = BOSS_MOMENTS[e.enemy.id];
@@ -721,6 +724,7 @@ export function DungeonScreen() {
         turnTimersRef.current.push(flashId);
       }
       const after = enemyTurn(stepped);
+      if (after.enemyHp <= 0) return;
       setEnc(after);
       const idleId = window.setTimeout(() => setTurnPhase("idle"), kind === "attack" ? 420 : 280);
       turnTimersRef.current.push(idleId);
@@ -834,8 +838,9 @@ export function DungeonScreen() {
   };
 
   const finishKill = (e: CombatEnc) => {
-    if (finishingKillRef.current || victoryBeat) return;
+    if (finishingKillRef.current) return;
     finishingKillRef.current = true;
+    try {
     clearTurnTimers();
     setTurnPhase("idle");
     setArmedAbility(null);
@@ -916,6 +921,10 @@ export function DungeonScreen() {
       playSfx("loot");
       victoryTimerRef.current = null;
     }, VICTORY_BEAT_MS);
+    } catch (err) {
+      finishingKillRef.current = false;
+      throw err;
+    }
   };
 
   const closeVictory = () => {

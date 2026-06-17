@@ -69,7 +69,7 @@ const EMPTY_BONUSES: GearCombatBonuses = {
 
 type AttrTier = "low" | "medium" | "high" | "veryHigh";
 
-function tierRoll(tier: AttrTier, ilvl: number): number {
+function tierRoll(tier: AttrTier, ilvl: number, rnd: () => number): number {
   const scale = 0.85 + ilvl * 0.12;
   const bands: Record<AttrTier, [number, number]> = {
     low: [1, 3],
@@ -80,13 +80,13 @@ function tierRoll(tier: AttrTier, ilvl: number): number {
   const [lo, hi] = bands[tier];
   const min = Math.max(1, Math.round(lo * scale));
   const max = Math.max(min, Math.round(hi * scale));
-  return min + Math.floor(Math.random() * (max - min + 1));
+  return min + Math.floor(rnd() * (max - min + 1));
 }
 
-function pickStat(preferred: PrimaryStatId[], exclude: PrimaryStatId[]): PrimaryStatId {
+function pickStat(preferred: PrimaryStatId[], exclude: PrimaryStatId[], rnd: () => number): PrimaryStatId {
   const pool = preferred.filter((s) => !exclude.includes(s));
-  const source = pool.length > 0 && Math.random() < 0.72 ? pool : ALL_STATS;
-  return source[Math.floor(Math.random() * source.length)];
+  const source = pool.length > 0 && rnd() < 0.72 ? pool : ALL_STATS;
+  return source[Math.floor(rnd() * source.length)];
 }
 
 function assignAttr(out: PrimaryStats, stat: PrimaryStatId, value: number) {
@@ -98,36 +98,37 @@ export function rollPrimaryAttrs(
   rarity: Rarity,
   ilvl: number,
   preferred: PrimaryStatId[] = ALL_STATS,
+  rnd: () => number = Math.random,
 ): PrimaryStats {
   const attrs: PrimaryStats = {};
   const used: PrimaryStatId[] = [];
 
   const rollOne = (tier: AttrTier) => {
-    const stat = pickStat(preferred, used);
+    const stat = pickStat(preferred, used, rnd);
     used.push(stat);
-    assignAttr(attrs, stat, tierRoll(tier, ilvl));
+    assignAttr(attrs, stat, tierRoll(tier, ilvl, rnd));
   };
 
   switch (rarity) {
     case "common":
-      if (Math.random() < 0.65) return attrs;
+      if (rnd() < 0.65) return attrs;
       rollOne("low");
       break;
     case "uncommon": {
-      const count = Math.random() < 0.45 ? 1 : 2;
+      const count = rnd() < 0.45 ? 1 : 2;
       rollOne(count === 1 ? "medium" : "low");
       if (count === 2) rollOne("medium");
       break;
     }
     case "rare": {
       const tiers: AttrTier[] = ["high", "medium", "low"];
-      const count = 1 + Math.floor(Math.random() * 3);
+      const count = 1 + Math.floor(rnd() * 3);
       for (let i = 0; i < count; i++) rollOne(tiers[i] ?? "low");
       break;
     }
     case "epic": {
       const tiers: AttrTier[] = ["veryHigh", "high", "medium"];
-      const count = 1 + Math.floor(Math.random() * 3);
+      const count = 1 + Math.floor(rnd() * 3);
       for (let i = 0; i < count; i++) rollOne(tiers[i] ?? "medium");
       break;
     }

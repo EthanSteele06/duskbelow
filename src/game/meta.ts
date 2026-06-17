@@ -15,12 +15,20 @@ export interface DailyContractState {
   claimed: boolean;
 }
 
+export interface RelicListing {
+  listing: GearItem;
+  price: number;
+  flavor?: string;
+}
+
 export interface RelicVendorState {
   rolledAt: number;
   /** seed used so the listings are deterministic for the cycle */
   seed: number;
-  /** ids of listings the player has already purchased this cycle */
-  sold: string[];
+  /** Cached listings for this cycle — do not re-roll on every render */
+  entries: RelicListing[];
+  /** Slot indices the player has already purchased this cycle (0–2) */
+  sold: number[];
 }
 
 export const DAILY_ROTATION_MS = 24 * 60 * 60 * 1000;
@@ -358,7 +366,15 @@ export function loadMeta(): MetaState {
       collection: { ...base.collection, ...(parsed.collection ?? {}) },
       options: { ...base.options, ...(parsed.options ?? {}) },
       dailyContract: parsed.dailyContract ?? null,
-      relicVendor: parsed.relicVendor ?? null,
+      relicVendor: parsed.relicVendor
+        ? {
+            ...parsed.relicVendor,
+            entries: parsed.relicVendor.entries ?? [],
+            sold: Array.isArray(parsed.relicVendor.sold)
+              ? parsed.relicVendor.sold.filter((x): x is number => typeof x === "number")
+              : [],
+          }
+        : null,
       seenBossIntros: parsed.seenBossIntros ?? [],
       pendingHoarderItem: parsed.pendingHoarderItem ?? null,
       completedChronicles: parsed.completedChronicles ?? [],

@@ -79,10 +79,18 @@ function ensureUnlock() {
   // Replay queued music after first gesture
   if (currentTrack) playMusic(currentTrack, { force: true });
 }
+export { ensureUnlock };
+
 if (typeof window !== "undefined") {
-  const unlock = () => { ensureUnlock(); window.removeEventListener("pointerdown", unlock); window.removeEventListener("keydown", unlock); };
-  window.addEventListener("pointerdown", unlock, { once: false });
-  window.addEventListener("keydown", unlock, { once: false });
+  const unlock = () => {
+    ensureUnlock();
+    window.removeEventListener("pointerdown", unlock);
+    window.removeEventListener("touchstart", unlock);
+    window.removeEventListener("keydown", unlock);
+  };
+  window.addEventListener("pointerdown", unlock, { passive: true });
+  window.addEventListener("touchstart", unlock, { passive: true });
+  window.addEventListener("keydown", unlock);
 }
 
 export function playSfx(name: SfxName) {

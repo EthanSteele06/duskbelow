@@ -1136,7 +1136,12 @@ export function rollRelicListings(seed: number, faction: FactionId | null): { li
   const out: { listing: GearItem; price: number; flavor?: string }[] = [];
   for (let i = 0; i < 3; i++) {
     const depth = 10 + Math.floor(rng() * 18);
-    const item = rollGear(depth, { minRarity: rarities[i], source: rarities[i] === "legendary" ? "final_boss" : "major_boss" });
+    const item = rollGear(depth, {
+      minRarity: rarities[i],
+      source: rarities[i] === "legendary" ? "final_boss" : "major_boss",
+      rng,
+      id: `g_relic_${seed}_${i}`,
+    });
     item.rarity = rarities[i];
     const basePrice = Math.max(50, gearSellPrice(item) * (item.rarity === "legendary" ? 14 : item.rarity === "epic" ? 8 : 4));
     const flavorAllies  = ["Recovered from a fallen knight's pack.", "Pawned by a temple novice.", "Stamped with the Allies' bulwark mark."];
@@ -1620,24 +1625,28 @@ const LOOT_WEIGHTS: Record<LootSource, Record<Rarity, number>> = {
   final_boss: { common: 0,  uncommon: 0,  rare: 10, epic: 90, legendary: 0 },
 };
 
-function rollRarity(source: LootSource): Rarity {
+function rollRarity(source: LootSource, rnd: () => number = Math.random): Rarity {
   const w = LOOT_WEIGHTS[source];
   const total = (["common","uncommon","rare","epic","legendary"] as Rarity[]).reduce((s, k) => s + w[k], 0);
-  let r = Math.random() * total;
+  let r = rnd() * total;
   for (const k of ["common","uncommon","rare","epic","legendary"] as Rarity[]) {
     r -= w[k]; if (r <= 0) return k;
   }
   return "common";
 }
 
-export function rollGear(depth: number, opts?: { minRarity?: Rarity; source?: LootSource }): GearItem {
+export function rollGear(
+  depth: number,
+  opts?: { minRarity?: Rarity; source?: LootSource; rng?: () => number; id?: string },
+): GearItem {
+  const rnd = opts?.rng ?? Math.random;
   const source: LootSource = opts?.source ?? "trash";
-  let rarity = rollRarity(source);
+  let rarity = rollRarity(source, rnd);
   if (opts?.minRarity && RARITY_RANK[rarity] < RARITY_RANK[opts.minRarity]) rarity = opts.minRarity;
 
-  const template = GEAR_TEMPLATES[Math.floor(Math.random() * GEAR_TEMPLATES.length)];
-  const variant = template.variants[Math.floor(Math.random() * template.variants.length)];
-  const ilvl = Math.max(1, Math.min(15, depth + Math.floor(Math.random() * 3)));
+  const template = GEAR_TEMPLATES[Math.floor(rnd() * GEAR_TEMPLATES.length)];
+  const variant = template.variants[Math.floor(rnd() * template.variants.length)];
+  const ilvl = Math.max(1, Math.min(15, depth + Math.floor(rnd() * 3)));
   const scale = 1 + (ilvl - 1) * 0.1;
   const rarityArmorMult = 1 + RARITY_RANK[rarity] * 0.12;
 
@@ -1645,13 +1654,13 @@ export function rollGear(depth: number, opts?: { minRarity?: Rarity; source?: Lo
   const name = `${baseName}${variant.suffix}`;
 
   const item: GearItem = {
-    id: newItemId(),
+    id: opts?.id ?? newItemId(),
     baseId: template.baseId,
     name,
     slot: template.slot,
     rarity,
     ilvl,
-    attrs: rollPrimaryAttrs(rarity, ilvl, variant.focus),
+    attrs: rollPrimaryAttrs(rarity, ilvl, variant.focus, rnd),
     variantId: variant.id,
   };
 

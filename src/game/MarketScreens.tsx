@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useGame, bagFreeSlots } from "@/game/store";
-import { VENDOR_ITEMS, AUCTION_LISTINGS, rollRelicListings, RARITY_LABEL, SLOT_ICON, formatGearStatsLine, type GearItem } from "@/game/data";
+import { VENDOR_ITEMS, AUCTION_LISTINGS, RARITY_LABEL, SLOT_ICON, formatGearStatsLine, type GearItem } from "@/game/data";
 import { DAILY_ROTATION_MS } from "@/game/meta";
 import { StatBar } from "./StatBar";
 import { GearCompare } from "./GearCompare";
@@ -102,7 +102,7 @@ export function AuctionScreen() {
   useEffect(() => { ensureRelicRoll(); }, [ensureRelicRoll]);
 
   const v = meta.relicVendor;
-  const listings = v ? rollRelicListings(v.seed, player.faction ?? null) : [];
+  const listings = v?.entries ?? [];
   const remaining = v ? v.rolledAt + DAILY_ROTATION_MS - Date.now() : 0;
 
   const rarityColor = (r: string) =>
@@ -122,8 +122,8 @@ export function AuctionScreen() {
 
       <div className="space-y-2">
         {listings.map((entry, i) => {
-          const key = `${i}:${entry.listing.id}`;
-          const sold = v?.sold.includes(key);
+          const key = entry.listing.id;
+          const sold = v?.sold.includes(i);
           const canAfford = player.gold >= entry.price;
           const equipped = player.equipment[entry.listing.slot];
           return (

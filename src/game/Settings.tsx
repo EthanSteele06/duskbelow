@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useGame } from "@/game/store";
-import { getAudioSettings, setAudioSettings, subscribeAudioSettings, playSfx } from "@/game/audio";
+import { getAudioSettings, setAudioSettings, subscribeAudioSettings, playSfx, ensureUnlock } from "@/game/audio";
 
 export function SettingsButton() {
   const [open, setOpen] = useState(false);
@@ -81,7 +81,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
             <input
               type="checkbox"
               checked={audio.muted}
-              onChange={(e) => setAudioSettings({ muted: e.target.checked })}
+              onChange={(e) => { ensureUnlock(); setAudioSettings({ muted: e.target.checked }); }}
             />
             <span className="font-body text-sm">Mute all</span>
           </label>
@@ -168,6 +168,10 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
 function Slider({
   label, value, disabled, onChange, onRelease,
 }: { label: string; value: number; disabled?: boolean; onChange: (v: number) => void; onRelease?: () => void }) {
+  const handle = (raw: string) => {
+    ensureUnlock();
+    onChange(Number(raw) / 100);
+  };
   return (
     <div className={`mb-2 ${disabled ? "opacity-50" : ""}`}>
       <div className="flex justify-between pixel text-[8px]">
@@ -179,9 +183,13 @@ function Slider({
         min={0} max={100} step={1}
         value={Math.round(value * 100)}
         disabled={disabled}
-        onChange={(e) => onChange(Number(e.target.value) / 100)}
+        onChange={(e) => handle(e.target.value)}
+        onInput={(e) => handle((e.target as HTMLInputElement).value)}
+        onPointerDown={() => ensureUnlock()}
+        onTouchStart={() => ensureUnlock()}
         onPointerUp={onRelease}
-        className="w-full"
+        onTouchEnd={onRelease}
+        className="w-full touch-pan-y"
       />
     </div>
   );
