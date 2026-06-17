@@ -12,10 +12,12 @@ import {
   type PlayerThreatSnap, type ThreatKind, type ThreatTier, type ZoneContext, type DungeonMode,
 } from "@/game/data";
 import { bestiaryMasteryMult, echoStart, zoneModsForLevel } from "@/game/meta";
-import {
-  resolveCombatAbilities, getTalentPassives,
+import { resolveCombatAbilities, getTalentPassives,
   abilityBonusCrit, abilityIgnoresGuard, abilityBonusVsBleed, stunBonusHealPct,
 } from "@/game/talentCombat";
+import {
+  abilityCost, resourceCostLabel, resourceDef, spendsResource,
+} from "@/game/resources";
 import { playMusic, playSfx } from "@/game/audio";
 import { TutorialTip } from "@/game/Tutorial";
 import { SettingsButton } from "@/game/Settings";
@@ -224,8 +226,12 @@ export function DungeonScreen() {
   const useRacial = useGame((s) => s.useRacial);
   const consumeMult = useGame((s) => s.consumeNextAttackMult);
   const equip = useGame((s) => s.equip);
+  const spendResource = useGame((s) => s.spendResource);
+  const gainResourceFromDamageDealt = useGame((s) => s.gainResourceFromDamageDealt);
+  const tickResourceRegenTurn = useGame((s) => s.tickResourceRegenTurn);
 
   const armNextAttack = useGame((s) => s.armNextAttack);
+  const classResource = resourceDef(player.classId);
   const specAbility = player.specId ? SPEC_ABILITIES[player.specId] : null;
   const abilities: Ability[] = player.classId
     ? resolveCombatAbilities(CLASS_ABILITIES[player.classId], specAbility, player.specId, player.learnedTalents)
@@ -646,6 +652,7 @@ export function DungeonScreen() {
     addFloater("player", dmg, dmgSkin);
     const flavor = ab.effect.flavor.replace("{p}", player.name);
     addLog(`${flavor} for ${dmg}${crit ? " CRIT" : ""}${legendary ? " ✦" : ""} damage!`);
+    gainResourceFromDamageDealt(dmg, { spenderAbility: spendsResource(ab) });
 
     // Lifesteal
     const effectiveLifesteal = ((ab.effect.lifesteal ?? 0) + (talentPassives.lifesteal_boost ?? 0) / 100) * lifestealMult;
@@ -686,7 +693,7 @@ export function DungeonScreen() {
     }
     return {
       ...e,
-      enemyHp: e.enemyHp - dmg,
+      enemyHp: Math.max(0, e.enemyHp - dmg),
       enemyEffects: nextEffects,
       enemyGuardPct: guardPct,
       enemyParryActive: parryActive,
@@ -722,7 +729,10 @@ export function DungeonScreen() {
       }
       const after = enemyTurn(stepped);
       setEnc(after);
-      const idleId = window.setTimeout(() => setTurnPhase("idle"), kind === "attack" ? 420 : 280);
+      const idleId = window.setTimeout(() => {
+        tickResourceRegenTurn();
+        setTurnPhase("idle");
+      }, kind === "attack" ? 420 : 280);
       turnTimersRef.current.push(idleId);
     }, TURN_TELEGRAPH_MS);
     turnTimersRef.current.push(resolveId);
@@ -738,6 +748,11 @@ export function DungeonScreen() {
   const useAbility = (ab: Ability) => {
     if (enc.kind !== "combat" || turnPhase !== "idle" || victoryBeat) return;
     if ((player.abilityCooldowns?.[ab.id] ?? 0) > 0) return;
+    const cost = abilityCost(ab);
+    if (cost > 0 && player.resource < cost) {
+      addLog(`Not enough ${classResource?.label ?? "resource"}.`);
+      return;
+    }
     // Tap-to-confirm on mobile/touch: first tap arms; second confirms.
     if (armedAbility !== ab.id) {
       setArmedAbility(ab.id);
@@ -745,6 +760,10 @@ export function DungeonScreen() {
       return;
     }
     setArmedAbility(null);
+    if (cost > 0 && !spendResource(cost)) {
+      addLog(`Not enough ${classResource?.label ?? "resource"}.`);
+      return;
+    }
     const e = enc;
     const flavor = ab.effect.flavor.replace("{p}", player.name);
 
@@ -1308,19 +1327,25 @@ export function DungeonScreen() {
             <div className={`grid gap-2 ${abilities.length >= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
               {abilities.map((ab) => {
                 const cd = player.abilityCooldowns?.[ab.id] ?? 0;
+                const cost = abilityCost(ab);
+                const lacksResource = cost > 0 && player.resource < cost;
                 const armed = armedAbility === ab.id;
                 const pulsing = readyPulse.has(ab.id) && cd === 0;
+                const costLabel = resourceCostLabel(ab, classResource);
                 return (
                   <button
                     key={ab.id}
                     onClick={() => useAbility(ab)}
                     onMouseEnter={() => setHoveredAbility(ab)}
                     onFocus={() => setHoveredAbility(ab)}
-                    disabled={cd > 0 || turnPhase !== "idle"}
+                    disabled={cd > 0 || turnPhase !== "idle" || lacksResource}
                     className={`pixel-btn !text-[8px] !p-2 disabled:opacity-40 ${weaponGlow ? "weapon-glow-btn" : ""} ${pulsing ? "cd-ready-pulse" : ""} ${armed ? "pixel-btn-gold ring-2 ring-gold" : ab.id === abilities[0].id ? "pixel-btn-primary" : ""}`}
                     style={weaponGlow ? ({ ["--weapon-glow" as string]: weaponGlow } as CSSProperties) : undefined}
                   >
                     {ab.name}
+                    {costLabel && cd === 0 && (
+                      <span className="block pixel text-[7px] mt-0.5 text-muted-foreground">{costLabel}</span>
+                    )}
                     {cd > 0 && <span className="block pixel text-[7px] mt-1 text-muted-foreground">CD {cd}</span>}
                     {armed && cd === 0 && <span className="block pixel text-[7px] mt-1 text-divine">TAP TO CONFIRM</span>}
                   </button>
