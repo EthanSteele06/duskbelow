@@ -8,7 +8,7 @@ export function SettingsButton() {
     <>
       <button
         aria-label="Settings"
-        onClick={() => { playSfx("ui-tap"); setOpen(true); }}
+        onClick={() => { ensureUnlock(); playSfx("ui-tap"); setOpen(true); }}
         className="pixel-btn !p-1.5 !text-[10px]"
       >
         ⚙
@@ -32,7 +32,11 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
   const devResetChronicles = useGame((s) => s.devResetChronicles);
   const [devOpen, setDevOpen] = useState(false);
 
-  useEffect(() => subscribeAudioSettings(setAudio), []);
+  useEffect(() => {
+    ensureUnlock();
+    setAudio(getAudioSettings());
+    return subscribeAudioSettings(setAudio);
+  }, []);
 
   const onWipe = () => {
     if (isChampion) return;
@@ -62,26 +66,31 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
             label="Master"
             value={audio.master}
             disabled={audio.muted}
-            onChange={(v) => setAudioSettings({ master: v })}
+            onChange={(v) => { setAudio((a) => ({ ...a, master: v })); setAudioSettings({ master: v }); }}
           />
           <Slider
             label="Music"
             value={audio.music}
             disabled={audio.muted}
-            onChange={(v) => setAudioSettings({ music: v })}
+            onChange={(v) => { setAudio((a) => ({ ...a, music: v })); setAudioSettings({ music: v }); }}
           />
           <Slider
             label="SFX"
             value={audio.sfx}
             disabled={audio.muted}
-            onChange={(v) => { setAudioSettings({ sfx: v }); }}
+            onChange={(v) => { setAudio((a) => ({ ...a, sfx: v })); setAudioSettings({ sfx: v }); }}
             onRelease={() => playSfx("ui-confirm")}
           />
           <label className="flex items-center gap-2 mt-2">
             <input
               type="checkbox"
               checked={audio.muted}
-              onChange={(e) => { ensureUnlock(); setAudioSettings({ muted: e.target.checked }); }}
+              onChange={(e) => {
+                ensureUnlock();
+                const muted = e.target.checked;
+                setAudio((a) => ({ ...a, muted }));
+                setAudioSettings({ muted });
+              }}
             />
             <span className="font-body text-sm">Mute all</span>
           </label>

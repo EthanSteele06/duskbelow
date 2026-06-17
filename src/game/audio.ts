@@ -61,7 +61,7 @@ export function setAudioSettings(patch: Partial<AudioSettings>) {
   settings = { ...settings, ...patch };
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {}
   applyMusicVolume();
-  listeners.forEach((fn) => fn(settings));
+  listeners.forEach((fn) => fn({ ...settings }));
 }
 export function subscribeAudioSettings(fn: (s: AudioSettings) => void): () => void {
   listeners.add(fn); return () => listeners.delete(fn);
@@ -95,7 +95,7 @@ if (typeof window !== "undefined") {
 
 export function playSfx(name: SfxName) {
   if (typeof window === "undefined") return;
-  if (settings.muted) return;
+  if (settings.muted || settings.master <= 0) return;
   const vol = settings.master * settings.sfx;
   if (vol <= 0) return;
   try {
@@ -110,7 +110,15 @@ export function playSfx(name: SfxName) {
 
 function applyMusicVolume() {
   if (!musicEl) return;
-  musicEl.volume = settings.muted ? 0 : Math.min(1, Math.max(0, settings.master * settings.music));
+  const vol = settings.muted || settings.master <= 0
+    ? 0
+    : Math.min(1, Math.max(0, settings.master * settings.music));
+  musicEl.volume = vol;
+  if (vol <= 0) {
+    try { musicEl.pause(); } catch {}
+    return;
+  }
+  if (unlocked) void musicEl.play().catch(() => {});
 }
 
 export function playMusic(track: MusicTrack, opts: { force?: boolean } = {}) {

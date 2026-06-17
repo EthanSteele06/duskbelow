@@ -271,6 +271,7 @@ export function DungeonScreen() {
   const roomTimersRef = useRef<number[]>([]);
   const victoryTimerRef = useRef<number | null>(null);
   const finishingKillRef = useRef(false);
+  const victoryBeatRef = useRef<{ depth: number; enemy: EnemyDef; enemyMaxHp: number; loot: Loot } | null>(null);
   const prevCdsRef = useRef<Record<string, number>>({});
 
   const clearTurnTimers = () => {
@@ -362,6 +363,7 @@ export function DungeonScreen() {
   useEffect(() => {
     if (enc.kind !== "combat" && enc.kind !== "victory") {
       finishingKillRef.current = false;
+      victoryBeatRef.current = null;
     }
     if (enc.kind === "victory") {
       finishingKillRef.current = false;
@@ -494,6 +496,7 @@ export function DungeonScreen() {
   };
 
   const enemyTurn = (eIn: CombatEnc): CombatEnc => {
+    if (finishingKillRef.current || eIn.enemyHp <= 0) return eIn;
     let e = bumpTurnEnrage(eIn);
     if (e.enemyParryActive) {
       addLog(`${e.enemy.name}'s parry stance fades.`);
@@ -697,16 +700,16 @@ export function DungeonScreen() {
   };
 
   const beginEnemyPhase = (e: CombatEnc, usedAbilityId?: string, usedCooldown = 0) => {
+    if (finishingKillRef.current || victoryBeatRef.current) return;
     clearTurnTimers();
     advanceAbilityCooldowns(usedAbilityId, usedCooldown);
     const stepped = tickPlayerEffects(e);
-    setEnc(stepped);
-    setArmedAbility(null);
-
     if (stepped.enemyHp <= 0) {
-      finishKill(stepped);
+      if (!finishingKillRef.current) finishKill(stepped);
       return;
     }
+    setEnc(stepped);
+    setArmedAbility(null);
 
     const intent = stepped.nextIntent;
     const kind = intent.kind ?? "attack";
@@ -717,6 +720,7 @@ export function DungeonScreen() {
     }
 
     const resolveId = window.setTimeout(() => {
+      if (finishingKillRef.current || victoryBeatRef.current) return;
       setTurnPhase("resolving");
       if (kind === "attack") {
         setArenaFlash(true);
@@ -724,23 +728,28 @@ export function DungeonScreen() {
         turnTimersRef.current.push(flashId);
       }
       const after = enemyTurn(stepped);
-      if (after.enemyHp <= 0) return;
+      if (after.enemyHp <= 0 || finishingKillRef.current) return;
       setEnc(after);
-      const idleId = window.setTimeout(() => setTurnPhase("idle"), kind === "attack" ? 420 : 280);
+      const idleId = window.setTimeout(() => {
+        if (finishingKillRef.current || victoryBeatRef.current) return;
+        setTurnPhase("idle");
+      }, kind === "attack" ? 420 : 280);
       turnTimersRef.current.push(idleId);
     }, TURN_TELEGRAPH_MS);
     turnTimersRef.current.push(resolveId);
   };
 
   const passTurn = () => {
-    if (enc.kind !== "combat" || turnPhase !== "idle" || victoryBeat) return;
+    if (enc.kind !== "combat" || turnPhase !== "idle") return;
+    if (victoryBeatRef.current || finishingKillRef.current || enc.enemyHp <= 0) return;
     addLog(`${player.name} holds, reading the foe's rhythm.`);
     if (talentPassives.pass_cd_tick) advanceAbilityCooldowns();
     beginEnemyPhase(enc);
   };
 
   const useAbility = (ab: Ability) => {
-    if (enc.kind !== "combat" || turnPhase !== "idle" || victoryBeat) return;
+    if (enc.kind !== "combat" || turnPhase !== "idle") return;
+    if (victoryBeatRef.current || finishingKillRef.current || enc.enemyHp <= 0) return;
     if ((player.abilityCooldowns?.[ab.id] ?? 0) > 0) return;
     // Tap-to-confirm on mobile/touch: first tap arms; second confirms.
     if (armedAbility !== ab.id) {
@@ -842,7 +851,7 @@ export function DungeonScreen() {
     finishingKillRef.current = true;
     try {
     clearTurnTimers();
-    setTurnPhase("idle");
+    setTurnPhase("resolving");
     setArmedAbility(null);
     // Fork bias: Left favors gold, Right favors XP & material drops.
     const goldMult = forkBias === "left" ? 1.25 : 1;
@@ -909,10 +918,20 @@ export function DungeonScreen() {
       addLog(`Blood sings — next attack empowered!`);
     }
     const loot: Loot = { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material, gear };
-    setEnc({ ...e, enemyHp: 0 });
-    setVictoryBeat({ depth: e.depth, enemy: e.enemy, enemyMaxHp: e.enemyMaxHp, loot });
+    const beat = { depth: e.depth, enemy: e.enemy, enemyMaxHp: e.enemyMaxHp, loot };
+    victoryBeatRef.current = beat;
+    setEnc({
+      ...e,
+      enemyHp: 0,
+      enemyEffects: [],
+      enemyGuardPct: 0,
+      enemyParryActive: false,
+      stunnedTurns: 0,
+    });
+    setVictoryBeat(beat);
     if (victoryTimerRef.current !== null) clearTimeout(victoryTimerRef.current);
     victoryTimerRef.current = window.setTimeout(() => {
+      victoryBeatRef.current = null;
       setVictoryBeat(null);
       setEnc({ kind: "victory", depth: e.depth, loot });
       setRoomTransition("in");
@@ -1370,7 +1389,7 @@ export function DungeonScreen() {
             )}
             <button
               onClick={passTurn}
-              disabled={turnPhase !== "idle"}
+              disabled={turnPhase !== "idle" || inVictoryBeat || (enc.kind === "combat" && enc.enemyHp <= 0)}
               className="pixel-btn !text-[8px] w-full border-l-4 border-l-muted-foreground disabled:opacity-40"
             >
               {turnPhase === "telegraph" ? "▶ Enemy winding up…" : turnPhase === "resolving" ? "▶ Resolving…" : "◌ Pass — hold your turn (CDs tick)"}

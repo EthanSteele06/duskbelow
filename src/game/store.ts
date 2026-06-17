@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { playSfx } from "@/game/audio";
 import type { ClassId, FactionId, Ability, ProfessionId, GearItem, GearSlot, TalentNode, BuffEffect, DungeonMode, AffixId, OathId } from "./data";
 import {
   CLASSES, FACTIONS, VENDOR_ITEMS, QUESTS, TRAINERS, RECIPES, MATERIALS, SPECS, COSMETICS,
@@ -1198,7 +1199,7 @@ export const useGame = create<GameState>((set, get) => ({
         runShards: s.player.runShards + shards,
       },
     }));
-    if (shards > 0) { get().pushLog(`✦ +${shards} Soul Shard${shards>1?"s":""}.`); import("@/game/audio").then((a) => a.playSfx("shard")); }
+    if (shards > 0) { get().pushLog(`✦ +${shards} Soul Shard${shards>1?"s":""}.`); playSfx("shard"); }
     if (opts?.loreId && loreFound !== j.loreFound) get().pushLog("✦ A lore fragment is etched into your Journal.");
   },
 
