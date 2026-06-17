@@ -16,13 +16,20 @@ import {
   ECHO_TREE, hasEcho, DAILY_ROTATION_MS, hasClassTrialUnlocked, zoneModsForLevel,
 } from "./meta";
 import { TALENT_TREES } from "./talents";
-import { sumTalentStatBonuses } from "./talentCombat";
+import { sumTalentStatBonuses, type TalentRanks } from "./talentCombat";
 import {
   clampResource, combatStartResource, computeMaxResource,
   energyRegenPerTurn, furyFromDamageDealt, furyFromDamageTaken,
   manaRegenBetweenRooms, manaRegenPerTurn, rageFromDamage,
   resourceDef, runeRegenPerTurn, type ResourceSnapshot,
 } from "./resources";
+import {
+  CHARACTER_LEVEL_CAP,
+  levelUpBaseStats,
+  talentPointsOnLevelUp,
+  xpForLevel,
+} from "./progression";
+import { canLearnTalent, pointsSpentInTree } from "./talentUtils";
 
 export type Screen =
   | "title" | "intro" | "city"
@@ -75,7 +82,8 @@ interface PlayerState {
   skillPoints: number;
   learnedSkills: string[];
   talentPoints: number;
-  learnedTalents: string[];
+  /** Talent id → rank learned in current spec tree. */
+  talentRanks: TalentRanks;
   earnedSkillForLevel: number;
   equipment: Partial<Record<GearSlot, GearItem>>;
   bag: GearItem[];
@@ -248,7 +256,7 @@ const emptyPlayer = (): PlayerState => ({
   resource: 0, maxResource: 0,
   baseMaxHp: 30, baseAtk: 5, baseMag: 1,
   gold: 50, gems: 0, inventory: [], questItems: {}, dungeonDepth: 0,
-  skillPoints: 0, learnedSkills: [], talentPoints: 0, learnedTalents: [], earnedSkillForLevel: 0,
+  skillPoints: 0, learnedSkills: [], talentPoints: 0, talentRanks: {}, earnedSkillForLevel: 0,
   equipment: {}, bag: [],
   profession: null, profLevel: 1, profXp: 0, materials: {}, knownRecipes: [], profIdleSince: 0,
   isChampion: false, ownedCosmetics: [], equippedCosmetics: {},
@@ -262,14 +270,12 @@ const emptyPlayer = (): PlayerState => ({
   abilityCooldowns: {},
 });
 
-const xpForLevel = (lvl: number) => lvl * 25;
-
 function sumGearStats(equipment: PlayerState["equipment"]) {
   return sumEquipmentBonuses(equipment);
 }
 
-function sumTalentStats(learnedIds: string[], specId: string | null) {
-  return sumTalentStatBonuses(specId, learnedIds);
+function sumTalentStats(talentRanks: TalentRanks, specId: string | null) {
+  return sumTalentStatBonuses(specId, talentRanks);
 }
 
 function sumBuffStats(buffs: BuffEffect[]) {
@@ -307,7 +313,7 @@ function resourceSnap(p: PlayerState): ResourceSnapshot {
 
 function recompute(p: PlayerState, meta?: MetaState): PlayerState {
   const gear = sumGearStats(p.equipment);
-  const tal = sumTalentStats(p.learnedTalents, p.specId);
+  const tal = sumTalentStats(p.talentRanks, p.specId);
   const fp = p.faction ? FACTIONS.find((x) => x.id === p.faction)?.passives : undefined;
   const db = sumBuffStats(p.dungeonBuffs ?? []);
   const echo = echoCombatBonuses(meta, p.faction);
@@ -573,22 +579,24 @@ export const useGame = create<GameState>((set, get) => ({
     let baseMag = p.baseMag;
     let talentPoints = p.talentPoints;
     let earnedSkillForLevel = p.earnedSkillForLevel;
-    while (xp >= xpForLevel(level) && level < 10) {
+    let lastGrowth = levelUpBaseStats();
+    while (xp >= xpForLevel(level) && level < CHARACTER_LEVEL_CAP) {
       xp -= xpForLevel(level);
       level += 1;
-      baseMaxHp += 6;
-      baseAtk += 1;
-      baseMag += 1;
+      lastGrowth = levelUpBaseStats();
+      baseMaxHp += lastGrowth.baseMaxHp;
+      baseAtk += lastGrowth.baseAtk;
+      baseMag += lastGrowth.baseMag;
       get().pushLog(`★ Level up! Now level ${level}.`);
-      if (level >= 3 && level > earnedSkillForLevel) {
-        talentPoints += 1;
+      if (talentPointsOnLevelUp(level) > 0 && level > earnedSkillForLevel) {
+        talentPoints += talentPointsOnLevelUp(level);
         earnedSkillForLevel = level;
         get().pushLog(`✦ Talent point earned — visit your trainer.`);
       }
     }
     const next = recompute({
       ...p, xp, level, baseMaxHp, baseAtk, baseMag, talentPoints, earnedSkillForLevel,
-      hp: Math.min(p.hp + 5, baseMaxHp),
+      hp: Math.min(p.hp + Math.max(1, lastGrowth.baseMaxHp), baseMaxHp),
       runXp: p.runXp + total,
     }, meta);
     set({ player: next });
@@ -902,31 +910,43 @@ export const useGame = create<GameState>((set, get) => ({
     if (!p.specId) return false;
     const cost = p.isChampion ? 0 : RESPEC_GOLD_COST;
     if (p.gold < cost) return false;
-    const refund = p.learnedTalents.length;
+    const refund = pointsSpentInTree(p.talentRanks);
     const next = recompute({
-      ...p, gold: p.gold - cost, specId: null, learnedTalents: [],
+      ...p,
+      gold: p.gold - cost,
+      talentRanks: {},
       talentPoints: p.talentPoints + refund,
     }, get().meta);
     set({ player: next });
-    get().pushLog(`Respec'd. ${refund} point${refund===1?"":"s"} refunded${cost ? ` for ${cost}g` : " (free)"}.`);
+    get().pushLog(`Talents reset. ${refund} point${refund === 1 ? "" : "s"} refunded${cost ? ` for ${cost}g` : " (free)"}.`);
     return true;
   },
 
   learnTalent: (node) => {
     const p = get().player;
     if (!p.specId) return false;
-    if (p.learnedTalents.includes(node.id)) return false;
-    if (node.requires && !p.learnedTalents.includes(node.requires)) return false;
-    if (p.talentPoints < 1) return false;
-    // Capstones are mutually exclusive — only one per spec.
-    if (node.capstone) {
-      const tree = TALENT_TREES[p.specId];
-      const hasCapstone = tree.some((n) => n.capstone && p.learnedTalents.includes(n.id));
-      if (hasCapstone) { get().pushLog("Only one capstone may be chosen. Respec to change."); return false; }
+    const tree = TALENT_TREES[p.specId];
+    if (!tree?.some((n) => n.id === node.id)) return false;
+    const check = canLearnTalent(node, p.specId, p.talentRanks, p.talentPoints);
+    if (!check.ok) {
+      if (check.reason === "Capstone taken" || check.reason === "Choice taken") {
+        get().pushLog("That choice is locked — respec to change capstones.");
+      }
+      return false;
     }
-    const next = recompute({ ...p, talentPoints: p.talentPoints - 1, learnedTalents: [...p.learnedTalents, node.id] }, get().meta);
+    const rank = (p.talentRanks[node.id] ?? 0) + 1;
+    const nextRanks = { ...p.talentRanks, [node.id]: rank };
+    const next = recompute(
+      { ...p, talentPoints: p.talentPoints - 1, talentRanks: nextRanks },
+      get().meta,
+    );
     set({ player: next });
-    get().pushLog(`Learned talent: ${node.name}.`);
+    const maxRank = node.maxRank ?? 1;
+    get().pushLog(
+      maxRank > 1
+        ? `Learned ${node.name} (${rank}/${maxRank}).`
+        : `Learned talent: ${node.name}.`,
+    );
     return true;
   },
 
@@ -1755,5 +1775,6 @@ export const useGame = create<GameState>((set, get) => ({
   },
 }));
 
-export { xpForLevel, bagCap, bagSlotsUsed, bagFreeSlots };
+export { xpForLevel, CHARACTER_LEVEL_CAP, TALENT_UNLOCK_LEVEL } from "./progression";
+export { bagCap, bagSlotsUsed, bagFreeSlots };
 export type { Ability };

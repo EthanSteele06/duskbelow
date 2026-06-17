@@ -2,6 +2,7 @@ import { useGame } from "@/game/store";
 import { CLASSES, COSMETICS, SPECS, FACTIONS } from "@/game/data";
 import { TweenHpBar } from "@/game/TweenHpBar";
 import { ResourceBar } from "@/game/ResourceBar";
+import { CHARACTER_LEVEL_CAP, xpProgressPct } from "@/game/progression";
 
 /**
  * Persistent header showing the player's portrait, name, title, level, HP,
@@ -22,7 +23,7 @@ export function CharacterHeader() {
   const plateCos    = eq.namePlate     ? COSMETICS.find((c) => c.id === eq.namePlate)     : null;
   const petCos      = eq.pet           ? COSMETICS.find((c) => c.id === eq.pet)           : null;
 
-  const xpPct = Math.min(100, (p.xp / (p.level * 25)) * 100);
+  const xpPct = xpProgressPct(p.xp, p.level);
   const showResourceInHeader = screen !== "dungeon";
 
   const plateBorder = plateCos?.tint ?? "#000";
@@ -85,7 +86,7 @@ export function CharacterHeader() {
             <span className="text-gold">{p.gold}g</span>
             <span style={{ color: "var(--color-arcane)" }}>◆{p.gems}</span>
           </div>
-          {p.level < 10 && (
+          {p.level < CHARACTER_LEVEL_CAP && (
             <div className="mt-0.5 h-[3px] w-full bg-stone border border-black">
               <div className="h-full bg-gold" style={{ width: `${xpPct}%` }} />
             </div>

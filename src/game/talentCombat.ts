@@ -1,29 +1,93 @@
 import type { Ability } from "@/game/data";
-import { TALENT_TREES, type TalentEffect, type TalentPassiveHook, type AbilityTalentMod } from "@/game/talents";
+import { TALENT_TREES, type TalentEffect, type TalentPassiveHook, type AbilityTalentMod, type TalentNode } from "@/game/talents";
 
 export type { TalentPassiveHook, AbilityTalentMod, TalentEffect } from "@/game/talents";
 
 export type TalentPassives = Partial<Record<TalentPassiveHook, number>>;
+export type TalentRanks = Record<string, number>;
 
-function learnedEffects(specId: string | null, learned: string[]): TalentEffect[] {
+function scaleAbilityMod(mod: AbilityTalentMod, rank: number): AbilityTalentMod {
+  if (rank <= 1) return mod;
+  const out: AbilityTalentMod = { ...mod };
+  if (mod.multDelta) out.multDelta = mod.multDelta * rank;
+  if (mod.multMult) out.multMult = 1 + (mod.multMult - 1) * rank;
+  if (mod.cooldownDelta) out.cooldownDelta = mod.cooldownDelta * rank;
+  if (mod.lifestealDelta) out.lifestealDelta = mod.lifestealDelta * rank;
+  if (mod.bonusVsChillDelta) out.bonusVsChillDelta = mod.bonusVsChillDelta * rank;
+  if (mod.bonusVsBleedMult) out.bonusVsBleedMult = 1 + (mod.bonusVsBleedMult - 1) * rank;
+  if (mod.healPctOnShield) out.healPctOnShield = mod.healPctOnShield * rank;
+  if (mod.reduceDelta) out.reduceDelta = mod.reduceDelta * rank;
+  if (mod.hotPowerDelta) out.hotPowerDelta = mod.hotPowerDelta * rank;
+  if (mod.hotTurnsDelta) out.hotTurnsDelta = mod.hotTurnsDelta * rank;
+  if (mod.buffNextMultDelta) out.buffNextMultDelta = mod.buffNextMultDelta * rank;
+  if (mod.bonusCritPct) out.bonusCritPct = mod.bonusCritPct * rank;
+  if (mod.statusAmp) {
+    out.statusAmp = {
+      kind: mod.statusAmp.kind,
+      turnsDelta: mod.statusAmp.turnsDelta ? mod.statusAmp.turnsDelta * rank : undefined,
+      powerDelta: mod.statusAmp.powerDelta ? mod.statusAmp.powerDelta * rank : undefined,
+    };
+  }
+  return out;
+}
+
+function effectForRank(node: TalentNode, rank: number): TalentEffect | null {
+  const ef = node.effect;
+  const scale = node.scalePerRank !== false;
+  if (ef.kind === "passive") {
+    return scale ? { ...ef, power: ef.power * rank } : ef;
+  }
+  if (ef.kind === "stat") {
+    return scale
+      ? {
+          kind: "stat",
+          atk: (ef.atk ?? 0) * rank,
+          mag: (ef.mag ?? 0) * rank,
+          maxHp: (ef.maxHp ?? 0) * rank,
+          crit: (ef.crit ?? 0) * rank,
+          dodge: (ef.dodge ?? 0) * rank,
+        }
+      : ef;
+  }
+  if (ef.kind === "ability") {
+    return { kind: "ability", mod: scale ? scaleAbilityMod(ef.mod, rank) : ef.mod };
+  }
+  return ef;
+}
+
+function learnedEffects(specId: string | null, talentRanks: TalentRanks): TalentEffect[] {
   if (!specId) return [];
   const tree = TALENT_TREES[specId];
   if (!tree) return [];
-  return tree.filter((n) => learned.includes(n.id)).map((n) => n.effect);
+  const out: TalentEffect[] = [];
+  for (const node of tree) {
+    const rank = talentRanks[node.id] ?? 0;
+    if (rank <= 0) continue;
+    const ef = effectForRank(node, rank);
+    if (ef) out.push(ef);
+  }
+  return out;
 }
 
-export function getTalentPassives(specId: string | null, learned: string[]): TalentPassives {
+/** @deprecated Use talentRanks directly. */
+export function ranksFromLegacyIds(learned: string[]): TalentRanks {
+  const ranks: TalentRanks = {};
+  for (const id of learned) ranks[id] = (ranks[id] ?? 0) + 1;
+  return ranks;
+}
+
+export function getTalentPassives(specId: string | null, talentRanks: TalentRanks): TalentPassives {
   const out: TalentPassives = {};
-  for (const ef of learnedEffects(specId, learned)) {
+  for (const ef of learnedEffects(specId, talentRanks)) {
     if (ef.kind !== "passive") continue;
     out[ef.hook] = (out[ef.hook] ?? 0) + ef.power;
   }
   return out;
 }
 
-export function sumTalentStatBonuses(specId: string | null, learned: string[]) {
+export function sumTalentStatBonuses(specId: string | null, talentRanks: TalentRanks) {
   const s = { atk: 0, mag: 0, maxHp: 0, crit: 0, dodge: 0 };
-  for (const ef of learnedEffects(specId, learned)) {
+  for (const ef of learnedEffects(specId, talentRanks)) {
     if (ef.kind !== "stat") continue;
     s.atk += ef.atk ?? 0;
     s.mag += ef.mag ?? 0;
@@ -31,8 +95,7 @@ export function sumTalentStatBonuses(specId: string | null, learned: string[]) {
     s.crit += ef.crit ?? 0;
     s.dodge += ef.dodge ?? 0;
   }
-  // Combat passives that also affect sheet stats
-  const passives = getTalentPassives(specId, learned);
+  const passives = getTalentPassives(specId, talentRanks);
   s.crit += passives.crit_bonus ?? 0;
   s.dodge += passives.dodge_bonus ?? 0;
   return s;
@@ -80,10 +143,10 @@ export function resolveCombatAbilities(
   base: Ability[],
   specAbility: Ability | null,
   specId: string | null,
-  learned: string[],
+  talentRanks: TalentRanks,
 ): Ability[] {
   const mods: AbilityTalentMod[] = [];
-  for (const ef of learnedEffects(specId, learned)) {
+  for (const ef of learnedEffects(specId, talentRanks)) {
     if (ef.kind === "ability") mods.push(ef.mod);
   }
 

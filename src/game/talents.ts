@@ -1,4 +1,5 @@
 import type { StatusEffectKind } from "@/game/data";
+import { ARMS_TREE_V2 } from "@/game/talents/arms";
 
 export type TalentPassiveHook =
   | "dot_amp_bleed"
@@ -47,13 +48,29 @@ export interface TalentNode {
   id: string;
   name: string;
   desc: string;
-  tier: 1 | 2 | 3 | 4 | 5;
-  requires?: string;
+  /** Per-rank tooltip lines (falls back to desc). */
+  rankDescs?: string[];
+  /** Defaults to 1. */
+  maxRank?: number;
+  /** Grid position for v2 tree UI. */
+  row?: number;
+  col?: number;
+  /** Parent node ids — all must be at least rank 1. */
+  requires?: string | string[];
+  /** Total points spent in this tree before this node unlocks. */
+  requiresPoints?: number;
+  /** Only one node per group may have ranks. */
+  choiceGroup?: string;
+  /** Legacy tier band (v1 UI). */
+  tier?: 1 | 2 | 3 | 4 | 5;
+  /** Legacy single-parent capstone trees. */
   capstone?: boolean;
+  /** When true, passive/stat power scales by rank; ability numeric deltas scale by rank. */
+  scalePerRank?: boolean;
   effect: TalentEffect;
 }
 
-type RawNode = Omit<TalentNode, "id" | "requires"> & { key: string };
+type RawNode = Omit<TalentNode, "id" | "requires" | "maxRank"> & { key: string; tier: 1 | 2 | 3 | 4 | 5 };
 
 function branchRequires(prefix: string, key: string): string | undefined {
   const map: Record<string, string> = {
@@ -67,32 +84,20 @@ function branchRequires(prefix: string, key: string): string | undefined {
   return req === "" ? undefined : req;
 }
 
-function buildTree(prefix: string, nodes: RawNode[]): TalentNode[] {
+function buildTree(prefix: string, nodes: (RawNode & { tier: 1 | 2 | 3 | 4 | 5 })[]): TalentNode[] {
   return nodes.map((n) => ({
     id: `${prefix}_${n.key}`,
     name: n.name,
     desc: n.desc,
     tier: n.tier,
     capstone: n.capstone,
+    maxRank: 1,
     requires: branchRequires(prefix, n.key),
     effect: n.effect,
   }));
 }
 
 // ── Warrior ─────────────────────────────────────────────────────────────────
-
-const arms = buildTree("arms", [
-  { key: "1", tier: 1, name: "Deep Wounds", desc: "Bleed ticks deal +2 damage.", effect: { kind: "passive", hook: "dot_amp_bleed", power: 2 } },
-  { key: "2a", tier: 2, name: "Overpower", desc: "Deal +25% damage to bleeding foes.", effect: { kind: "passive", hook: "vs_bleeding", power: 25 } },
-  { key: "2b", tier: 2, name: "Taste for Blood", desc: "Killing blows empower your next hit (+30%).", effect: { kind: "passive", hook: "kill_frenzy", power: 30 } },
-  { key: "3a", tier: 3, name: "Trauma", desc: "Cleave bleed lasts 2 turns longer.", effect: { kind: "ability", mod: { abilityId: "cleave", statusAmp: { kind: "bleed", turnsDelta: 2 } } } },
-  { key: "3b", tier: 3, name: "Impale", desc: "Critical strikes rend for 3 bleed.", effect: { kind: "passive", hook: "crit_dot_bleed", power: 3 } },
-  { key: "4a", tier: 4, name: "Bladestorm", desc: "Cleave hits 30% harder.", effect: { kind: "ability", mod: { abilityId: "cleave", multDelta: 0.3 } } },
-  { key: "4b", tier: 4, name: "Martial Precision", desc: "+10% crit chance.", effect: { kind: "passive", hook: "crit_bonus", power: 10 } },
-  { key: "5a", tier: 5, name: "Colossus Smash", capstone: true, desc: "★ Strike shatters armor: +0.6× damage, ignores guard.", effect: { kind: "ability", mod: { abilityId: "strike", multDelta: 0.6, ignoreGuard: true, rename: "Colossus Smash", descOverride: "Armor-shattering strike. 1.6× ATK, pierces guard." } } },
-  { key: "5b", tier: 5, name: "Sweeping Strikes", capstone: true, desc: "★ Cleave becomes a whirlwind: 2.2× ATK + heavy bleed.", effect: { kind: "ability", mod: { abilityId: "cleave", multDelta: 0.6, statusAmp: { kind: "bleed", powerDelta: 3 }, rename: "Sweeping Strikes", descOverride: "Whirlwind cleave. 2.2× ATK, brutal bleed (6/t)." } } },
-  { key: "5c", tier: 5, name: "Die by the Sword", capstone: true, desc: "★ Shield Wall also heals 20% Max HP.", effect: { kind: "ability", mod: { abilityId: "wall", healPctOnShield: 0.2, reduceDelta: 0.1, rename: "Die by the Sword", descOverride: "Brace 80% next hit AND heal 20% Max HP." } } },
-]);
 
 const fury = buildTree("fury", [
   { key: "1", tier: 1, name: "Bloodthirsty", desc: "All attacks leech +8% life.", effect: { kind: "passive", hook: "lifesteal_boost", power: 8 } },
@@ -354,7 +359,7 @@ const vengeance = buildTree("veng", [
 ]);
 
 export const TALENT_TREES: Record<string, TalentNode[]> = {
-  arms,
+  arms: ARMS_TREE_V2,
   fury,
   protection,
   assassination,

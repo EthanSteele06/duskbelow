@@ -235,9 +235,9 @@ export function DungeonScreen() {
   const classResource = resourceDef(player.classId);
   const specAbility = player.specId ? SPEC_ABILITIES[player.specId] : null;
   const abilities: Ability[] = player.classId
-    ? resolveCombatAbilities(CLASS_ABILITIES[player.classId], specAbility, player.specId, player.learnedTalents)
+    ? resolveCombatAbilities(CLASS_ABILITIES[player.classId], specAbility, player.specId, player.talentRanks)
     : [];
-  const talentPassives = getTalentPassives(player.specId, player.learnedTalents);
+  const talentPassives = getTalentPassives(player.specId, player.talentRanks);
   const dotAmp = { bleed: talentPassives.dot_amp_bleed, burn: talentPassives.dot_amp_burn };
   const inv = player.inventory;
   const faction = player.faction ? FACTIONS.find((f) => f.id === player.faction)! : null;
