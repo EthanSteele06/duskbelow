@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { useGame } from "@/game/store";
 import { FloatingNumber, nextFloatingId, type FloatingNum } from "./FloatingNumber";
 import {
-  CLASS_ABILITIES, SPEC_ABILITIES, CLASSES, COSMETICS, FACTIONS, enemyForDepth, rollChest, rollGear, MATERIALS, RECIPES,
+  CLASS_ABILITIES, SPEC_ABILITIES, CLASSES, COSMETICS, FACTIONS, rollGear, MATERIALS, RECIPES,
   RARITY_CLASS, RARITY_LABEL, rollDamage, damageRange, formatGearStatsLine,
   MAX_DEPTH, MAJOR_BOSS_FLOORS, MINI_BOSS_FLOORS, dungeonBgForDepth, depthAmbientStyle, rollClassLegendary, AFFIXES, BOSS_MOMENTS, FACTION_SHRINES,
   equippedGearScore, playerThreat, threatHpScale, threatAtkScale, threatTierFor, THREAT_TIERS, depthHpBonus,
@@ -16,7 +16,14 @@ import { resolveCombatAbilities, getTalentPassives,
   abilityBonusCrit, abilityIgnoresGuard, abilityBonusVsBleed, stunBonusHealPct,
 } from "@/game/talentCombat";
 import {
-  abilityCost, resourceCostLabel, resourceDef, spendsResource,
+  type CombatEnc, type CombatFoe,
+  focusFoe, getFocusIndex, primaryEnemy, primaryFoe,
+  allFoesDead, livingFoeIndices, mapFoes, updateFoeAt, normalizeFocus,
+  totalEnemyHp, totalEnemyMaxHp, encRoomCombatKey,
+} from "@/game/combatTypes";
+import { rollEncounter } from "@/game/combatEncounters";
+import {
+  effectiveAbilityCost, resourceCostLabel, resourceDef, spendsResource,
 } from "@/game/resources";
 import { ResourceBar } from "@/game/ResourceBar";
 import { playMusic, playSfx } from "@/game/audio";
@@ -44,7 +51,7 @@ const ROOM_FADE_IN_MS = 320;
 
 function encRoomKey(e: Encounter): string {
   switch (e.kind) {
-    case "combat": return `combat-${e.depth}-${e.enemy.id}`;
+    case "combat": return encRoomCombatKey(e);
     case "victory": return `victory-${e.depth}`;
     case "chest": return `chest-${e.depth}`;
     case "shrine": return `shrine-${e.depth}-${e.shrine}`;
@@ -67,30 +74,8 @@ interface Loot {
   material?: string;
   recipe?: string;
   gear?: GearItem;
+  packBonus?: number;
 }
-
-type CombatEnc = {
-  kind: "combat"; depth: number;
-  enemy: EnemyDef;
-  enemyHp: number; enemyMaxHp: number;
-  stunnedTurns: number; shieldReduce: number;
-  /** Guard stance — reduces next player attack damage dealt to this foe. */
-  enemyGuardPct: number;
-  /** Parry stance — next player attack is heavily mitigated; riposte damage. */
-  enemyParryActive: boolean;
-  enemyEffects: StatusEffect[];
-  playerEffects: StatusEffect[];
-  nextIntent: EnemyIntent;
-  /** 1 = healthy boss / regular enemy, 2 = boss in phase 2 (≤50% HP). */
-  bossPhase: 1 | 2;
-  /** HP multiplier from player power at fight start (visible threat tier). */
-  threatHpScale: number;
-  threatTier: ThreatTier;
-  /** Rounds elapsed — drives visible turn enrage after turn 4. */
-  combatTurns: number;
-  /** Highest turn-enrage tier we've already announced in the log. */
-  turnEnrageAnnounced: number;
-};
 
 type ShrineKind = "heal" | "blessing" | FactionShrineId;
 type TrapKind = "spikes" | "gas";
@@ -104,110 +89,34 @@ type Encounter =
   | { kind: "trap"; depth: number; trap: TrapKind; sprung: boolean }
   | CombatEnc;
 
-function pickIntent(enemy: EnemyDef): EnemyIntent {
-  const teleg = enemy.intents.filter((i) => i.telegraphable);
-  const normal = enemy.intents.filter((i) => !i.telegraphable);
-  if (teleg.length && Math.random() < 0.35) return teleg[Math.floor(Math.random() * teleg.length)];
-  const pool = normal.length ? normal : enemy.intents;
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
-function threatKindForDepth(depth: number, mode: DungeonMode = "normal"): ThreatKind {
-  if (isMajorBossFloor(depth, mode)) return "major";
-  if (isMiniBossFloor(depth, mode)) return "mini";
-  return "trash";
-}
-
-function buildCombat(
-  depth: number,
-  snap: PlayerThreatSnap,
-  faction?: FactionId | null,
-  affixes: string[] = [],
-  zones: ZoneContext = {},
-  mode: DungeonMode = "normal",
-): CombatEnc {
-  const e = enemyForDepth(depth, faction, zones, mode);
-  const kind = threatKindForDepth(depth, mode);
-  const hpScale = threatHpScale(playerThreat(snap), depth, kind);
-  let hp = Math.floor((e.hpBase + depthHpBonus(depth)) * hpScale);
-  if (zones.voidSanctum && depth >= 21 && depth <= 25) hp = Math.floor(hp * 1.08);
-  if (mode === "ascension" && depth > MAX_DEPTH) hp = Math.floor(hp * 1.15);
-  if (affixes.includes("fortified")) hp = Math.floor(hp * 1.3);
-  const tier = threatTierFor(hpScale);
-  return {
-    kind: "combat", depth, enemy: e, enemyHp: hp, enemyMaxHp: hp,
-    stunnedTurns: 0, shieldReduce: 0, enemyGuardPct: 0, enemyParryActive: false,
-    enemyEffects: [], playerEffects: [],
-    nextIntent: e.id === "bone_warden"
-      ? (e.intents.find((i) => i.telegraphable) ?? pickIntent(e))
-      : pickIntent(e),
-    bossPhase: 1,
-    threatHpScale: hpScale,
-    threatTier: tier,
-    combatTurns: 0,
-    turnEnrageAnnounced: 0,
-  };
-}
-
-function rollEncounter(
-  depth: number,
-  snap: PlayerThreatSnap,
-  faction?: FactionId | null,
-  affixes: string[] = [],
-  bias: ForkBias = "onward",
-  chestBias = 0,
-  zones: ZoneContext = {},
-  mode: DungeonMode = "normal",
-): Encounter {
-  const bosses = bossFloorsForMode(mode);
-  if (bosses[depth]) return buildCombat(depth, snap, faction, affixes, zones, mode);
-  // Bias bends the encounter weights: Left = more fights & less traps, Right = more traps & fewer fights.
-  const combatW = 0.58 * (bias === "left" ? 1.6 : bias === "right" ? 0.7 : 1);
-  const trapW = 0.12 * (bias === "left" ? 0.5 : bias === "right" ? 1.8 : 1);
-  const shrineW = 0.04 * (bias === "left" ? 0.5 : bias === "right" ? 1.8 : 1);
-  const chestW = 0.20 + chestBias;
-  const pathW = Math.max(0.03, 0.06 - chestBias * 0.25);
-  const total = combatW + chestW + shrineW + trapW + pathW;
-  const r = Math.random() * total;
-  let acc = 0;
-  if (r < (acc += combatW)) return buildCombat(depth, snap, faction, affixes, zones, mode);
-  if (r < (acc += chestW)) return { kind: "chest", depth, preview: rollChest(depth) };
-  if (r < (acc += shrineW)) {
-    if (faction) {
-      const def = FACTION_SHRINES.find((s) => s.faction === faction);
-      if (def && Math.random() < 0.5) return { kind: "shrine", depth, shrine: def.id };
-    }
-    return { kind: "shrine", depth, shrine: Math.random() < 0.6 ? "heal" : "blessing" };
-  }
-  if (r < (acc += trapW)) return { kind: "trap", depth, trap: Math.random() < 0.5 ? "spikes" : "gas", sprung: false };
-  return { kind: "path", depth };
-}
-
 function chillMult(effects: StatusEffect[]) {
   const c = effects.find((e) => e.kind === "chill");
   return c ? c.power : 1;
 }
 
-function tickEffectsOnEnemy(
+function tickEffectsOnFoes(
   e: CombatEnc,
   log: (m: string) => void,
   dotAmp: { bleed?: number; burn?: number } = {},
 ): CombatEnc {
-  let hp = e.enemyHp;
-  const next: StatusEffect[] = [];
-  for (const ef of e.enemyEffects) {
-    if (ef.kind === "bleed") {
-      const dmg = ef.power + (dotAmp.bleed ?? 0);
-      hp = Math.max(0, hp - dmg);
-      log(`${e.enemy.name} bleeds for ${dmg}.`);
-    } else if (ef.kind === "burn") {
-      const dmg = ef.power + (dotAmp.burn ?? 0);
-      hp = Math.max(0, hp - dmg);
-      log(`${e.enemy.name} burns for ${dmg}.`);
+  return mapFoes(e, (foe) => {
+    if (foe.hp <= 0) return foe;
+    let hp = foe.hp;
+    const next: StatusEffect[] = [];
+    for (const ef of foe.effects) {
+      if (ef.kind === "bleed") {
+        const dmg = ef.power + (dotAmp.bleed ?? 0);
+        hp = Math.max(0, hp - dmg);
+        log(`${foe.enemy.name} bleeds for ${dmg}.`);
+      } else if (ef.kind === "burn") {
+        const dmg = ef.power + (dotAmp.burn ?? 0);
+        hp = Math.max(0, hp - dmg);
+        log(`${foe.enemy.name} burns for ${dmg}.`);
+      }
+      if (ef.turns - 1 > 0) next.push({ ...ef, turns: ef.turns - 1 });
     }
-    if (ef.turns - 1 > 0) next.push({ ...ef, turns: ef.turns - 1 });
-  }
-  return { ...e, enemyHp: hp, enemyEffects: next };
+    return { ...foe, hp, effects: next };
+  });
 }
 
 export function DungeonScreen() {
@@ -228,6 +137,7 @@ export function DungeonScreen() {
   const consumeMult = useGame((s) => s.consumeNextAttackMult);
   const equip = useGame((s) => s.equip);
   const spendResource = useGame((s) => s.spendResource);
+  const gainResource = useGame((s) => s.gainResource);
   const gainResourceFromDamageDealt = useGame((s) => s.gainResourceFromDamageDealt);
   const tickResourceRegenTurn = useGame((s) => s.tickResourceRegenTurn);
 
@@ -238,6 +148,8 @@ export function DungeonScreen() {
     ? resolveCombatAbilities(CLASS_ABILITIES[player.classId], specAbility, player.specId, player.talentRanks)
     : [];
   const talentPassives = getTalentPassives(player.specId, player.talentRanks);
+  const costReduction = player.abilityCostReduction ?? 0;
+  const abilityResourceCost = (ab: Ability) => effectiveAbilityCost(ab, costReduction);
   const dotAmp = { bleed: talentPassives.dot_amp_bleed, burn: talentPassives.dot_amp_burn };
   const inv = player.inventory;
   const faction = player.faction ? FACTIONS.find((f) => f.id === player.faction)! : null;
@@ -255,7 +167,7 @@ export function DungeonScreen() {
   useEffect(() => {
     const isBoss = enc.kind === "combat" && (isMajorBossFloor(enc.depth, player.dungeonMode) || isMiniBossFloor(enc.depth, player.dungeonMode));
     playMusic(isBoss ? "boss" : "dungeon");
-  }, [enc.kind, enc.kind === "combat" ? enc.enemy.id : null]);
+  }, [enc.kind, enc.kind === "combat" ? primaryEnemy(enc).id : null]);
   const playerFaction = player.faction;
   const [hit, setHit] = useState(false);
   const [combatLog, setCombatLog] = useState<LogEntry[]>([]);
@@ -452,12 +364,17 @@ export function DungeonScreen() {
     );
     let afterRoomIn: (() => void) | undefined;
     if (next.kind === "combat") {
-      const moment = BOSS_MOMENTS[next.enemy.id];
-      if (moment && !seenBossIntros.includes(next.enemy.id)) {
-        markBossSeen(next.enemy.id);
-        afterRoomIn = () => setBossIntro({ id: next.enemy.id, intro: moment.intro });
+      const lead = primaryEnemy(next);
+      const moment = BOSS_MOMENTS[lead.id];
+      if (moment && !seenBossIntros.includes(lead.id)) {
+        markBossSeen(lead.id);
+        afterRoomIn = () => setBossIntro({ id: lead.id, intro: moment.intro });
       }
-      addLog(`A ${next.enemy.name} blocks your path!`);
+      if (next.isPack) {
+        addLog(`${next.foes.length} foes block your path — ${next.foes.map((f) => f.enemy.name).join(", ")}!`);
+      } else {
+        addLog(`A ${lead.name} blocks your path!`);
+      }
       if (next.threatTier !== "none") {
         const def = THREAT_TIERS[next.threatTier];
         addLog(`⚠ ${def.label} — ${def.intro}`);
@@ -468,14 +385,95 @@ export function DungeonScreen() {
     transitionToEnc(next, afterRoomIn);
   };
 
-  const pickNextIntent = (e: CombatEnc): EnemyIntent => {
-    const moment = BOSS_MOMENTS[e.enemy.id];
-    const pool = moment && e.bossPhase === 2 ? [...e.enemy.intents, moment.phaseIntent] : e.enemy.intents;
+  const pickNextIntent = (foe: CombatFoe): EnemyIntent => {
+    const moment = BOSS_MOMENTS[foe.enemy.id];
+    const pool = moment && foe.bossPhase === 2 ? [...foe.enemy.intents, moment.phaseIntent] : foe.enemy.intents;
     const teleg = pool.filter((i) => i.telegraphable);
     const normal = pool.filter((i) => !i.telegraphable);
     return teleg.length && Math.random() < 0.4
       ? teleg[Math.floor(Math.random() * teleg.length)]
       : (normal.length ? normal : pool)[Math.floor(Math.random() * (normal.length || pool.length))];
+  };
+
+  const resolveFoeIntent = (e: CombatEnc, foeIndex: number, shieldReduce: number): { enc: CombatEnc; shieldReduce: number } => {
+    const foe = e.foes[foeIndex];
+    if (!foe || foe.hp <= 0) return { enc: e, shieldReduce };
+
+    const moment = BOSS_MOMENTS[foe.enemy.id];
+    let nextEnc = e;
+    if (moment && foe.bossPhase === 1 && foe.hp <= foe.maxHp / 2) {
+      addLog(`★ ${moment.phaseLine}`);
+      nextEnc = updateFoeAt(nextEnc, foeIndex, { bossPhase: 2 });
+    }
+    const f = nextEnc.foes[foeIndex];
+
+    if (f.stunnedTurns > 0) {
+      addLog(`${f.enemy.name} is frozen and cannot act.`);
+      return {
+        enc: updateFoeAt(nextEnc, foeIndex, {
+          stunnedTurns: f.stunnedTurns - 1,
+          nextIntent: pickNextIntent(f),
+        }),
+        shieldReduce: 0,
+      };
+    }
+
+    if (f.parryActive) {
+      addLog(`${f.enemy.name}'s parry stance fades.`);
+      nextEnc = updateFoeAt(nextEnc, foeIndex, { parryActive: false });
+    }
+
+    const intent = f.nextIntent;
+    const kind = intent.kind ?? "attack";
+    const nextIntent = pickNextIntent(f);
+
+    if (kind === "guard") {
+      addLog(intent.line.replace("{n}", f.enemy.name));
+      return {
+        enc: updateFoeAt(nextEnc, foeIndex, { guardPct: intent.guardPct ?? 0.4, nextIntent }),
+        shieldReduce: 0,
+      };
+    }
+    if (kind === "parry") {
+      addLog(intent.line.replace("{n}", f.enemy.name));
+      return {
+        enc: updateFoeAt(nextEnc, foeIndex, { parryActive: true, nextIntent }),
+        shieldReduce: 0,
+      };
+    }
+    if (kind === "heal") {
+      const amt = Math.max(1, Math.floor(f.maxHp * (intent.healPct ?? 0.12)));
+      const newHp = Math.min(f.maxHp, f.hp + amt);
+      addLog(intent.line.replace("{n}", f.enemy.name).replace("{h}", String(amt)));
+      addFloater("heal", amt);
+      return {
+        enc: updateFoeAt(nextEnc, foeIndex, { hp: newHp, nextIntent }),
+        shieldReduce: 0,
+      };
+    }
+
+    const affixes = player.affixes ?? [];
+    let mult = intent.mult;
+    if (affixes.includes("sapping")) mult *= 1.2;
+    if (affixes.includes("bloodlust") && f.hp / f.maxHp < 0.3) mult *= 1.5;
+    if (moment && f.bossPhase === 2) mult *= moment.phaseDmgMult;
+    if (player.activeOaths?.includes("deep")) mult *= 1.15;
+    mult *= threatAtkScale(nextEnc.threatHpScale) * turnEnrageMult(nextEnc.combatTurns);
+    const baseDmg = (f.enemy.atkBase + nextEnc.depth * 0.5) * mult;
+    let dmg = rollDamage(baseDmg);
+    if (shieldReduce > 0) dmg = Math.max(1, Math.floor(dmg * (1 - shieldReduce)));
+    const taken = damage(dmg);
+    if (taken > 0) {
+      playSfx("enemy-hit");
+      vibrate(18);
+      addFloater("enemy", taken);
+      setHit(true); setTimeout(() => setHit(false), 350);
+    }
+    addLog(intent.line.replace("{n}", f.enemy.name).replace("{d}", String(taken)) + (shieldReduce > 0 ? " (shielded!)" : ""));
+    return {
+      enc: updateFoeAt(nextEnc, foeIndex, { nextIntent }),
+      shieldReduce: 0,
+    };
   };
 
   const intentKindLabel = (kind: EnemyIntentKind | undefined) => {
@@ -517,7 +515,8 @@ export function DungeonScreen() {
     const announced = Math.max(e.turnEnrageAnnounced, 0);
     if (mult > 1 && mult > announced) {
       const label = turnEnrageLabel(nextTurns);
-      if (label) addLog(`★ ${e.enemy.name} ${label}!`);
+      const name = e.isPack ? "The pack" : focusFoe(e).enemy.name;
+      if (label) addLog(`★ ${name} ${label}!`);
       return { ...e, combatTurns: nextTurns, turnEnrageAnnounced: mult };
     }
     return { ...e, combatTurns: nextTurns };
@@ -525,81 +524,41 @@ export function DungeonScreen() {
 
   const enemyTurn = (eIn: CombatEnc): CombatEnc => {
     if (finishingKillRef.current || victoryBeatRef.current) return eIn;
-    if (eIn.enemyHp <= 0) {
+    if (allFoesDead(eIn)) {
       finishKill(eIn);
       return eIn;
     }
     let e = bumpTurnEnrage(eIn);
-    if (e.enemyParryActive) {
-      addLog(`${e.enemy.name}'s parry stance fades.`);
-      e = { ...e, enemyParryActive: false };
-    }
-    // Tick enemy DoTs first; check for kill
-    e = tickEffectsOnEnemy(e, addLog, dotAmp);
-    if (e.enemyHp <= 0) {
+    e = tickEffectsOnFoes(e, addLog, dotAmp);
+    if (allFoesDead(e)) {
       finishKill(e);
       return e;
     }
-    const moment = BOSS_MOMENTS[e.enemy.id];
-    if (moment && e.bossPhase === 1 && e.enemyHp <= e.enemyMaxHp / 2) {
-      addLog(`★ ${moment.phaseLine}`);
-      e = { ...e, bossPhase: 2 };
-    }
-    if (e.stunnedTurns > 0) {
-      addLog(`${e.enemy.name} is frozen and cannot act.`);
-      return { ...e, stunnedTurns: e.stunnedTurns - 1, shieldReduce: 0, nextIntent: pickNextIntent(e) };
-    }
 
-    const intent = e.nextIntent;
-    const kind = intent.kind ?? "attack";
-    const nextIntent = pickNextIntent(e);
-
-    if (kind === "guard") {
-      addLog(intent.line.replace("{n}", e.enemy.name));
-      return {
-        ...e, shieldReduce: 0,
-        enemyGuardPct: intent.guardPct ?? 0.4,
-        nextIntent,
-      };
+    let shieldReduce = e.shieldReduce;
+    for (const idx of livingFoeIndices(e)) {
+      const res = resolveFoeIntent(e, idx, shieldReduce);
+      e = res.enc;
+      shieldReduce = res.shieldReduce;
+      if (allFoesDead(e)) {
+        finishKill({ ...e, shieldReduce: 0 });
+        return e;
+      }
     }
-    if (kind === "parry") {
-      addLog(intent.line.replace("{n}", e.enemy.name));
-      return { ...e, shieldReduce: 0, enemyParryActive: true, nextIntent };
-    }
-    if (kind === "heal") {
-      const amt = Math.max(1, Math.floor(e.enemyMaxHp * (intent.healPct ?? 0.12)));
-      const newHp = Math.min(e.enemyMaxHp, e.enemyHp + amt);
-      addLog(intent.line.replace("{n}", e.enemy.name).replace("{h}", String(amt)));
-      addFloater("heal", amt);
-      return { ...e, enemyHp: newHp, shieldReduce: 0, nextIntent };
-    }
-
-    // Attack intent
-    const affixes = player.affixes ?? [];
-    let mult = intent.mult;
-    if (affixes.includes("sapping")) mult *= 1.2;
-    if (affixes.includes("bloodlust") && e.enemyHp / e.enemyMaxHp < 0.3) mult *= 1.5;
-    if (moment && e.bossPhase === 2) mult *= moment.phaseDmgMult;
-    if (player.activeOaths?.includes("deep")) mult *= 1.15;
-    mult *= threatAtkScale(e.threatHpScale) * turnEnrageMult(e.combatTurns);
-    const baseDmg = (e.enemy.atkBase + e.depth * 0.5) * mult;
-    let dmg = rollDamage(baseDmg);
-    if (e.shieldReduce > 0) dmg = Math.max(1, Math.floor(dmg * (1 - e.shieldReduce)));
-    const taken = damage(dmg);
-    if (taken > 0) {
-      playSfx("enemy-hit");
-      vibrate(18);
-      addFloater("enemy", taken);
-      setHit(true); setTimeout(() => setHit(false), 350);
-    }
-    addLog(intent.line.replace("{n}", e.enemy.name).replace("{d}", String(taken)) + (e.shieldReduce > 0 ? " (shielded!)" : ""));
-    return { ...e, shieldReduce: 0, nextIntent };
+    return { ...normalizeFocus(e), shieldReduce: 0 };
   };
 
-  const applyAttack = (e: CombatEnc, ab: Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> }): CombatEnc => {
+  const strikeOneFoe = (
+    e: CombatEnc,
+    foeIndex: number,
+    ab: Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> },
+    opts: { consumeNextAttackMult?: boolean; logSuffix?: string },
+  ): { enc: CombatEnc; totalDmg: number; anyCrit: boolean } => {
+    const foe = e.foes[foeIndex];
+    if (!foe || foe.hp <= 0) return { enc: e, totalDmg: 0, anyCrit: false };
+
     const base = ab.effect.useMag ? player.mag : player.atk;
-    // Legendary class-signature buff: applies only when using the empowered ability
-    // and the equipped legendary matches the player's class.
+    const aoeMult = ab.effect.targets === "all" ? (ab.effect.aoeMult ?? 1) : 1;
     const legendary = Object.values(player.equipment).find(
       (g) => g && g.classId === player.classId && g.empowersAbilityId === ab.id,
     );
@@ -613,80 +572,70 @@ export function DungeonScreen() {
         case "warrior":     dmgMult = 1.6; break;
         case "rogue":       bonusCritPct = 35; break;
         case "mage":        dmgMult = 1.5; extraChillTurns = 1; break;
-        case "priest":      postHitHeal = -1; break; // sentinel: heal 40% of dmg
+        case "priest":      postHitHeal = -1; break;
         case "druid":       dmgMult = 1.4; postHitHeal = 6; break;
         case "deathknight": dmgMult = 1.35; lifestealMult = 2; break;
       }
     }
-    const masteryMult = bestiaryMasteryMult(meta.journal.enemyKills[e.enemy.id] ?? 0);
-    // Roll damage in a ±20% range so hits feel less robotic.
-    let dmg = rollDamage(base * ab.effect.mult * dmgMult * masteryMult);
-    // Crit
+    const masteryMult = bestiaryMasteryMult(meta.journal.enemyKills[foe.enemy.id] ?? 0);
+    let dmg = rollDamage(base * ab.effect.mult * dmgMult * masteryMult * aoeMult);
     const echoCrit = consumeFirstHitCrit();
     const critChance = player.crit + bonusCritPct + abilityBonusCrit(ab);
     const crit = echoCrit || (critChance > 0 && Math.random() * 100 < critChance);
     if (crit) dmg = Math.floor(dmg * 1.5);
     if (echoCrit) addLog("✦ Echo of Light — your first strike finds the mark!");
-    if (e.enemyEffects.some((x) => x.kind === "bleed")) {
+    if (foe.effects.some((x) => x.kind === "bleed")) {
       dmg = Math.floor(dmg * abilityBonusVsBleed(ab));
       if (talentPassives.vs_bleeding) dmg = Math.floor(dmg * (1 + talentPassives.vs_bleeding / 100));
     }
-    if (e.enemyEffects.some((x) => x.kind === "burn") && talentPassives.vs_burning) {
+    if (foe.effects.some((x) => x.kind === "burn") && talentPassives.vs_burning) {
       dmg = Math.floor(dmg * (1 + talentPassives.vs_burning / 100));
     }
-    if (e.enemyEffects.some((x) => x.kind === "chill") && talentPassives.vs_chilled) {
+    if (foe.effects.some((x) => x.kind === "chill") && talentPassives.vs_chilled) {
       dmg = Math.floor(dmg * (1 + talentPassives.vs_chilled / 100));
     }
     if (talentPassives.low_hp_dmg && player.hp / player.maxHp <= 0.4) {
       dmg = Math.floor(dmg * (1 + talentPassives.low_hp_dmg / 100));
     }
-    // Frenzy / Rally next-attack multiplier
-    if (player.nextAttackMult !== 1) {
+    if (opts.consumeNextAttackMult !== false && player.nextAttackMult !== 1) {
       dmg = Math.floor(dmg * player.nextAttackMult);
       consumeMult();
     }
-    // Chill on enemy increases damage taken
-    const cMult = chillMult(e.enemyEffects);
+    const cMult = chillMult(foe.effects);
     if (cMult !== 1) dmg = Math.floor(dmg * cMult);
-    // Bonus damage vs chilled targets (e.g. Ice Lance)
-    if (ab.effect.bonusVsChill && e.enemyEffects.some((x) => x.kind === "chill")) {
+    if (ab.effect.bonusVsChill && foe.effects.some((x) => x.kind === "chill")) {
       dmg = Math.floor(dmg * ab.effect.bonusVsChill);
     }
 
-    let guardPct = e.enemyGuardPct;
-    let parryActive = e.enemyParryActive;
+    let guardPct = foe.guardPct;
+    let parryActive = foe.parryActive;
     if (guardPct > 0 && !abilityIgnoresGuard(ab)) {
       const absorbed = Math.floor(dmg * guardPct);
       dmg = Math.max(1, dmg - absorbed);
-      addLog(`${e.enemy.name}'s guard absorbs ${absorbed} damage!`);
+      addLog(`${foe.enemy.name}'s guard absorbs ${absorbed} damage!`);
       guardPct = 0;
     } else if (guardPct > 0 && abilityIgnoresGuard(ab)) {
-      addLog(`${e.enemy.name}'s guard shatters under your blow!`);
+      addLog(`${foe.enemy.name}'s guard shatters under your blow!`);
       guardPct = 0;
     }
     if (parryActive) {
       const mitigated = Math.max(1, Math.floor(dmg * 0.25));
-      const riposte = Math.max(2, Math.floor((e.enemy.atkBase + e.depth * 0.3) * 0.65));
-      addLog(`${e.enemy.name} parries — only ${mitigated} gets through!`);
+      const riposte = Math.max(2, Math.floor((foe.enemy.atkBase + e.depth * 0.3) * 0.65));
+      addLog(`${foe.enemy.name} parries — only ${mitigated} gets through!`);
       const taken = damage(riposte);
       if (taken > 0) {
         addFloater("enemy", taken);
-        addLog(`${e.enemy.name} ripostes for ${taken}!`);
+        addLog(`${foe.enemy.name} ripostes for ${taken}!`);
       }
       dmg = mitigated;
       parryActive = false;
     }
 
-    // Trigger combat animation
-    triggerFx(ab.effect.useMag ? "spell" : "melee");
-    setHit(true); setTimeout(() => setHit(false), 350);
-
     addFloater("player", dmg, dmgSkin);
     const flavor = ab.effect.flavor.replace("{p}", player.name);
-    addLog(`${flavor} for ${dmg}${crit ? " CRIT" : ""}${legendary ? " ✦" : ""} damage!`);
-    gainResourceFromDamageDealt(dmg, { spenderAbility: spendsResource(ab) });
+    const suffix = opts.logSuffix ?? (foeIndex === getFocusIndex(e) ? "" : ` (${foe.enemy.name})`);
+    addLog(`${flavor}${suffix} for ${dmg}${crit ? " CRIT" : ""}${legendary ? " ✦" : ""} damage!`);
 
-    // Lifesteal
     const effectiveLifesteal = ((ab.effect.lifesteal ?? 0) + (talentPassives.lifesteal_boost ?? 0) / 100) * lifestealMult;
     if (effectiveLifesteal > 0) {
       const healed = Math.max(1, Math.floor(dmg * effectiveLifesteal));
@@ -694,7 +643,6 @@ export function DungeonScreen() {
       addFloater("heal", healed);
       addLog(`${player.name} drains ${healed} life.`);
     }
-    // Legendary post-hit heal
     if (postHitHeal === -1) {
       const healed = Math.max(1, Math.floor(dmg * 0.4));
       heal(healed); addFloater("heal", healed);
@@ -702,47 +650,78 @@ export function DungeonScreen() {
       heal(postHitHeal); addFloater("heal", postHitHeal);
     }
 
-    let nextEffects = e.enemyEffects;
+    let nextEffects = foe.effects;
     if (ab.effect.applyStatus) {
       const s = ab.effect.applyStatus;
       let power = s.power;
       if (s.kind === "chill" && talentPassives.dot_amp_chill) power += talentPassives.dot_amp_chill * 0.1;
       const turns = s.kind === "chill" ? s.turns + extraChillTurns : s.turns;
       nextEffects = nextEffects.filter((x) => x.kind !== s.kind).concat({ kind: s.kind, turns, power });
-      addLog(`${e.enemy.name} is afflicted with ${s.kind}.`);
+      addLog(`${foe.enemy.name} is afflicted with ${s.kind}.`);
     }
     if (crit && talentPassives.crit_dot_bleed) {
       nextEffects = nextEffects.filter((x) => x.kind !== "bleed").concat({
         kind: "bleed", turns: 3, power: talentPassives.crit_dot_bleed,
       });
-      addLog(`${e.enemy.name} is torn by a critical rend!`);
+      addLog(`${foe.enemy.name} is torn by a critical rend!`);
     }
     if (crit && talentPassives.crit_dot_burn) {
       nextEffects = nextEffects.filter((x) => x.kind !== "burn").concat({
         kind: "burn", turns: 3, power: talentPassives.crit_dot_burn,
       });
-      addLog(`${e.enemy.name} ignites from the critical hit!`);
+      addLog(`${foe.enemy.name} ignites from the critical hit!`);
     }
-    return {
-      ...e,
-      enemyHp: Math.max(0, e.enemyHp - dmg),
-      enemyEffects: nextEffects,
-      enemyGuardPct: guardPct,
-      enemyParryActive: parryActive,
-    };
+    if (crit && talentPassives.crit_dot_chill) {
+      nextEffects = nextEffects.filter((x) => x.kind !== "chill").concat({
+        kind: "chill", turns: 2, power: 1.2 + (talentPassives.crit_dot_chill - 2) * 0.1,
+      });
+      addLog(`${foe.enemy.name} is chilled by the critical frost!`);
+    }
+
+    const nextEnc = updateFoeAt(e, foeIndex, {
+      hp: Math.max(0, foe.hp - dmg),
+      effects: nextEffects,
+      guardPct,
+      parryActive,
+    });
+    return { enc: nextEnc, totalDmg: dmg, anyCrit: crit };
   };
 
-  const clearDeadEnemy = (e: CombatEnc): CombatEnc => ({
-    ...e,
-    enemyHp: 0,
-    enemyEffects: [],
-    enemyGuardPct: 0,
-    enemyParryActive: false,
+  const applyAttack = (e: CombatEnc, ab: Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> }): CombatEnc => {
+    triggerFx(ab.effect.useMag ? "spell" : "melee");
+    setHit(true); setTimeout(() => setHit(false), 350);
+
+    const targetIndices = ab.effect.targets === "all"
+      ? livingFoeIndices(e)
+      : [getFocusIndex(e)];
+
+    let next = e;
+    let totalDmg = 0;
+    for (let i = 0; i < targetIndices.length; i++) {
+      const idx = targetIndices[i];
+      const res = strikeOneFoe(next, idx, ab, {
+        consumeNextAttackMult: i === 0,
+        logSuffix: ab.effect.targets === "all" && targetIndices.length > 1 ? ` (${next.foes[idx].enemy.name})` : "",
+      });
+      next = res.enc;
+      totalDmg += res.totalDmg;
+    }
+    if (totalDmg > 0) gainResourceFromDamageDealt(totalDmg, { spenderAbility: spendsResource(ab) });
+    return normalizeFocus(next);
+  };
+
+  const clearDeadFoes = (e: CombatEnc): CombatEnc => mapFoes(e, (f) => ({
+    ...f,
+    hp: 0,
+    effects: [],
+    guardPct: 0,
+    parryActive: false,
     stunnedTurns: 0,
-  });
+  }));
 
   const scheduleVictoryTransition = (e: CombatEnc, loot: Loot) => {
-    const beat = { depth: e.depth, enemy: e.enemy, enemyMaxHp: e.enemyMaxHp, loot };
+    const lead = primaryEnemy(e);
+    const beat = { depth: e.depth, enemy: lead, enemyMaxHp: primaryFoe(e).maxHp, loot };
     victoryBeatRef.current = beat;
     setVictoryBeat(beat);
     if (victoryTimerRef.current !== null) clearTimeout(victoryTimerRef.current);
@@ -764,14 +743,14 @@ export function DungeonScreen() {
     clearTurnTimers();
     advanceAbilityCooldowns(usedAbilityId, usedCooldown);
     const stepped = tickPlayerEffects(e);
-    if (stepped.enemyHp <= 0) {
+    if (allFoesDead(stepped)) {
       if (!finishingKillRef.current) finishKill(stepped);
       return;
     }
     setEnc(stepped);
     setArmedAbility(null);
 
-    const intent = stepped.nextIntent;
+    const intent = focusFoe(stepped).nextIntent;
     const kind = intent.kind ?? "attack";
     setTurnPhase("telegraph");
     if (intent.telegraphable || kind === "attack") {
@@ -788,8 +767,8 @@ export function DungeonScreen() {
         turnTimersRef.current.push(flashId);
       }
       const after = enemyTurn(stepped);
-      if (after.enemyHp <= 0 || finishingKillRef.current) {
-        if (after.enemyHp <= 0 && !finishingKillRef.current) finishKill(after);
+      if (allFoesDead(after) || finishingKillRef.current) {
+        if (allFoesDead(after) && !finishingKillRef.current) finishKill(after);
         return;
       }
       setEnc(after);
@@ -805,17 +784,23 @@ export function DungeonScreen() {
 
   const passTurn = () => {
     if (enc.kind !== "combat" || turnPhase !== "idle") return;
-    if (victoryBeatRef.current || finishingKillRef.current || enc.enemyHp <= 0) return;
+    if (victoryBeatRef.current || finishingKillRef.current || allFoesDead(enc)) return;
     addLog(`${player.name} holds, reading the foe's rhythm.`);
     if (talentPassives.pass_cd_tick) advanceAbilityCooldowns();
     beginEnemyPhase(enc);
   };
 
+  const setCombatFocus = (index: number) => {
+    if (enc.kind !== "combat" || turnPhase !== "idle") return;
+    if (!enc.foes[index] || enc.foes[index].hp <= 0) return;
+    setEnc({ ...enc, focusIndex: index });
+  };
+
   const useAbility = (ab: Ability) => {
     if (enc.kind !== "combat" || turnPhase !== "idle") return;
-    if (victoryBeatRef.current || finishingKillRef.current || enc.enemyHp <= 0) return;
+    if (victoryBeatRef.current || finishingKillRef.current || allFoesDead(enc)) return;
     if ((player.abilityCooldowns?.[ab.id] ?? 0) > 0) return;
-    const cost = abilityCost(ab);
+    const cost = abilityResourceCost(ab);
     if (cost > 0 && player.resource < cost) {
       addLog(`Not enough ${classResource?.label ?? "resource"}.`);
       return;
@@ -839,7 +824,7 @@ export function DungeonScreen() {
         playSfx("hit");
         const after = applyAttack(e, ab as Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> });
         setEnc(after);
-        if (after.enemyHp <= 0) {
+        if (allFoesDead(after)) {
           advanceAbilityCooldowns(ab.id, ab.cooldown);
           finishKill(after);
           return;
@@ -863,7 +848,10 @@ export function DungeonScreen() {
         return;
       }
       case "stun": {
-        addLog(`${flavor}. ${e.enemy.name} is frozen!`);
+        const stunAll = ab.effect.stunAll ?? false;
+        const victims = stunAll ? livingFoeIndices(e) : [getFocusIndex(e)];
+        const names = victims.map((i) => e.foes[i].enemy.name).join(", ");
+        addLog(`${flavor}. ${stunAll ? `Foes freeze: ${names}` : `${focusFoe(e).enemy.name} is frozen`}!`);
         const stunHeal = stunBonusHealPct(ab);
         if (stunHeal > 0) {
           const healed = Math.max(1, Math.floor(player.maxHp * stunHeal));
@@ -872,11 +860,18 @@ export function DungeonScreen() {
           addLog(`${player.name} focuses — restored ${healed} HP.`);
         }
         advanceAbilityCooldowns(ab.id, ab.cooldown);
-        let stepped: CombatEnc = { ...e, stunnedTurns: 1 };
+        let stepped = mapFoes(e, (f, i) => (
+          victims.includes(i) && f.hp > 0 ? { ...f, stunnedTurns: Math.max(f.stunnedTurns, 1) } : f
+        ));
         stepped = tickPlayerEffects(stepped);
-        stepped = tickEffectsOnEnemy(stepped, addLog, dotAmp);
-        if (stepped.enemyHp <= 0) { finishKill(stepped); return; }
-        setEnc({ ...stepped, stunnedTurns: stepped.stunnedTurns - 1, nextIntent: pickNextIntent(stepped) });
+        stepped = tickEffectsOnFoes(stepped, addLog, dotAmp);
+        if (allFoesDead(stepped)) { finishKill(stepped); return; }
+        stepped = mapFoes(stepped, (f, i) => (
+          victims.includes(i) && f.hp > 0 && f.stunnedTurns > 0
+            ? { ...f, stunnedTurns: f.stunnedTurns - 1, nextIntent: pickNextIntent(f) }
+            : f
+        ));
+        setEnc(normalizeFocus(stepped));
         return;
       }
       case "shield": {
@@ -916,7 +911,7 @@ export function DungeonScreen() {
   const addToBag = useGame((s) => s.addToBag);
 
   const retreatFromBoneWarden = () => {
-    if (enc.kind !== "combat" || enc.enemy.id !== "bone_warden" || enc.depth !== 5 || player.eliteRetreatUsed) return;
+    if (enc.kind !== "combat" || primaryEnemy(enc).id !== "bone_warden" || enc.depth !== 5 || player.eliteRetreatUsed) return;
     markEliteRetreat();
     restoreBetweenRooms();
     addLog("You fall back before the Warden's glaive finds bone. Live to descend again.");
@@ -931,39 +926,45 @@ export function DungeonScreen() {
     setTurnPhase("resolving");
     setArmedAbility(null);
     // Lock the encounter immediately — loot rolling must not block death resolution.
-    setEnc(clearDeadEnemy(e));
+    setEnc(clearDeadFoes(e));
 
     const goldMult = forkBias === "left" ? 1.25 : 1;
     const xpMult = forkBias === "right" ? 1.3 : 1;
     const gearChanceBonus = forkBias === "left" ? 0.1 : 0;
     const matChanceMult = forkBias === "right" ? 1.3 : 1;
+    const packLootMult = e.isPack ? 1 + (e.foes.length - 1) * 0.18 : 1;
     const threatLoot = threatLootBonus(e.threatTier);
-    const goldDrop = Math.round((4 + e.depth * 3) * goldMult * threatLoot.gold);
-    const xpDrop = Math.round((6 + e.depth * 4) * xpMult * threatLoot.xp);
+    const goldDrop = Math.round((4 + e.depth * 3) * goldMult * threatLoot.gold * packLootMult);
+    const xpDrop = Math.round((6 + e.depth * 4) * xpMult * threatLoot.xp * packLootMult);
     let questItem: string | undefined;
     let material: string | undefined;
     let gear: GearItem | undefined;
+    const lead = primaryEnemy(e);
 
     try {
       rewardGold(goldDrop);
       rewardXp(xpDrop);
-      addLog(`${e.enemy.name} falls. +${goldDrop}g +${xpDrop}xp`);
+      if (e.isPack) {
+        addLog(`The pack falls. +${goldDrop}g +${xpDrop}xp`);
+      } else {
+        addLog(`${lead.name} falls. +${goldDrop}g +${xpDrop}xp`);
+      }
       if (e.threatTier !== "none") {
         addLog(`✦ ${THREAT_TIERS[e.threatTier].label} foe — richer spoils.`);
       }
       vibrate([20, 40, 60]);
       playSfx("death");
-      if (e.enemy.questItemId && Math.random() < 0.6) { addQuestItem(e.enemy.questItemId); questItem = e.enemy.questItemId; }
-      let matId = e.enemy.materialDrop?.id;
-      let matChance = (e.enemy.materialDrop?.chance ?? 0) * matChanceMult;
+      if (lead.questItemId && Math.random() < 0.6) { addQuestItem(lead.questItemId); questItem = lead.questItemId; }
+      let matId = lead.materialDrop?.id;
+      let matChance = (lead.materialDrop?.chance ?? 0) * matChanceMult;
       const zones = zoneContext(e.depth);
-      if (zones.boneHalls && e.depth >= 6 && e.depth <= 10 && ["skeleton", "ghoul", "stone_golem", "ogre"].includes(e.enemy.id)) {
+      if (zones.boneHalls && e.depth >= 6 && e.depth <= 10 && ["skeleton", "ghoul", "stone_golem", "ogre"].includes(lead.id)) {
         matId = "bone_dust";
         matChance = Math.max(matChance, 0.55);
       }
       if (matId && Math.random() < matChance) { addMaterial(matId); material = matId; }
       const isFinalBoss = e.depth >= maxDepthForMode(player.dungeonMode);
-      const isBossEnemy = !!BOSS_MOMENTS[e.enemy.id];
+      const isBossEnemy = !!BOSS_MOMENTS[lead.id];
       const ownsLegendary =
         Object.values(player.equipment).some((g) => g?.rarity === "legendary") ||
         player.bag.some((g) => g.rarity === "legendary");
@@ -987,12 +988,15 @@ export function DungeonScreen() {
       const loreByEnemy: Record<string, string> = {
         cultist: "lore_seals", wraith: "lore_wraith", ogre: "lore_ogre", dragon: "lore_dragon", skeleton: "lore_brigade",
       };
-      const bossLore = BOSS_MOMENTS[e.enemy.id]?.firstKillLore;
-      recordKill(e.enemy.id, {
-        boss: isBossEnemy,
-        loreId: bossLore ?? (Math.random() < 0.4 ? loreByEnemy[e.enemy.id] : undefined),
-        itemDropId: gear?.baseId,
-      });
+      for (let fi = 0; fi < e.foes.length; fi++) {
+        const f = e.foes[fi];
+        const bossLore = BOSS_MOMENTS[f.enemy.id]?.firstKillLore;
+        recordKill(f.enemy.id, {
+          boss: !!BOSS_MOMENTS[f.enemy.id],
+          loreId: bossLore ?? (Math.random() < 0.4 ? loreByEnemy[f.enemy.id] : undefined),
+          itemDropId: fi === 0 ? gear?.baseId : undefined,
+        });
+      }
       if (talentPassives.kill_frenzy) {
         armNextAttack(1 + talentPassives.kill_frenzy / 100);
         addLog(`Blood sings — next attack empowered!`);
@@ -1001,17 +1005,17 @@ export function DungeonScreen() {
       if (import.meta.env.DEV) console.error("[combat] finishKill loot error:", err);
     }
 
-    const loot: Loot = { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material, gear };
+    const loot: Loot = { enemy: lead, gold: goldDrop, xp: xpDrop, questItem, material, gear, packBonus: e.isPack ? e.foes.length : undefined };
     scheduleVictoryTransition(e, loot);
   };
 
   // Safety net: if HP hit zero but victory never fired, force resolution.
   useEffect(() => {
     if (enc.kind !== "combat") return;
-    if (enc.enemyHp > 0 || finishingKillRef.current || victoryBeatRef.current) return;
+    if (!allFoesDead(enc) || finishingKillRef.current || victoryBeatRef.current) return;
     finishKill(enc);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- only recover from HP hitting zero
-  }, [enc.kind, enc.kind === "combat" ? enc.enemyHp : 0]);
+  }, [enc.kind, enc.kind === "combat" ? totalEnemyHp(enc) : 0]);
 
   const closeVictory = () => {
     if (enc.kind !== "victory") return;
@@ -1039,6 +1043,8 @@ export function DungeonScreen() {
   const inVictoryBeat = victoryBeat !== null;
   const ambient = depthAmbientStyle(enc.depth);
   const roomAnimClass = roomTransition === "out" ? "room-transition-out" : roomTransition === "in" ? "room-transition-in" : "";
+  const combatLead = enc.kind === "combat" ? focusFoe(enc) : null;
+  const combatIntent = combatLead?.nextIntent;
 
   // Always show the dungeon corridor as the background — enemy/chest sprites
   // overlay on top so the player can read where they are at a glance.
@@ -1046,7 +1052,7 @@ export function DungeonScreen() {
   const enemyOverlay = inVictoryBeat
     ? victoryBeat.enemy.image
     : enc.kind === "combat"
-      ? enc.enemy.image
+      ? focusFoe(enc).enemy.image
       : enc.kind === "victory"
         ? enc.loot.enemy.image
         : null;
@@ -1076,7 +1082,7 @@ export function DungeonScreen() {
         )}
         {showEnemyOverlay && enemyOverlay && (
           <img
-            key={(inVictoryBeat ? victoryBeat.enemy.id : enc.kind === "combat" ? enc.enemy.id : "v_" + enc.loot.enemy.id) + enc.depth}
+            key={(inVictoryBeat ? victoryBeat.enemy.id : enc.kind === "combat" ? focusFoe(enc).enemy.id : "v_" + enc.loot.enemy.id) + enc.depth}
             src={enemyOverlay}
             alt=""
             className={`absolute inset-0 m-auto h-[88%] w-auto max-w-[88%] object-contain fade-in-up drop-shadow-[0_8px_0_rgba(0,0,0,0.7)] ${enc.kind === "victory" || inVictoryBeat ? "grayscale opacity-60" : ""} ${hit && enc.kind === "combat" && !inVictoryBeat ? "fx-recoil" : ""} ${enc.kind === "combat" && turnPhase === "telegraph" && !inVictoryBeat ? "fx-enemy-windup" : ""}`}
@@ -1100,9 +1106,15 @@ export function DungeonScreen() {
         <div className="absolute top-2 right-2 z-10"><SettingsButton /></div>
         {enc.kind === "combat" && !inVictoryBeat && (
           <div className="absolute right-2 top-9 flex flex-col items-end gap-0.5">
-            <div className="pixel text-[8px] text-blood text-shadow-pixel bg-background/80 px-1.5 py-0.5 border border-black">
-              {enc.enemy.name} {enc.enemyHp}/{enc.enemyMaxHp}
-            </div>
+            {enc.isPack ? (
+              <div className="pixel text-[8px] text-blood text-shadow-pixel bg-background/80 px-1.5 py-0.5 border border-black">
+                Pack {livingFoeIndices(enc).length}/{enc.foes.length} · {totalEnemyHp(enc)}/{totalEnemyMaxHp(enc)} HP
+              </div>
+            ) : (
+              <div className="pixel text-[8px] text-blood text-shadow-pixel bg-background/80 px-1.5 py-0.5 border border-black">
+                {combatLead!.enemy.name} {combatLead!.hp}/{combatLead!.maxHp}
+              </div>
+            )}
             {enc.threatTier !== "none" && (
               <div className={`pixel text-[7px] text-shadow-pixel bg-background/90 px-1.5 py-0.5 border border-black ${
                 enc.threatTier === "enraged" ? "text-blood" : enc.threatTier === "awakened" ? "text-ember" : "text-muted-foreground"
@@ -1112,26 +1124,27 @@ export function DungeonScreen() {
             )}
           </div>
         )}
-        {enc.kind === "combat" && !inVictoryBeat && (
+        {enc.kind === "combat" && !inVictoryBeat && combatIntent && (
           <div className="absolute left-2 right-2 bottom-2 flex justify-center">
             <div className={`pixel text-[10px] font-bold px-3 py-1.5 border-2 border-black text-shadow-pixel ${
               turnPhase === "telegraph"
-                ? (enc.nextIntent.kind === "guard" || enc.nextIntent.kind === "parry")
+                ? (combatIntent.kind === "guard" || combatIntent.kind === "parry")
                   ? "bg-allies text-white"
-                  : enc.nextIntent.kind === "heal"
+                  : combatIntent.kind === "heal"
                     ? "bg-divine text-black"
                     : "bg-blood text-white"
-                : enc.nextIntent.telegraphable
-                  ? (enc.nextIntent.kind === "guard" || enc.nextIntent.kind === "parry")
+                : combatIntent.telegraphable
+                  ? (combatIntent.kind === "guard" || combatIntent.kind === "parry")
                     ? "bg-allies text-white animate-pulse"
-                    : enc.nextIntent.kind === "heal"
+                    : combatIntent.kind === "heal"
                       ? "bg-divine text-black animate-pulse"
                       : "bg-blood text-white animate-pulse"
                   : "bg-background/95 text-gold"
-            } ${telegraphBannerClass(enc.nextIntent, turnPhase)}`}>
-              {turnPhase === "telegraph" ? "▶ NOW — " : enc.nextIntent.telegraphable ? "⚠ INCOMING — " : "» "}
-              {intentKindLabel(enc.nextIntent.kind) ? `${intentKindLabel(enc.nextIntent.kind)} · ` : ""}
-              {enc.enemy.name}: {enc.nextIntent.label}
+            } ${telegraphBannerClass(combatIntent, turnPhase)}`}>
+              {turnPhase === "telegraph" ? "▶ NOW — " : combatIntent.telegraphable ? "⚠ INCOMING — " : "» "}
+              {intentKindLabel(combatIntent.kind) ? `${intentKindLabel(combatIntent.kind)} · ` : ""}
+              {enc.isPack && livingFoeIndices(enc).length > 1 ? "Pack assault · " : ""}
+              {combatLead!.enemy.name}: {combatIntent.label}
             </div>
           </div>
         )}
@@ -1177,50 +1190,74 @@ export function DungeonScreen() {
         </div>
 
         {enc.kind === "combat" && !inVictoryBeat && (
-          <div className="border-2 border-black bg-card p-2">
-            <div className="flex items-baseline justify-between">
-              <span className="pixel text-[9px] text-blood">{enc.enemy.name}</span>
-              <span className="font-body text-sm">{enc.enemyHp}/{enc.enemyMaxHp}</span>
-            </div>
-            <TweenHpBar
-              current={enc.enemyHp}
-              max={enc.enemyMaxHp}
-              className="mt-1 h-2 w-full bg-stone border border-black overflow-hidden"
-            />
-            <div className="mt-1 flex flex-wrap gap-1">
-              {enc.threatTier !== "none" && (
-                <span className={`pixel text-[7px] border px-1 ${
-                  enc.threatTier === "enraged"
-                    ? "border-blood text-blood animate-pulse"
-                    : enc.threatTier === "awakened"
-                      ? "border-ember text-ember"
-                      : "border-muted-foreground text-ember"
-                }`}>
-                  ⚠ {THREAT_TIERS[enc.threatTier].label}
-                </span>
-              )}
-              {turnEnrageLabel(enc.combatTurns) && (
-                <span className="pixel text-[7px] border border-blood text-blood px-1 animate-pulse">
-                  ★ {turnEnrageLabel(enc.combatTurns)}
-                </span>
-              )}
-              {enc.enemyGuardPct > 0 && (
-                <span className="pixel text-[7px] text-allies border border-allies px-1">🛡 GUARDING</span>
-              )}
-              {enc.enemyParryActive && (
-                <span className="pixel text-[7px] text-gold border border-gold px-1">⚔ PARRY READY</span>
-              )}
-              {enc.stunnedTurns > 0 && <span className="pixel text-[7px] text-arcane border border-arcane px-1">❄ FROZEN</span>}
-              {enc.shieldReduce > 0 && <span className="pixel text-[7px] text-gold border border-gold px-1">⛨ BRACED</span>}
-              {enc.enemyEffects.map((ef) => (
-                <span key={ef.kind} className="pixel text-[7px] border border-blood text-blood px-1 uppercase">
-                  {ef.kind === "burn" ? "🔥" : ef.kind === "bleed" ? "🩸" : ef.kind === "chill" ? "❄" : "✦"} {ef.kind} {ef.turns}t
-                </span>
-              ))}
-              {enc.playerEffects.filter((e) => e.kind === "renew").map((ef) => (
-                <span key={ef.kind} className="pixel text-[7px] border border-divine text-divine px-1 uppercase">✦ Renew {ef.turns}t</span>
-              ))}
-            </div>
+          <div className="border-2 border-black bg-card p-2 space-y-2">
+            {enc.isPack && (
+              <p className="pixel text-[8px] text-muted-foreground">Tap a foe to change focus · AoE hits everyone</p>
+            )}
+            {enc.foes.map((foe, i) => {
+              if (foe.hp <= 0) return null;
+              const focused = i === getFocusIndex(enc);
+              return (
+                <div
+                  key={`${foe.enemy.id}-${i}`}
+                  className={`rounded border p-1.5 ${focused ? "border-gold bg-gold/5" : "border-black/40"} ${enc.foes.length > 1 ? "cursor-pointer" : ""}`}
+                  onClick={() => enc.foes.length > 1 && setCombatFocus(i)}
+                  onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") setCombatFocus(i); }}
+                  role={enc.foes.length > 1 ? "button" : undefined}
+                  tabIndex={enc.foes.length > 1 ? 0 : undefined}
+                >
+                  <div className="flex items-baseline justify-between">
+                    <span className={`pixel text-[9px] ${focused ? "text-gold" : "text-blood"}`}>
+                      {foe.enemy.name}{focused ? " ◎" : ""}
+                    </span>
+                    <span className="font-body text-sm">{foe.hp}/{foe.maxHp}</span>
+                  </div>
+                  <TweenHpBar
+                    current={foe.hp}
+                    max={foe.maxHp}
+                    className="mt-1 h-2 w-full bg-stone border border-black overflow-hidden"
+                  />
+                  {focused && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {enc.threatTier !== "none" && (
+                        <span className={`pixel text-[7px] border px-1 ${
+                          enc.threatTier === "enraged"
+                            ? "border-blood text-blood animate-pulse"
+                            : enc.threatTier === "awakened"
+                              ? "border-ember text-ember"
+                              : "border-muted-foreground text-ember"
+                        }`}>
+                          ⚠ {THREAT_TIERS[enc.threatTier].label}
+                        </span>
+                      )}
+                      {turnEnrageLabel(enc.combatTurns) && (
+                        <span className="pixel text-[7px] border border-blood text-blood px-1 animate-pulse">
+                          ★ {turnEnrageLabel(enc.combatTurns)}
+                        </span>
+                      )}
+                      {foe.guardPct > 0 && (
+                        <span className="pixel text-[7px] text-allies border border-allies px-1">🛡 GUARDING</span>
+                      )}
+                      {foe.parryActive && (
+                        <span className="pixel text-[7px] text-gold border border-gold px-1">⚔ PARRY READY</span>
+                      )}
+                      {foe.stunnedTurns > 0 && <span className="pixel text-[7px] text-arcane border border-arcane px-1">❄ FROZEN</span>}
+                      {enc.shieldReduce > 0 && focused && (
+                        <span className="pixel text-[7px] text-gold border border-gold px-1">⛨ BRACED</span>
+                      )}
+                      {foe.effects.map((ef) => (
+                        <span key={ef.kind} className="pixel text-[7px] border border-blood text-blood px-1 uppercase">
+                          {ef.kind === "burn" ? "🔥" : ef.kind === "bleed" ? "🩸" : ef.kind === "chill" ? "❄" : "✦"} {ef.kind} {ef.turns}t
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {enc.playerEffects.filter((e) => e.kind === "renew").map((ef) => (
+              <span key={ef.kind} className="pixel text-[7px] border border-divine text-divine px-1 uppercase inline-block">✦ Renew {ef.turns}t</span>
+            ))}
           </div>
         )}
 
@@ -1301,6 +1338,11 @@ export function DungeonScreen() {
                   } else if (enc.shrine === "heal") {
                     const amt = Math.max(10, Math.floor(player.maxHp * 0.5));
                     heal(amt); addFloater("heal", amt); addLog(`The shrine restores ${amt} HP.`); playSfx("ui-confirm");
+                    if (classResource?.kind === "mana") {
+                      const manaAmt = Math.max(8, Math.floor(player.maxResource * 0.35));
+                      gainResource(manaAmt);
+                      addLog(`Cool water steadies your mind. +${manaAmt} ${classResource.label}.`);
+                    }
                   } else {
                     rewardXp(20 + enc.depth * 6); addLog("The shrine fills you with insight."); playSfx("ui-confirm");
                   }
@@ -1404,11 +1446,11 @@ export function DungeonScreen() {
             <div className={`grid gap-2 ${abilities.length >= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
               {abilities.map((ab) => {
                 const cd = player.abilityCooldowns?.[ab.id] ?? 0;
-                const cost = abilityCost(ab);
+                const cost = abilityResourceCost(ab);
                 const lacksResource = cost > 0 && player.resource < cost;
                 const armed = armedAbility === ab.id;
                 const pulsing = readyPulse.has(ab.id) && cd === 0;
-                const costLabel = resourceCostLabel(ab, classResource);
+                const costLabel = resourceCostLabel(ab, classResource, costReduction);
                 return (
                   <button
                     key={ab.id}
@@ -1460,7 +1502,7 @@ export function DungeonScreen() {
             {player.nextAttackMult !== 1 && (
               <p className="pixel text-[8px] text-blood text-center">FRENZY — next hit ×{player.nextAttackMult}</p>
             )}
-            {enc.enemy.id === "bone_warden" && enc.depth === 5 && !player.eliteRetreatUsed && (
+            {primaryEnemy(enc).id === "bone_warden" && enc.depth === 5 && !player.eliteRetreatUsed && (
               <button
                 onClick={retreatFromBoneWarden}
                 className="pixel-btn !text-[8px] w-full border-l-4 border-l-muted-foreground"
@@ -1470,7 +1512,7 @@ export function DungeonScreen() {
             )}
             <button
               onClick={passTurn}
-              disabled={turnPhase !== "idle" || inVictoryBeat || (enc.kind === "combat" && enc.enemyHp <= 0)}
+              disabled={turnPhase !== "idle" || inVictoryBeat || (enc.kind === "combat" && allFoesDead(enc))}
               className="pixel-btn !text-[8px] w-full border-l-4 border-l-muted-foreground disabled:opacity-40"
             >
               {turnPhase === "telegraph" ? "▶ Enemy winding up…" : turnPhase === "resolving" ? "▶ Resolving…" : "◌ Pass — hold your turn (CDs tick)"}

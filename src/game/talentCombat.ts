@@ -1,4 +1,5 @@
 import type { Ability } from "@/game/data";
+import { TALENT_GRANTED_ABILITIES } from "@/game/data";
 import { TALENT_TREES, type TalentEffect, type TalentPassiveHook, type AbilityTalentMod, type TalentNode } from "@/game/talents";
 
 export type { TalentPassiveHook, AbilityTalentMod, TalentEffect } from "@/game/talents";
@@ -12,6 +13,7 @@ function scaleAbilityMod(mod: AbilityTalentMod, rank: number): AbilityTalentMod 
   if (mod.multDelta) out.multDelta = mod.multDelta * rank;
   if (mod.multMult) out.multMult = 1 + (mod.multMult - 1) * rank;
   if (mod.cooldownDelta) out.cooldownDelta = mod.cooldownDelta * rank;
+  if (mod.costDelta) out.costDelta = mod.costDelta * rank;
   if (mod.lifestealDelta) out.lifestealDelta = mod.lifestealDelta * rank;
   if (mod.bonusVsChillDelta) out.bonusVsChillDelta = mod.bonusVsChillDelta * rank;
   if (mod.bonusVsBleedMult) out.bonusVsBleedMult = 1 + (mod.bonusVsBleedMult - 1) * rank;
@@ -51,6 +53,9 @@ function effectForRank(node: TalentNode, rank: number): TalentEffect | null {
   }
   if (ef.kind === "ability") {
     return { kind: "ability", mod: scale ? scaleAbilityMod(ef.mod, rank) : ef.mod };
+  }
+  if (ef.kind === "grant_ability") {
+    return rank >= 1 ? ef : null;
   }
   return ef;
 }
@@ -106,6 +111,7 @@ function applyModToAbility(ab: Ability, mod: AbilityTalentMod): Ability {
   if (mod.rename) clone.name = mod.rename;
   if (mod.descOverride) clone.desc = mod.descOverride;
   if (mod.cooldownDelta) clone.cooldown = Math.max(0, clone.cooldown + mod.cooldownDelta);
+  if (mod.costDelta) clone.cost = Math.max(0, (clone.cost ?? 0) + mod.costDelta);
 
   const ef = clone.effect;
   if (ef.kind === "attack") {
@@ -146,8 +152,10 @@ export function resolveCombatAbilities(
   talentRanks: TalentRanks,
 ): Ability[] {
   const mods: AbilityTalentMod[] = [];
+  const grantedIds = new Set<string>();
   for (const ef of learnedEffects(specId, talentRanks)) {
     if (ef.kind === "ability") mods.push(ef.mod);
+    if (ef.kind === "grant_ability") grantedIds.add(ef.abilityId);
   }
 
   const resolveOne = (ab: Ability): Ability => {
@@ -160,6 +168,12 @@ export function resolveCombatAbilities(
 
   const resolved = base.map(resolveOne);
   if (specAbility) resolved.push(resolveOne(specAbility));
+  for (const id of grantedIds) {
+    const def = TALENT_GRANTED_ABILITIES[id];
+    if (def && !resolved.some((a) => a.id === def.id)) {
+      resolved.push(resolveOne(JSON.parse(JSON.stringify(def)) as Ability));
+    }
+  }
   return resolved;
 }
 

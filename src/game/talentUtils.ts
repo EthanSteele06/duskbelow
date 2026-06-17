@@ -10,6 +10,17 @@ export const V2_TALENT_SPECS = new Set([
   "blood_dk",
   "frost_dk",
   "unholy",
+  "havoc",
+  "vengeance",
+  "frost",
+  "fire",
+  "arcane",
+  "discipline",
+  "holy",
+  "shadow",
+  "balance",
+  "feral",
+  "restoration",
 ]);
 
 export function isV2TalentTree(specId: string | null): boolean {
@@ -79,16 +90,30 @@ export function canLearnTalent(
 
 export function treeLayout(specId: string): { rows: number; cols: number; nodes: TalentNode[] } {
   const nodes = TALENT_TREES[specId] ?? [];
-  let rows = 1;
-  let cols = 1;
+  let rows = 0;
+  let cols = 0;
   for (const n of nodes) {
-    if (n.row != null) rows = Math.max(rows, n.row + 1);
-    if (n.col != null) cols = Math.max(cols, n.col + 1);
+    if (n.row !== undefined) rows = Math.max(rows, n.row + 1);
+    if (n.col !== undefined) cols = Math.max(cols, n.col + 1);
   }
-  return { rows, cols, nodes };
+  return { rows: Math.max(rows, 1), cols: Math.max(cols, 1), nodes };
 }
 
 export function rankDescription(node: TalentNode, rank: number): string {
   if (node.rankDescs && node.rankDescs[rank - 1]) return node.rankDescs[rank - 1];
   return node.desc;
+}
+
+/** Left-rail label for a v2 tree row's point gate. */
+export function rowGateLabel(requiresPoints: number): string {
+  if (requiresPoints <= 0) return "Start";
+  return `${requiresPoints} pts`;
+}
+
+/** Unique row indices in a v2 tree, sorted ascending. */
+export function treeRows(specId: string): number[] {
+  const nodes = TALENT_TREES[specId] ?? [];
+  const set = new Set<number>();
+  for (const n of nodes) set.add(n.row ?? 0);
+  return [...set].sort((a, b) => a - b);
 }

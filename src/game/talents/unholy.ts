@@ -28,11 +28,10 @@ export const UNHOLY_TREE_V2: TalentNode[] = [
   },
   {
     id: "unholy_defile",
-    name: "Defile",
-    desc: "Blood Boil applies plague burn per rank.",
-    rankDescs: ["Plague 3/t.", "Plague 4/t.", "Plague 5/t."],
-    maxRank: 3, row: 2, col: 0, requires: "unholy_unholy_blight", requiresPoints: 8, scalePerRank: true,
-    effect: { kind: "ability", mod: { abilityId: "bloodboil", extraStatus: { kind: "burn", turns: 3, power: 3 } } },
+    name: "Death and Decay",
+    desc: "Unlock Death and Decay — unholy zone hits ALL foes.",
+    maxRank: 1, row: 2, col: 0, requires: "unholy_unholy_blight", requiresPoints: 8,
+    effect: { kind: "grant_ability", abilityId: "death_and_decay" },
   },
   {
     id: "unholy_epidemic",
