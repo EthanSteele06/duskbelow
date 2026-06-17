@@ -2,6 +2,7 @@ import { useGame, bagCap, bagSlotsUsed } from "@/game/store";
 import { SLOT_LABEL, SLOT_ICON, RARITY_CLASS, RARITY_LABEL, MATERIALS, MATERIAL_STACK_SIZE, VENDOR_ITEMS, gearSellPrice, formatGearStatsLine, type GearSlot, type GearItem } from "@/game/data";
 import { GearCompare } from "./GearCompare";
 import { StatBar } from "./StatBar";
+import { resourceDef } from "@/game/resources";
 
 const SLOTS: GearSlot[] = ["head", "chest", "legs", "weapon", "offhand", "trinket"];
 
@@ -16,6 +17,7 @@ export function EquipmentScreen() {
   const cap = bagCap(player, meta);
   const used = bagSlotsUsed(player);
   const matEntries = Object.entries(player.materials).filter(([, n]) => n > 0);
+  const resDef = resourceDef(player.classId);
   const potionEntries = VENDOR_ITEMS
     .filter((v) => v.kind === "potion")
     .map((v) => ({ def: v, count: player.inventory.filter((id) => id === v.id).length }))
@@ -65,7 +67,7 @@ export function EquipmentScreen() {
             {player.weaponMin > 0 && player.armor > 0 && " · "}
             {player.armor > 0 && `${player.armor} armor`}
             {player.hpRegen > 0 && ` · +${player.hpRegen.toFixed(1)} HP/r`}
-            {player.maxMana > 0 && ` · ${player.maxMana} mana`}
+            {player.maxResource > 0 && resDef && ` · ${player.maxResource} ${resDef.label}`}
           </p>
         )}
       </div>

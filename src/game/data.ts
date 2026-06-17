@@ -146,44 +146,46 @@ export interface Ability {
   name: string;
   desc: string;
   cooldown: number;
+  /** Class resource cost. 0/omitted = free basic (Strike, Frostbolt, etc.). */
+  cost?: number;
   effect: AbilityEffect;
 }
 
 export const CLASS_ABILITIES: Record<ClassId, Ability[]> = {
   warrior: [
-    { id: "strike", name: "Strike",      desc: "A clean swing. ATK damage.",                        cooldown: 0, effect: { kind: "attack", mult: 1.0, flavor: "{p} strikes with their blade" } },
-    { id: "cleave", name: "Cleave",      desc: "Heavy two-hander. 1.6× ATK, applies Bleed (3t).",   cooldown: 2, effect: { kind: "attack", mult: 1.6, flavor: "{p} swings a wide cleave", applyStatus: { kind: "bleed", turns: 3, power: 3 } } },
-    { id: "wall",   name: "Shield Wall", desc: "Brace. Cut next hit by 70%.",                       cooldown: 3, effect: { kind: "shield", reduce: 0.7, flavor: "{p} raises a shield wall" } },
+    { id: "strike", name: "Strike",      desc: "A clean swing. ATK damage. Builds Rage.",                        cooldown: 0, effect: { kind: "attack", mult: 1.0, flavor: "{p} strikes with their blade" } },
+    { id: "cleave", name: "Cleave",      desc: "Heavy two-hander. 1.6× ATK, applies Bleed (3t). Costs 30 Rage.",   cooldown: 2, cost: 30, effect: { kind: "attack", mult: 1.6, flavor: "{p} swings a wide cleave", applyStatus: { kind: "bleed", turns: 3, power: 3 } } },
+    { id: "wall",   name: "Shield Wall", desc: "Brace. Cut next hit by 70%. Costs 20 Rage.",                       cooldown: 3, cost: 20, effect: { kind: "shield", reduce: 0.7, flavor: "{p} raises a shield wall" } },
   ],
   rogue: [
     { id: "slash",      name: "Slash",      desc: "Twin daggers. ATK damage.",                      cooldown: 0, effect: { kind: "attack", mult: 1.0, flavor: "{p} slashes with twin daggers" } },
-    { id: "eviscerate", name: "Eviscerate", desc: "Vicious cut. 1.8× ATK + Bleed (4t).",            cooldown: 2, effect: { kind: "attack", mult: 1.8, flavor: "{p} carves a deep wound", applyStatus: { kind: "bleed", turns: 4, power: 4 } } },
-    { id: "backstab",   name: "Backstab",   desc: "Surgical kill. 2.5× ATK.",                       cooldown: 4, effect: { kind: "attack", mult: 2.5, flavor: "{p} drives a dagger through a weak point" } },
+    { id: "eviscerate", name: "Eviscerate", desc: "Vicious cut. 1.8× ATK + Bleed (4t). 35 Energy.",            cooldown: 2, cost: 35, effect: { kind: "attack", mult: 1.8, flavor: "{p} carves a deep wound", applyStatus: { kind: "bleed", turns: 4, power: 4 } } },
+    { id: "backstab",   name: "Backstab",   desc: "Surgical kill. 2.5× ATK. 30 Energy.",                       cooldown: 4, cost: 30, effect: { kind: "attack", mult: 2.5, flavor: "{p} drives a dagger through a weak point" } },
   ],
   mage: [
     { id: "frostbolt", name: "Frostbolt",  desc: "1.0× MAG + Chill (foe takes +30% dmg, 2t).",      cooldown: 0, effect: { kind: "attack", mult: 1.0, useMag: true, flavor: "{p} hurls a frostbolt", applyStatus: { kind: "chill", turns: 2, power: 1.3 } } },
-    { id: "fireball",  name: "Fireball",   desc: "1.5× MAG + Burn (3t).",                           cooldown: 2, effect: { kind: "attack", mult: 1.5, useMag: true, flavor: "{p} casts a roaring fireball", applyStatus: { kind: "burn", turns: 3, power: 5 } } },
-    { id: "nova",      name: "Frost Nova", desc: "Freeze the foe. Skip its turn.",                  cooldown: 3, effect: { kind: "stun", flavor: "{p} unleashes a frost nova" } },
+    { id: "fireball",  name: "Fireball",   desc: "1.5× MAG + Burn (3t). 30 Mana.",                           cooldown: 2, cost: 30, effect: { kind: "attack", mult: 1.5, useMag: true, flavor: "{p} casts a roaring fireball", applyStatus: { kind: "burn", turns: 3, power: 5 } } },
+    { id: "nova",      name: "Frost Nova", desc: "Freeze the foe. Skip its turn. 25 Mana.",                  cooldown: 3, cost: 25, effect: { kind: "stun", flavor: "{p} unleashes a frost nova" } },
   ],
   priest: [
     { id: "smite", name: "Smite",             desc: "Holy MAG damage.",                              cooldown: 0, effect: { kind: "attack", mult: 1.0, useMag: true, flavor: "{p} smites with holy light" } },
-    { id: "swp",   name: "Shadow Word: Pain", desc: "1.2× MAG + DoT (4t).",                          cooldown: 2, effect: { kind: "attack", mult: 1.2, useMag: true, flavor: "{p} whispers a word of agony", applyStatus: { kind: "burn", turns: 4, power: 4 } } },
-    { id: "renew", name: "Renew",             desc: "Heal over time — MAG/turn for 4 turns.",        cooldown: 3, effect: { kind: "hot", healPerTurn: 0, turns: 4, flavor: "{p} weaves a renewing prayer" } },
+    { id: "swp",   name: "Shadow Word: Pain", desc: "1.2× MAG + DoT (4t). 22 Mana.",                          cooldown: 2, cost: 22, effect: { kind: "attack", mult: 1.2, useMag: true, flavor: "{p} whispers a word of agony", applyStatus: { kind: "burn", turns: 4, power: 4 } } },
+    { id: "renew", name: "Renew",             desc: "Heal over time — MAG/turn for 4 turns. 28 Mana.",        cooldown: 3, cost: 28, effect: { kind: "hot", healPerTurn: 0, turns: 4, flavor: "{p} weaves a renewing prayer" } },
   ],
   druid: [
     { id: "wrath",     name: "Wrath",         desc: "Nature MAG damage.",                            cooldown: 0, effect: { kind: "attack", mult: 1.0, useMag: true, flavor: "{p} hurls a bolt of wrath" } },
-    { id: "moonfire",  name: "Moonfire",      desc: "1.2× MAG + Burn (3t).",                         cooldown: 2, effect: { kind: "attack", mult: 1.2, useMag: true, flavor: "{p} sears the foe with moonfire", applyStatus: { kind: "burn", turns: 3, power: 4 } } },
-    { id: "rejuv",     name: "Rejuvenation",  desc: "Heal over time — MAG/turn for 4 turns.",        cooldown: 3, effect: { kind: "hot", healPerTurn: 0, turns: 4, flavor: "{p} weaves vines of renewal" } },
+    { id: "moonfire",  name: "Moonfire",      desc: "1.2× MAG + Burn (3t). 22 Mana.",                         cooldown: 2, cost: 22, effect: { kind: "attack", mult: 1.2, useMag: true, flavor: "{p} sears the foe with moonfire", applyStatus: { kind: "burn", turns: 3, power: 4 } } },
+    { id: "rejuv",     name: "Rejuvenation",  desc: "Heal over time — MAG/turn for 4 turns. 28 Mana.",        cooldown: 3, cost: 28, effect: { kind: "hot", healPerTurn: 0, turns: 4, flavor: "{p} weaves vines of renewal" } },
   ],
   deathknight: [
     { id: "deathstrike", name: "Death Strike", desc: "1.3× ATK + heal for 30% damage dealt.",        cooldown: 0, effect: { kind: "attack", mult: 1.3, flavor: "{p} drives a runeblade through the foe", lifesteal: 0.30 } },
-    { id: "froststrike", name: "Frost Strike", desc: "1.0× ATK + Chill (foe takes +30% dmg, 2t).",   cooldown: 2, effect: { kind: "attack", mult: 1.0, flavor: "{p} buries a frost-rimed blade", applyStatus: { kind: "chill", turns: 2, power: 1.3 } } },
-    { id: "bloodboil",   name: "Blood Boil",   desc: "1.7× ATK + Bleed (4t).",                       cooldown: 3, effect: { kind: "attack", mult: 1.7, flavor: "{p} boils the foe's blood", applyStatus: { kind: "bleed", turns: 4, power: 5 } } },
+    { id: "froststrike", name: "Frost Strike", desc: "1.0× ATK + Chill. Costs 2 Runes.",   cooldown: 2, cost: 2, effect: { kind: "attack", mult: 1.0, flavor: "{p} buries a frost-rimed blade", applyStatus: { kind: "chill", turns: 2, power: 1.3 } } },
+    { id: "bloodboil",   name: "Blood Boil",   desc: "1.7× ATK + Bleed (4t). Costs 1 Rune.",                       cooldown: 3, cost: 1, effect: { kind: "attack", mult: 1.7, flavor: "{p} boils the foe's blood", applyStatus: { kind: "bleed", turns: 4, power: 5 } } },
   ],
   demonhunter: [
-    { id: "chaosstrike", name: "Chaos Strike", desc: "Twin glaives. 1.1× ATK, lifesteal 20%.",       cooldown: 0, effect: { kind: "attack", mult: 1.1, flavor: "{p} flickers — twin glaives bite", lifesteal: 0.20 } },
-    { id: "felrush",     name: "Fel Rush",     desc: "Charge through. 1.6× MAG + Burn (3t).",        cooldown: 2, effect: { kind: "attack", mult: 1.6, useMag: true, flavor: "{p} fel-rushes through the foe", applyStatus: { kind: "burn", turns: 3, power: 5 } } },
-    { id: "eyebeam",     name: "Eye Beam",     desc: "Green torrent. 2.2× MAG.",                     cooldown: 3, effect: { kind: "attack", mult: 2.2, useMag: true, flavor: "{p}'s eyes blaze — fel-light pours forth" } },
+    { id: "chaosstrike", name: "Chaos Strike", desc: "Twin glaives. 1.1× ATK, lifesteal 20%. Builds Fury.",       cooldown: 0, effect: { kind: "attack", mult: 1.1, flavor: "{p} flickers — twin glaives bite", lifesteal: 0.20 } },
+    { id: "felrush",     name: "Fel Rush",     desc: "Charge through. 1.6× MAG + Burn (3t). 40 Fury.",        cooldown: 2, cost: 40, effect: { kind: "attack", mult: 1.6, useMag: true, flavor: "{p} fel-rushes through the foe", applyStatus: { kind: "burn", turns: 3, power: 5 } } },
+    { id: "eyebeam",     name: "Eye Beam",     desc: "Green torrent. 2.2× MAG. 50 Fury.",                     cooldown: 3, cost: 50, effect: { kind: "attack", mult: 2.2, useMag: true, flavor: "{p}'s eyes blaze — fel-light pours forth" } },
   ],
 };
 
@@ -193,32 +195,32 @@ export const CLASS_ABILITIES: Record<ClassId, Ability[]> = {
 
 export const SPEC_ABILITIES: Record<string, Ability> = {
   // Warrior
-  arms:        { id: "spec_arms",       name: "Mortal Strike",    desc: "2.0× ATK + deep Bleed (4t).",                  cooldown: 3, effect: { kind: "attack", mult: 2.0, flavor: "{p} unleashes a mortal strike", applyStatus: { kind: "bleed", turns: 4, power: 5 } } },
-  fury:        { id: "spec_fury",       name: "Bloodthirst",      desc: "1.6× ATK and heal for 40% damage dealt.",      cooldown: 2, effect: { kind: "attack", mult: 1.6, flavor: "{p} buries a fang of steel", lifesteal: 0.40 } },
-  protection:  { id: "spec_prot",       name: "Last Stand",       desc: "Brace 80% next hit AND heal 25% Max HP.",      cooldown: 5, effect: { kind: "shield", reduce: 0.8, healPct: 0.25, flavor: "{p} plants their feet and stands" } },
+  arms:        { id: "spec_arms",       name: "Mortal Strike",    desc: "2.0× ATK + deep Bleed (4t). 30 Rage.",                  cooldown: 3, cost: 30, effect: { kind: "attack", mult: 2.0, flavor: "{p} unleashes a mortal strike", applyStatus: { kind: "bleed", turns: 4, power: 5 } } },
+  fury:        { id: "spec_fury",       name: "Bloodthirst",      desc: "1.6× ATK and heal for 40% damage dealt. 25 Rage.",      cooldown: 2, cost: 25, effect: { kind: "attack", mult: 1.6, flavor: "{p} buries a fang of steel", lifesteal: 0.40 } },
+  protection:  { id: "spec_prot",       name: "Last Stand",       desc: "Brace 80% next hit AND heal 25% Max HP. 30 Rage.",      cooldown: 5, cost: 30, effect: { kind: "shield", reduce: 0.8, healPct: 0.25, flavor: "{p} plants their feet and stands" } },
   // Rogue
-  assassination:{ id: "spec_assn",      name: "Rupture",          desc: "1.2× ATK + crippling Bleed (6t).",             cooldown: 3, effect: { kind: "attack", mult: 1.2, flavor: "{p} ruptures a vein", applyStatus: { kind: "bleed", turns: 6, power: 6 } } },
-  outlaw:      { id: "spec_outlaw",     name: "Adrenaline Rush",  desc: "Charge up — next attack hits for ×2.5.",       cooldown: 4, effect: { kind: "buff_next", mult: 2.5, flavor: "{p}'s eyes go wide — adrenaline floods in" } },
-  subtlety:    { id: "spec_sub",        name: "Shadowstrike",     desc: "2.2× ATK from the dark.",                      cooldown: 3, effect: { kind: "attack", mult: 2.2, flavor: "{p} flickers in and out of shadow — a strike from nowhere" } },
+  assassination:{ id: "spec_assn",      name: "Rupture",          desc: "1.2× ATK + crippling Bleed (6t). 35 Energy.",             cooldown: 3, cost: 35, effect: { kind: "attack", mult: 1.2, flavor: "{p} ruptures a vein", applyStatus: { kind: "bleed", turns: 6, power: 6 } } },
+  outlaw:      { id: "spec_outlaw",     name: "Adrenaline Rush",  desc: "Charge up — next attack hits for ×2.5. 40 Energy.",       cooldown: 4, cost: 40, effect: { kind: "buff_next", mult: 2.5, flavor: "{p}'s eyes go wide — adrenaline floods in" } },
+  subtlety:    { id: "spec_sub",        name: "Shadowstrike",     desc: "2.2× ATK from the dark. 35 Energy.",                      cooldown: 3, cost: 35, effect: { kind: "attack", mult: 2.2, flavor: "{p} flickers in and out of shadow — a strike from nowhere" } },
   // Mage
-  frost:       { id: "spec_frost",      name: "Ice Lance",        desc: "1.0× MAG (3.0× MAG if foe is Chilled).",       cooldown: 2, effect: { kind: "attack", mult: 1.0, useMag: true, flavor: "{p} hurls a glittering ice lance", bonusVsChill: 3.0 } },
-  fire:        { id: "spec_fire",       name: "Pyroblast",        desc: "2.2× MAG + heavy Burn (4t).",                  cooldown: 4, effect: { kind: "attack", mult: 2.2, useMag: true, flavor: "{p} channels a pyroblast", applyStatus: { kind: "burn", turns: 4, power: 6 } } },
-  arcane:      { id: "spec_arc",        name: "Arcane Blast",     desc: "1.8× MAG, short cooldown.",                    cooldown: 1, effect: { kind: "attack", mult: 1.8, useMag: true, flavor: "{p} unleashes an arcane blast" } },
+  frost:       { id: "spec_frost",      name: "Ice Lance",        desc: "1.0× MAG (3.0× MAG if foe is Chilled). 20 Mana.",       cooldown: 2, cost: 20, effect: { kind: "attack", mult: 1.0, useMag: true, flavor: "{p} hurls a glittering ice lance", bonusVsChill: 3.0 } },
+  fire:        { id: "spec_fire",       name: "Pyroblast",        desc: "2.2× MAG + heavy Burn (4t). 40 Mana.",                  cooldown: 4, cost: 40, effect: { kind: "attack", mult: 2.2, useMag: true, flavor: "{p} channels a pyroblast", applyStatus: { kind: "burn", turns: 4, power: 6 } } },
+  arcane:      { id: "spec_arc",        name: "Arcane Blast",     desc: "1.8× MAG, short cooldown. 25 Mana.",                    cooldown: 1, cost: 25, effect: { kind: "attack", mult: 1.8, useMag: true, flavor: "{p} unleashes an arcane blast" } },
   // Priest
-  discipline:  { id: "spec_disc",       name: "Power Word: Shield",desc: "Brace 60% next hit AND heal for 1.5× MAG.",   cooldown: 3, effect: { kind: "shield", reduce: 0.6, healPct: 0, flavor: "{p} weaves a power-word shield" } },
-  holy:        { id: "spec_holy",       name: "Holy Word: Serenity",desc: "Heal for 3× MAG instantly.",                 cooldown: 3, effect: { kind: "heal", amount: 0, magMult: 3, flavor: "{p} speaks a word of serenity" } },
-  shadow:      { id: "spec_shadow",     name: "Mind Blast",       desc: "1.7× MAG shadow damage.",                      cooldown: 2, effect: { kind: "attack", mult: 1.7, useMag: true, flavor: "{p} blasts the {n}'s mind" } },
+  discipline:  { id: "spec_disc",       name: "Power Word: Shield",desc: "Brace 60% next hit AND heal for 1.5× MAG. 25 Mana.",   cooldown: 3, cost: 25, effect: { kind: "shield", reduce: 0.6, healPct: 0, flavor: "{p} weaves a power-word shield" } },
+  holy:        { id: "spec_holy",       name: "Holy Word: Serenity",desc: "Heal for 3× MAG instantly. 35 Mana.",                 cooldown: 3, cost: 35, effect: { kind: "heal", amount: 0, magMult: 3, flavor: "{p} speaks a word of serenity" } },
+  shadow:      { id: "spec_shadow",     name: "Mind Blast",       desc: "1.7× MAG shadow damage. 28 Mana.",                      cooldown: 2, cost: 28, effect: { kind: "attack", mult: 1.7, useMag: true, flavor: "{p} blasts the {n}'s mind" } },
   // Druid
-  balance:     { id: "spec_bal",        name: "Starsurge",        desc: "1.6× MAG + Burn (3t).",                        cooldown: 3, effect: { kind: "attack", mult: 1.6, useMag: true, flavor: "{p} calls down a starsurge", applyStatus: { kind: "burn", turns: 3, power: 5 } } },
-  feral:       { id: "spec_feral",      name: "Rake",             desc: "1.3× ATK + Bleed (4t).",                       cooldown: 2, effect: { kind: "attack", mult: 1.3, flavor: "{p} rakes with savage claws", applyStatus: { kind: "bleed", turns: 4, power: 5 } } },
-  restoration: { id: "spec_resto",      name: "Wild Growth",      desc: "Renew — 5 HP/turn for 5 turns.",               cooldown: 4, effect: { kind: "hot", healPerTurn: 5, turns: 5, flavor: "{p} calls forth a wild growth" } },
+  balance:     { id: "spec_bal",        name: "Starsurge",        desc: "1.6× MAG + Burn (3t). 32 Mana.",                        cooldown: 3, cost: 32, effect: { kind: "attack", mult: 1.6, useMag: true, flavor: "{p} calls down a starsurge", applyStatus: { kind: "burn", turns: 3, power: 5 } } },
+  feral:       { id: "spec_feral",      name: "Rake",             desc: "1.3× ATK + Bleed (4t). 25 Mana.",                       cooldown: 2, cost: 25, effect: { kind: "attack", mult: 1.3, flavor: "{p} rakes with savage claws", applyStatus: { kind: "bleed", turns: 4, power: 5 } } },
+  restoration: { id: "spec_resto",      name: "Wild Growth",      desc: "Renew — 5 HP/turn for 5 turns. 35 Mana.",               cooldown: 4, cost: 35, effect: { kind: "hot", healPerTurn: 5, turns: 5, flavor: "{p} calls forth a wild growth" } },
   // Death Knight
-  blood_dk:    { id: "spec_blood_dk",   name: "Death Coil",       desc: "1.4× ATK and heal for 50% damage dealt.",      cooldown: 3, effect: { kind: "attack", mult: 1.4, flavor: "{p} lashes a coil of unholy power", lifesteal: 0.50 } },
-  frost_dk:    { id: "spec_frost_dk",   name: "Obliterate",       desc: "2.0× ATK (×2 if foe is Chilled).",             cooldown: 3, effect: { kind: "attack", mult: 2.0, flavor: "{p} obliterates the foe", bonusVsChill: 2.0 } },
-  unholy:      { id: "spec_unholy",     name: "Festering Strike", desc: "1.4× ATK + festering Bleed (4t).",             cooldown: 2, effect: { kind: "attack", mult: 1.4, flavor: "{p} drives a festering blade in", applyStatus: { kind: "bleed", turns: 4, power: 4 } } },
+  blood_dk:    { id: "spec_blood_dk",   name: "Death Coil",       desc: "1.4× ATK and heal for 50% damage dealt. 2 Runes.",      cooldown: 3, cost: 2, effect: { kind: "attack", mult: 1.4, flavor: "{p} lashes a coil of unholy power", lifesteal: 0.50 } },
+  frost_dk:    { id: "spec_frost_dk",   name: "Obliterate",       desc: "2.0× ATK (×2 if foe is Chilled). 2 Runes.",             cooldown: 3, cost: 2, effect: { kind: "attack", mult: 2.0, flavor: "{p} obliterates the foe", bonusVsChill: 2.0 } },
+  unholy:      { id: "spec_unholy",     name: "Festering Strike", desc: "1.4× ATK + festering Bleed (4t). 1 Rune.",             cooldown: 2, cost: 1, effect: { kind: "attack", mult: 1.4, flavor: "{p} drives a festering blade in", applyStatus: { kind: "bleed", turns: 4, power: 4 } } },
   // Demon Hunter
-  havoc:       { id: "spec_havoc",      name: "Blade Dance",      desc: "Whirlwind glaives. 2.2× ATK, +20% crit chance.",cooldown: 3, effect: { kind: "attack", mult: 2.2, flavor: "{p} dances between strikes — glaives sing" } },
-  vengeance:   { id: "spec_veng",       name: "Soul Cleave",      desc: "1.6× ATK and heal for 60% damage dealt.",      cooldown: 3, effect: { kind: "attack", mult: 1.6, flavor: "{p} drinks the wound", lifesteal: 0.60 } },
+  havoc:       { id: "spec_havoc",      name: "Blade Dance",      desc: "Whirlwind glaives. 2.2× ATK, +20% crit chance. 45 Fury.",cooldown: 3, cost: 45, effect: { kind: "attack", mult: 2.2, flavor: "{p} dances between strikes — glaives sing" } },
+  vengeance:   { id: "spec_veng",       name: "Soul Cleave",      desc: "1.6× ATK and heal for 60% damage dealt. 35 Fury.",      cooldown: 3, cost: 35, effect: { kind: "attack", mult: 1.6, flavor: "{p} drinks the wound", lifesteal: 0.60 } },
 };
 
 // ── Enemies ──────────────────────────────────────────────────────────────────

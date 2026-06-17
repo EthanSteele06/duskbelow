@@ -17,6 +17,12 @@ import {
 } from "./meta";
 import { TALENT_TREES } from "./talents";
 import { sumTalentStatBonuses } from "./talentCombat";
+import {
+  clampResource, combatStartResource, computeMaxResource,
+  energyRegenPerTurn, furyFromDamageDealt, furyFromDamageTaken,
+  manaRegenBetweenRooms, manaRegenPerTurn, rageFromDamage,
+  resourceDef, runeRegenPerTurn, type ResourceSnapshot,
+} from "./resources";
 
 export type Screen =
   | "title" | "intro" | "city"
@@ -48,7 +54,6 @@ interface PlayerState {
   crit: number;
   dodge: number;
   block: number;
-  maxMana: number;
   hpRegen: number;
   manaRegen: number;
   xpGainPct: number;
@@ -56,6 +61,9 @@ interface PlayerState {
   weaponMin: number;
   weaponMax: number;
   attackSpeed: number;
+  /** Current class combat resource (rage, energy, mana, runes, fury) */
+  resource: number;
+  maxResource: number;
   baseMaxHp: number;
   baseAtk: number;
   baseMag: number;
@@ -227,12 +235,17 @@ interface GameState {
   markEliteRetreat: () => void;
   /** Tick all ability CDs down by 1; optionally arm one ability's full cooldown. */
   advanceAbilityCooldowns: (usedId?: string, turns?: number) => void;
+  spendResource: (amount: number) => boolean;
+  gainResource: (amount: number) => void;
+  gainResourceFromDamageDealt: (amount: number, opts?: { spenderAbility?: boolean }) => void;
+  tickResourceRegenTurn: () => void;
 }
 
 const emptyPlayer = (): PlayerState => ({
   name: "Wanderer", faction: null, classId: null, specId: null,
   level: 1, xp: 0, hp: 30, maxHp: 30, atk: 5, mag: 1, crit: 0, dodge: 0, block: 0,
-  maxMana: 0, hpRegen: 0, manaRegen: 0, xpGainPct: 0, armor: 0, weaponMin: 0, weaponMax: 0, attackSpeed: 0,
+  hpRegen: 0, manaRegen: 0, xpGainPct: 0, armor: 0, weaponMin: 0, weaponMax: 0, attackSpeed: 0,
+  resource: 0, maxResource: 0,
   baseMaxHp: 30, baseAtk: 5, baseMag: 1,
   gold: 50, gems: 0, inventory: [], questItems: {}, dungeonDepth: 0,
   skillPoints: 0, learnedSkills: [], talentPoints: 0, learnedTalents: [], earnedSkillForLevel: 0,
@@ -280,6 +293,18 @@ function echoCombatBonuses(meta: MetaState | undefined, faction: FactionId | nul
   };
 }
 
+function resourceSnap(p: PlayerState): ResourceSnapshot {
+  return {
+    classId: p.classId,
+    specId: p.specId,
+    resource: p.resource,
+    maxResource: p.maxResource,
+    mag: p.mag,
+    level: p.level,
+    dungeonDepth: p.dungeonDepth,
+  };
+}
+
 function recompute(p: PlayerState, meta?: MetaState): PlayerState {
   const gear = sumGearStats(p.equipment);
   const tal = sumTalentStats(p.learnedTalents, p.specId);
@@ -292,7 +317,7 @@ function recompute(p: PlayerState, meta?: MetaState): PlayerState {
   const crit = Math.round((fp?.crit ?? 0) + gear.crit + tal.crit + db.crit + echo.crit);
   const dodge = Math.round((fp?.dodge ?? 0) + gear.dodge + tal.dodge + db.dodge + echo.dodge);
   const block = Math.round(gear.block);
-  return {
+  const partial = {
     ...p,
     maxHp,
     atk,
@@ -300,7 +325,6 @@ function recompute(p: PlayerState, meta?: MetaState): PlayerState {
     crit,
     dodge,
     block,
-    maxMana: Math.floor(gear.maxMana),
     hpRegen: gear.hpRegen,
     manaRegen: gear.manaRegen,
     xpGainPct: gear.xpGainPct,
@@ -309,6 +333,12 @@ function recompute(p: PlayerState, meta?: MetaState): PlayerState {
     weaponMax: gear.weaponMax,
     attackSpeed: gear.attackSpeed,
     hp: Math.min(p.hp, maxHp),
+  };
+  const maxResource = computeMaxResource(resourceSnap({ ...partial, maxResource: 0 }));
+  return {
+    ...partial,
+    maxResource,
+    resource: clampResource(p.resource, maxResource),
   };
 }
 
@@ -497,7 +527,16 @@ export const useGame = create<GameState>((set, get) => ({
       }
     }
     set({ player: { ...p, hp: hpAfter } });
-    return p.hp - hpAfter;
+    const taken = p.hp - hpAfter;
+    if (taken > 0 && p.dungeonDepth > 0 && p.classId) {
+      const def = resourceDef(p.classId);
+      if (def?.kind === "rage") {
+        get().gainResource(rageFromDamage(taken));
+      } else if (def?.kind === "fury" && p.specId === "vengeance") {
+        get().gainResource(furyFromDamageTaken(taken));
+      }
+    }
+    return taken;
   },
   heal: (n) => set((s) => ({ player: { ...s.player, hp: Math.min(s.player.maxHp, s.player.hp + n) } })),
 
@@ -788,8 +827,8 @@ export const useGame = create<GameState>((set, get) => ({
         activeBuffs: townBuffs,
       }, s.meta);
       const withDodge = bDodge > 0 ? { ...p, dodge: p.dodge + bDodge } : p;
-      // First descent: grant a free Hearthstone Charm so floor 5 isn't a dead end.
-      let nextPlayer = withDodge;
+      const startResource = combatStartResource(resourceSnap(withDodge));
+      let nextPlayer = { ...withDodge, resource: startResource };
       if (!s.meta.hasCompletedFirstRun && !withDodge.inventory.includes("hearth")) {
         nextPlayer = { ...withDodge, inventory: [...withDodge.inventory, "hearth"] };
       }
@@ -841,6 +880,7 @@ export const useGame = create<GameState>((set, get) => ({
         activeOaths: [],
         dungeonBuffs: [],
         abilityCooldowns: {},
+        resource: 0,
       });
       return { screen: "city", player: recompute(p, s.meta) };
     });
@@ -1112,9 +1152,18 @@ export const useGame = create<GameState>((set, get) => ({
     for (const [k, v] of Object.entries(p.abilityCooldowns ?? {})) {
       if (v > 1) cds[k] = v - 1;
     }
+    let resource = p.resource;
+    const def = resourceDef(p.classId);
+    if (def?.kind === "mana") {
+      const gain = manaRegenBetweenRooms(resourceSnap(p));
+      resource = clampResource(p.resource + gain, p.maxResource);
+    }
     const healed = hp - p.hp;
-    set({ player: { ...p, hp, abilityCooldowns: cds } });
+    set({ player: { ...p, hp, resource, abilityCooldowns: cds } });
     if (healed > 0) get().pushLog(`You catch your breath. +${healed} HP.`);
+    if (def?.kind === "mana" && resource > p.resource) {
+      get().pushLog(`Your mana steadies. +${resource - p.resource} ${def.label}.`);
+    }
   },
 
   useRacial: () => {
@@ -1662,6 +1711,47 @@ export const useGame = create<GameState>((set, get) => ({
     }
     if (usedId && turns > 0) next[usedId] = turns;
     set({ player: { ...p, abilityCooldowns: next } });
+  },
+
+  spendResource: (amount) => {
+    if (amount <= 0) return true;
+    const p = get().player;
+    if (p.resource < amount) return false;
+    set({ player: { ...p, resource: p.resource - amount } });
+    return true;
+  },
+
+  gainResource: (amount) => {
+    if (amount <= 0) return;
+    const p = get().player;
+    const next = clampResource(p.resource + amount, p.maxResource);
+    if (next === p.resource) return;
+    set({ player: { ...p, resource: next } });
+  },
+
+  gainResourceFromDamageDealt: (amount, opts) => {
+    if (amount <= 0 || opts?.spenderAbility) return;
+    const p = get().player;
+    if (p.dungeonDepth <= 0 || !p.classId) return;
+    const def = resourceDef(p.classId);
+    if (def?.kind === "rage") get().gainResource(rageFromDamage(amount));
+    else if (def?.kind === "fury") get().gainResource(furyFromDamageDealt(amount));
+  },
+
+  tickResourceRegenTurn: () => {
+    const p = get().player;
+    if (p.dungeonDepth <= 0) return;
+    const def = resourceDef(p.classId);
+    if (!def) return;
+    let gain = 0;
+    if (def.kind === "energy") gain = energyRegenPerTurn(p.level);
+    else if (def.kind === "mana") gain = manaRegenPerTurn(resourceSnap(p));
+    else if (def.kind === "runes") gain = runeRegenPerTurn();
+    else return;
+    if (gain <= 0) return;
+    const next = clampResource(p.resource + gain, p.maxResource);
+    if (next === p.resource) return;
+    set({ player: { ...p, resource: next } });
   },
 }));
 
