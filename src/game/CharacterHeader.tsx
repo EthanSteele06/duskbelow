@@ -1,7 +1,7 @@
 import { useGame } from "@/game/store";
 import { CLASSES, COSMETICS, SPECS, FACTIONS } from "@/game/data";
 import { TweenHpBar } from "@/game/TweenHpBar";
-import { resourceDef, resourceBarPct } from "@/game/resources";
+import { ResourceBar } from "@/game/ResourceBar";
 
 /**
  * Persistent header showing the player's portrait, name, title, level, HP,
@@ -9,6 +9,7 @@ import { resourceDef, resourceBarPct } from "@/game/resources";
  */
 export function CharacterHeader() {
   const p = useGame((s) => s.player);
+  const screen = useGame((s) => s.screen);
   if (!p.classId) return null;
 
   const cls = CLASSES.find((c) => c.id === p.classId)!;
@@ -22,8 +23,7 @@ export function CharacterHeader() {
   const petCos      = eq.pet           ? COSMETICS.find((c) => c.id === eq.pet)           : null;
 
   const xpPct = Math.min(100, (p.xp / (p.level * 25)) * 100);
-  const resDef = resourceDef(p.classId);
-  const resPct = resDef ? resourceBarPct(p.resource, p.maxResource) : 0;
+  const showResourceInHeader = screen !== "dungeon";
 
   const plateBorder = plateCos?.tint ?? "#000";
   const frameColor = frameCos?.tint ?? "transparent";
@@ -75,15 +75,9 @@ export function CharacterHeader() {
             max={p.maxHp}
             className="mt-0.5 h-1.5 w-full bg-stone border border-black overflow-hidden"
           />
-          {resDef && p.maxResource > 0 && (
+          {showResourceInHeader && (
             <div className="mt-0.5">
-              <div className="flex justify-between text-[9px] font-body leading-none mb-0.5">
-                <span className="text-muted-foreground">{resDef.label}</span>
-                <span>{Math.floor(p.resource)}/{p.maxResource}</span>
-              </div>
-              <div className="h-1 w-full bg-stone border border-black overflow-hidden">
-                <div className={`h-full transition-all ${resDef.barClass}`} style={{ width: `${resPct}%` }} />
-              </div>
+              <ResourceBar classId={p.classId} current={p.resource} max={p.maxResource} />
             </div>
           )}
           <div className="flex items-center justify-between text-[10px] font-body leading-none mt-0.5">

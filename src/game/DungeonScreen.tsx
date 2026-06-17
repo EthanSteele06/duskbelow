@@ -18,6 +18,7 @@ import { resolveCombatAbilities, getTalentPassives,
 import {
   abilityCost, resourceCostLabel, resourceDef, spendsResource,
 } from "@/game/resources";
+import { ResourceBar } from "@/game/ResourceBar";
 import { playMusic, playSfx } from "@/game/audio";
 import { TutorialTip } from "@/game/Tutorial";
 import { SettingsButton } from "@/game/Settings";
@@ -1392,6 +1393,14 @@ export function DungeonScreen() {
 
         {enc.kind === "combat" && !inVictoryBeat && (
           <div className="space-y-2">
+            {player.maxResource > 0 && (
+              <ResourceBar
+                classId={player.classId}
+                current={player.resource}
+                max={player.maxResource}
+                size="combat"
+              />
+            )}
             <div className={`grid gap-2 ${abilities.length >= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
               {abilities.map((ab) => {
                 const cd = player.abilityCooldowns?.[ab.id] ?? 0;
