@@ -7,6 +7,9 @@ export const V2_TALENT_SPECS = new Set([
   "assassination",
   "outlaw",
   "subtlety",
+  "blood_dk",
+  "frost_dk",
+  "unholy",
 ]);
 
 export function isV2TalentTree(specId: string | null): boolean {

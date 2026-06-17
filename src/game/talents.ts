@@ -5,6 +5,9 @@ import { PROTECTION_TREE_V2 } from "@/game/talents/protection";
 import { ASSASSINATION_TREE_V2 } from "@/game/talents/assassination";
 import { OUTLAW_TREE_V2 } from "@/game/talents/outlaw";
 import { SUBTLETY_TREE_V2 } from "@/game/talents/subtlety";
+import { BLOOD_DK_TREE_V2 } from "@/game/talents/blood_dk";
+import { FROST_DK_TREE_V2 } from "@/game/talents/frost_dk";
+import { UNHOLY_TREE_V2 } from "@/game/talents/unholy";
 
 export type TalentPassiveHook =
   | "dot_amp_bleed"
@@ -227,46 +230,7 @@ const restoration = buildTree("resto", [
   { key: "5c", tier: 5, name: "Ironbark", capstone: true, desc: "★ Moonfire: 1.2× MAG, +15% dodge 2t.", effect: { kind: "ability", mod: { abilityId: "moonfire", multDelta: 0.2, rename: "Ironbark", descOverride: "Barkskin strike. 1.2× MAG, toughen yourself." } } },
 ]);
 
-// ── Death Knight ────────────────────────────────────────────────────────────
-
-const blood_dk = buildTree("blood", [
-  { key: "1", tier: 1, name: "Crimson Scourge", desc: "Bleed ticks +2.", effect: { kind: "passive", hook: "dot_amp_bleed", power: 2 } },
-  { key: "2a", tier: 2, name: "Bone Shield", desc: "+6 Max HP, +2% dodge.", effect: { kind: "stat", maxHp: 6, dodge: 2 } },
-  { key: "2b", tier: 2, name: "Hemostasis", desc: "Death Strike leeches +10%.", effect: { kind: "ability", mod: { abilityId: "deathstrike", lifestealDelta: 0.1 } } },
-  { key: "3a", tier: 3, name: "Heart Strike", desc: "Frost Strike +0.3× damage.", effect: { kind: "ability", mod: { abilityId: "froststrike", multDelta: 0.3 } } },
-  { key: "3b", tier: 3, name: "Bloodworms", desc: "Below 40% HP, +20% damage.", effect: { kind: "passive", hook: "low_hp_dmg", power: 20 } },
-  { key: "4a", tier: 4, name: "Dancing Rune Weapon", desc: "Blood Boil CD −1.", effect: { kind: "ability", mod: { abilityId: "bloodboil", cooldownDelta: -1 } } },
-  { key: "4b", tier: 4, name: "Vampiric Blood", desc: "All attacks +10% lifesteal.", effect: { kind: "passive", hook: "lifesteal_boost", power: 10 } },
-  { key: "5a", tier: 5, name: "Marrowrend", capstone: true, desc: "★ Death Strike: 1.6× ATK, 50% lifesteal.", effect: { kind: "ability", mod: { abilityId: "deathstrike", multDelta: 0.3, lifestealDelta: 0.2, rename: "Marrowrend", descOverride: "Bone rend. 1.6× ATK, heal half dealt." } } },
-  { key: "5b", tier: 5, name: "Blooddrinker", capstone: true, desc: "★ Blood Boil: 2.0× ATK, brutal bleed.", effect: { kind: "ability", mod: { abilityId: "bloodboil", multDelta: 0.3, statusAmp: { kind: "bleed", powerDelta: 3 }, rename: "Blooddrinker", descOverride: "Blood chug. 2.0× ATK, heavy bleed." } } },
-  { key: "5c", tier: 5, name: "Anti-Magic Shell", capstone: true, desc: "★ Frost Strike: deep chill + 25% lifesteal.", effect: { kind: "ability", mod: { abilityId: "froststrike", lifestealDelta: 0.25, statusAmp: { kind: "chill", turnsDelta: 1, powerDelta: 0.1 }, rename: "Anti-Magic Shell", descOverride: "Runic ward. Chill + 25% lifesteal." } } },
-]);
-
-const frost_dk = buildTree("dkfrost", [
-  { key: "1", tier: 1, name: "Rime", desc: "+30% vs chilled foes.", effect: { kind: "passive", hook: "vs_chilled", power: 30 } },
-  { key: "2a", tier: 2, name: "Killing Machine", desc: "+12% crit.", effect: { kind: "passive", hook: "crit_bonus", power: 12 } },
-  { key: "2b", tier: 2, name: "Frozen Pulse", desc: "Frost Strike chill +1 turn.", effect: { kind: "ability", mod: { abilityId: "froststrike", statusAmp: { kind: "chill", turnsDelta: 1 } } } },
-  { key: "3a", tier: 3, name: "Howling Blast", desc: "Frost Strike +0.4× damage.", effect: { kind: "ability", mod: { abilityId: "froststrike", multDelta: 0.4 } } },
-  { key: "3b", tier: 3, name: "Gathering Storm", desc: "Chill potency +0.1.", effect: { kind: "passive", hook: "dot_amp_chill", power: 1 } },
-  { key: "4a", tier: 4, name: "Pillar of Frost", desc: "Death Strike ×1.5 vs chilled.", effect: { kind: "ability", mod: { abilityId: "deathstrike", bonusVsChillDelta: 0.5 } } },
-  { key: "4b", tier: 4, name: "Breath of Sindragosa", desc: "Blood Boil applies chill.", effect: { kind: "ability", mod: { abilityId: "bloodboil", extraStatus: { kind: "chill", turns: 2, power: 1.3 } } } },
-  { key: "5a", tier: 5, name: "Obliterate", capstone: true, desc: "★ Death Strike: 2.0× ATK, ×2 vs chilled.", effect: { kind: "ability", mod: { abilityId: "deathstrike", multDelta: 0.7, bonusVsChillDelta: 1.0, rename: "Obliterate", descOverride: "Rune obliteration. 2.0× ATK, shatters chill." } } },
-  { key: "5b", tier: 5, name: "Frostscythe", capstone: true, desc: "★ Frost Strike: 1.4× ATK, always chills.", effect: { kind: "ability", mod: { abilityId: "froststrike", multDelta: 0.4, statusAmp: { kind: "chill", powerDelta: 0.2, turnsDelta: 1 }, rename: "Frostscythe", descOverride: "Scythe of frost. 1.4× ATK, deep chill." } } },
-  { key: "5c", tier: 5, name: "Remorseless Winter", capstone: true, desc: "★ Blood Boil: 1.8× ATK, freeze 1t.", effect: { kind: "ability", mod: { abilityId: "bloodboil", multDelta: 0.1, rename: "Remorseless Winter", descOverride: "Winter storm. 1.8× ATK, brief freeze." } } },
-]);
-
-const unholy = buildTree("unholy", [
-  { key: "1", tier: 1, name: "Festering Wounds", desc: "Bleed ticks +2.", effect: { kind: "passive", hook: "dot_amp_bleed", power: 2 } },
-  { key: "2a", tier: 2, name: "Unholy Blight", desc: "+25% vs bleeding.", effect: { kind: "passive", hook: "vs_bleeding", power: 25 } },
-  { key: "2b", tier: 2, name: "All Will Serve", desc: "Death Strike +0.2× damage.", effect: { kind: "ability", mod: { abilityId: "deathstrike", multDelta: 0.2 } } },
-  { key: "3a", tier: 3, name: "Defile", desc: "Blood Boil burn +2.", effect: { kind: "ability", mod: { abilityId: "bloodboil", extraStatus: { kind: "burn", turns: 3, power: 4 } } } },
-  { key: "3b", tier: 3, name: "Epidemic", desc: "Burn ticks +2.", effect: { kind: "passive", hook: "dot_amp_burn", power: 2 } },
-  { key: "4a", tier: 4, name: "Dark Transformation", desc: "Frost Strike applies bleed.", effect: { kind: "ability", mod: { abilityId: "froststrike", extraStatus: { kind: "bleed", turns: 3, power: 4 } } } },
-  { key: "4b", tier: 4, name: "Soul Reaper", desc: "Kills empower next hit (+25%).", effect: { kind: "passive", hook: "kill_frenzy", power: 25 } },
-  { key: "5a", tier: 5, name: "Festering Strike", capstone: true, desc: "★ Death Strike: 1.5× ATK, festering bleed.", effect: { kind: "ability", mod: { abilityId: "deathstrike", multDelta: 0.2, statusAmp: { kind: "bleed", powerDelta: 3, turnsDelta: 2 }, rename: "Festering Strike", descOverride: "Festering blade. 1.5× ATK, plague bleed." } } },
-  { key: "5b", tier: 5, name: "Army of the Dead", capstone: true, desc: "★ Blood Boil: 2.0× ATK, plague burn.", effect: { kind: "ability", mod: { abilityId: "bloodboil", multDelta: 0.3, statusAmp: { kind: "burn", powerDelta: 4 }, rename: "Army of the Dead", descOverride: "Legion boil. 2.0× ATK, plague fire." } } },
-  { key: "5c", tier: 5, name: "Summon Gargoyle", capstone: true, desc: "★ Frost Strike: 1.5× ATK, ignores guard.", effect: { kind: "ability", mod: { abilityId: "froststrike", multDelta: 0.5, ignoreGuard: true, rename: "Summon Gargoyle", descOverride: "Gargoyle strike. 1.5× ATK, pierces guard." } } },
-]);
+// ── Death Knight (v2 modules) ───────────────────────────────────────────────
 
 // ── Demon Hunter ──────────────────────────────────────────────────────────
 
@@ -312,9 +276,9 @@ export const TALENT_TREES: Record<string, TalentNode[]> = {
   balance,
   feral,
   restoration,
-  blood_dk,
-  frost_dk,
-  unholy,
+  blood_dk: BLOOD_DK_TREE_V2,
+  frost_dk: FROST_DK_TREE_V2,
+  unholy: UNHOLY_TREE_V2,
   havoc,
   vengeance,
 };
