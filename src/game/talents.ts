@@ -1,5 +1,10 @@
 import type { StatusEffectKind } from "@/game/data";
 import { ARMS_TREE_V2 } from "@/game/talents/arms";
+import { FURY_TREE_V2 } from "@/game/talents/fury";
+import { PROTECTION_TREE_V2 } from "@/game/talents/protection";
+import { ASSASSINATION_TREE_V2 } from "@/game/talents/assassination";
+import { OUTLAW_TREE_V2 } from "@/game/talents/outlaw";
+import { SUBTLETY_TREE_V2 } from "@/game/talents/subtlety";
 
 export type TalentPassiveHook =
   | "dot_amp_bleed"
@@ -97,74 +102,7 @@ function buildTree(prefix: string, nodes: (RawNode & { tier: 1 | 2 | 3 | 4 | 5 }
   }));
 }
 
-// ── Warrior ─────────────────────────────────────────────────────────────────
-
-const fury = buildTree("fury", [
-  { key: "1", tier: 1, name: "Bloodthirsty", desc: "All attacks leech +8% life.", effect: { kind: "passive", hook: "lifesteal_boost", power: 8 } },
-  { key: "2a", tier: 2, name: "Enrage", desc: "Below 40% HP, deal +20% damage.", effect: { kind: "passive", hook: "low_hp_dmg", power: 20 } },
-  { key: "2b", tier: 2, name: "Meat Cleaver", desc: "Cleave cooldown −1.", effect: { kind: "ability", mod: { abilityId: "cleave", cooldownDelta: -1 } } },
-  { key: "3a", tier: 3, name: "Rampage", desc: "Strike hits bleeding foes for +35%.", effect: { kind: "ability", mod: { abilityId: "strike", bonusVsBleedMult: 1.35 } } },
-  { key: "3b", tier: 3, name: "Cruelty", desc: "Burn ticks deal +2 damage.", effect: { kind: "passive", hook: "dot_amp_burn", power: 2 } },
-  { key: "4a", tier: 4, name: "Dragon Roar", desc: "Cleave applies Burn (3t).", effect: { kind: "ability", mod: { abilityId: "cleave", extraStatus: { kind: "burn", turns: 3, power: 4 } } } },
-  { key: "4b", tier: 4, name: "Recklessness", desc: "+12% crit chance.", effect: { kind: "passive", hook: "crit_bonus", power: 12 } },
-  { key: "5a", tier: 5, name: "Bloodthirst", capstone: true, desc: "★ Strike becomes Bloodthirst: 1.4× ATK, 35% lifesteal.", effect: { kind: "ability", mod: { abilityId: "strike", multDelta: 0.4, lifestealDelta: 0.35, rename: "Bloodthirst", descOverride: "Ravenous strike. 1.4× ATK, heal 35% of damage." } } },
-  { key: "5b", tier: 5, name: "Raging Blow", capstone: true, desc: "★ Cleave hits twice as hard: 2.4× ATK.", effect: { kind: "ability", mod: { abilityId: "cleave", multDelta: 0.8, rename: "Raging Blow", descOverride: "Twin cleave. 2.4× ATK + bleed." } } },
-  { key: "5c", tier: 5, name: "Victory Rush", capstone: true, desc: "★ Kills with Strike heal 15% Max HP.", effect: { kind: "ability", mod: { abilityId: "strike", lifestealDelta: 0.5, multDelta: 0.2, rename: "Victory Rush", descOverride: "Finishing strike. 1.2× ATK, massive lifesteal on kill." } } },
-]);
-
-const protection = buildTree("protection", [
-  { key: "1", tier: 1, name: "Tough as Nails", desc: "+8 Max HP, +2% dodge.", effect: { kind: "stat", maxHp: 8, dodge: 2 } },
-  { key: "2a", tier: 2, name: "Shield Mastery", desc: "Shield Wall blocks 10% more.", effect: { kind: "ability", mod: { abilityId: "wall", reduceDelta: 0.1 } } },
-  { key: "2b", tier: 2, name: "Thunder Clap", desc: "Cleave applies Chill (2t).", effect: { kind: "ability", mod: { abilityId: "cleave", extraStatus: { kind: "chill", turns: 2, power: 1.25 } } } },
-  { key: "3a", tier: 3, name: "Last Stand", desc: "Shield Wall heals 12% Max HP.", effect: { kind: "ability", mod: { abilityId: "wall", healPctOnShield: 0.12 } } },
-  { key: "3b", tier: 3, name: "Devastate", desc: "Strike applies bleed (3t).", effect: { kind: "ability", mod: { abilityId: "strike", extraStatus: { kind: "bleed", turns: 3, power: 3 } } } },
-  { key: "4a", tier: 4, name: "Bastion", desc: "+4% dodge.", effect: { kind: "passive", hook: "dodge_bonus", power: 4 } },
-  { key: "4b", tier: 4, name: "Heavy Repercussions", desc: "Strike hits 25% harder.", effect: { kind: "ability", mod: { abilityId: "strike", multDelta: 0.25 } } },
-  { key: "5a", tier: 5, name: "Shield Slam", capstone: true, desc: "★ Strike becomes Shield Slam: 1.5× ATK, ignores guard.", effect: { kind: "ability", mod: { abilityId: "strike", multDelta: 0.5, ignoreGuard: true, rename: "Shield Slam", descOverride: "Shield bash. 1.5× ATK, pierces guard." } } },
-  { key: "5b", tier: 5, name: "Avatar", capstone: true, desc: "★ Shield Wall: 90% block + heal 25% Max HP.", effect: { kind: "ability", mod: { abilityId: "wall", reduceDelta: 0.2, healPctOnShield: 0.25, rename: "Avatar", descOverride: "Unbreakable. Block 90% next hit, heal 25% Max HP." } } },
-  { key: "5c", tier: 5, name: "Revenge", capstone: true, desc: "★ Cleave after blocking: 2.0× ATK, +50% lifesteal.", effect: { kind: "ability", mod: { abilityId: "cleave", multDelta: 0.4, lifestealDelta: 0.5, rename: "Revenge", descOverride: "Vengeful cleave. 2.0× ATK, heavy lifesteal." } } },
-]);
-
-// ── Rogue ───────────────────────────────────────────────────────────────────
-
-const assassination = buildTree("assassin", [
-  { key: "1", tier: 1, name: "Venomous Wounds", desc: "Bleed ticks deal +2 damage.", effect: { kind: "passive", hook: "dot_amp_bleed", power: 2 } },
-  { key: "2a", tier: 2, name: "Exsanguinate", desc: "+25% damage vs bleeding foes.", effect: { kind: "passive", hook: "vs_bleeding", power: 25 } },
-  { key: "2b", tier: 2, name: "Cold Blood", desc: "+10% crit chance.", effect: { kind: "passive", hook: "crit_bonus", power: 10 } },
-  { key: "3a", tier: 3, name: "Hemorrhage", desc: "Slash applies bleed (3t).", effect: { kind: "ability", mod: { abilityId: "slash", extraStatus: { kind: "bleed", turns: 3, power: 4 } } } },
-  { key: "3b", tier: 3, name: "Seal Fate", desc: "Crits apply 4 bleed.", effect: { kind: "passive", hook: "crit_dot_bleed", power: 4 } },
-  { key: "4a", tier: 4, name: "Rupture Mastery", desc: "Eviscerate bleed +2 power, +2 turns.", effect: { kind: "ability", mod: { abilityId: "eviscerate", statusAmp: { kind: "bleed", powerDelta: 2, turnsDelta: 2 } } } },
-  { key: "4b", tier: 4, name: "Vendetta", desc: "Backstab +0.4× vs bleeding.", effect: { kind: "ability", mod: { abilityId: "backstab", bonusVsBleedMult: 1.4 } } },
-  { key: "5a", tier: 5, name: "Mutilate", capstone: true, desc: "★ Slash becomes Mutilate: 1.3× ATK, vicious bleed.", effect: { kind: "ability", mod: { abilityId: "slash", multDelta: 0.3, statusAmp: { kind: "bleed", powerDelta: 3, turnsDelta: 2 }, rename: "Mutilate", descOverride: "Twin puncture. 1.3× ATK, crippling bleed (7/t, 6t)." } } },
-  { key: "5b", tier: 5, name: "Envenom", capstone: true, desc: "★ Eviscerate becomes Envenom: 2.2× ATK poison burst.", effect: { kind: "ability", mod: { abilityId: "eviscerate", multDelta: 0.4, extraStatus: { kind: "burn", turns: 4, power: 5 }, rename: "Envenom", descOverride: "Toxic finisher. 2.2× ATK + poison burn." } } },
-  { key: "5c", tier: 5, name: "Deathmark", capstone: true, desc: "★ Backstab executes bleeds: 3.0× vs bleeding.", effect: { kind: "ability", mod: { abilityId: "backstab", bonusVsBleedMult: 2.0, multDelta: 0.3, rename: "Deathmark", descOverride: "Marked for death. 3.0× ATK (×2 vs bleeding)." } } },
-]);
-
-const outlaw = buildTree("outlaw", [
-  { key: "1", tier: 1, name: "Restless Blades", desc: "Pass Turn ticks ability CDs twice.", effect: { kind: "passive", hook: "pass_cd_tick", power: 1 } },
-  { key: "2a", tier: 2, name: "Opportunity", desc: "+15% crit chance.", effect: { kind: "passive", hook: "crit_bonus", power: 15 } },
-  { key: "2b", tier: 2, name: "Dirty Tricks", desc: "Slash applies bleed (2t).", effect: { kind: "ability", mod: { abilityId: "slash", extraStatus: { kind: "bleed", turns: 2, power: 3 } } } },
-  { key: "3a", tier: 3, name: "Alacrity", desc: "Eviscerate CD −1.", effect: { kind: "ability", mod: { abilityId: "eviscerate", cooldownDelta: -1 } } },
-  { key: "3b", tier: 3, name: "Gunpowder Plot", desc: "Burn ticks +2 damage.", effect: { kind: "passive", hook: "dot_amp_burn", power: 2 } },
-  { key: "4a", tier: 4, name: "Blade Flurry", desc: "Slash hits 20% harder.", effect: { kind: "ability", mod: { abilityId: "slash", multDelta: 0.2 } } },
-  { key: "4b", tier: 4, name: "Killing Spree", desc: "Kills empower next hit (+25%).", effect: { kind: "passive", hook: "kill_frenzy", power: 25 } },
-  { key: "5a", tier: 5, name: "Pistol Shot", capstone: true, desc: "★ Slash becomes Pistol Shot: 1.2× ATK, always crits bleeding.", effect: { kind: "ability", mod: { abilityId: "slash", multDelta: 0.2, bonusCritPct: 25, bonusVsBleedMult: 1.5, rename: "Pistol Shot", descOverride: "Quick draw. 1.2× ATK, +25% crit, bonus vs bleed." } } },
-  { key: "5b", tier: 5, name: "Between the Eyes", capstone: true, desc: "★ Backstab: 2.8× ATK, +20% crit.", effect: { kind: "ability", mod: { abilityId: "backstab", multDelta: 0.3, bonusCritPct: 20, rename: "Between the Eyes", descOverride: "Precision shot. 2.8× ATK, +20% crit." } } },
-  { key: "5c", tier: 5, name: "Roll the Bones", capstone: true, desc: "★ Eviscerate: 2.0× ATK, vicious bleed.", effect: { kind: "ability", mod: { abilityId: "eviscerate", multDelta: 0.2, statusAmp: { kind: "bleed", powerDelta: 2, turnsDelta: 1 }, rename: "Roll the Bones", descOverride: "Lucky cut. 2.0× ATK, deeper bleed." } } },
-]);
-
-const subtlety = buildTree("subtle", [
-  { key: "1", tier: 1, name: "Find Weakness", desc: "+20% damage vs chilled foes.", effect: { kind: "passive", hook: "vs_chilled", power: 20 } },
-  { key: "2a", tier: 2, name: "Shadow Focus", desc: "Backstab CD −1.", effect: { kind: "ability", mod: { abilityId: "backstab", cooldownDelta: -1 } } },
-  { key: "2b", tier: 2, name: "Premeditation", desc: "+12% crit chance.", effect: { kind: "passive", hook: "crit_bonus", power: 12 } },
-  { key: "3a", tier: 3, name: "Nightblade", desc: "Slash applies Chill (2t).", effect: { kind: "ability", mod: { abilityId: "slash", extraStatus: { kind: "chill", turns: 2, power: 1.35 } } } },
-  { key: "3b", tier: 3, name: "Shadow Dance", desc: "Chill potency +0.1 (foes take more dmg).", effect: { kind: "passive", hook: "dot_amp_chill", power: 1 } },
-  { key: "4a", tier: 4, name: "Eviscerate from Shadows", desc: "Eviscerate +0.3× damage.", effect: { kind: "ability", mod: { abilityId: "eviscerate", multDelta: 0.3 } } },
-  { key: "4b", tier: 4, name: "Cloakwork", desc: "+3% dodge.", effect: { kind: "passive", hook: "dodge_bonus", power: 3 } },
-  { key: "5a", tier: 5, name: "Shadowstrike", capstone: true, desc: "★ Backstab becomes Shadowstrike: 2.8× ATK from stealth.", effect: { kind: "ability", mod: { abilityId: "backstab", multDelta: 0.3, rename: "Shadowstrike", descOverride: "Ambush from shadow. 2.8× ATK." } } },
-  { key: "5b", tier: 5, name: "Black Powder", capstone: true, desc: "★ Eviscerate: 2.4× ATK + burn.", effect: { kind: "ability", mod: { abilityId: "eviscerate", multDelta: 0.6, extraStatus: { kind: "burn", turns: 3, power: 5 }, rename: "Black Powder", descOverride: "Shadow bomb. 2.4× ATK + burn." } } },
-  { key: "5c", tier: 5, name: "Symbols of Death", capstone: true, desc: "★ Slash: 1.4× ATK, applies chill.", effect: { kind: "ability", mod: { abilityId: "slash", multDelta: 0.4, extraStatus: { kind: "chill", turns: 2, power: 1.35 }, rename: "Symbols of Death", descOverride: "Rune-carved cut. 1.4× ATK + chill." } } },
-]);
+// ── Warrior (Fury/Prot legacy trees replaced by v2 modules) ─────────────────
 
 // ── Mage ────────────────────────────────────────────────────────────────────
 
@@ -360,11 +298,11 @@ const vengeance = buildTree("veng", [
 
 export const TALENT_TREES: Record<string, TalentNode[]> = {
   arms: ARMS_TREE_V2,
-  fury,
-  protection,
-  assassination,
-  outlaw,
-  subtlety,
+  fury: FURY_TREE_V2,
+  protection: PROTECTION_TREE_V2,
+  assassination: ASSASSINATION_TREE_V2,
+  outlaw: OUTLAW_TREE_V2,
+  subtlety: SUBTLETY_TREE_V2,
   frost,
   fire,
   arcane,

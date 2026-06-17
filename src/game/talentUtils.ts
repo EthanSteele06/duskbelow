@@ -1,6 +1,13 @@
 import { TALENT_TREES, type TalentNode } from "@/game/talents";
 
-export const V2_TALENT_SPECS = new Set(["arms"]);
+export const V2_TALENT_SPECS = new Set([
+  "arms",
+  "fury",
+  "protection",
+  "assassination",
+  "outlaw",
+  "subtlety",
+]);
 
 export function isV2TalentTree(specId: string | null): boolean {
   return !!specId && V2_TALENT_SPECS.has(specId);
