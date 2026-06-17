@@ -235,7 +235,7 @@ export const FROST_MAGE_TREE_V2: TalentNode[] = [
   {
     id: "frost_cap_frozen_orb",
     name: "Frozen Orb",
-    desc: "★ Fireball: 1.8× MAG, spreads chill.",
+    desc: "★ Unlock Frozen Orb — orb hits ALL foes for MAG + Chill.",
     maxRank: 1,
     row: 7,
     col: 2,
@@ -243,16 +243,7 @@ export const FROST_MAGE_TREE_V2: TalentNode[] = [
     requiresPoints: 45,
     capstone: true,
     choiceGroup: "frost_capstone",
-    effect: {
-      kind: "ability",
-      mod: {
-        abilityId: "fireball",
-        multDelta: 0.3,
-        extraStatus: { kind: "chill", turns: 2, power: 1.3 },
-        rename: "Frozen Orb",
-        descOverride: "Orb of frost. 1.8× MAG + chill.",
-      },
-    },
+    effect: { kind: "grant_ability", abilityId: "frozen_orb" },
   },
   {
     id: "frost_cap_ice_barrier",

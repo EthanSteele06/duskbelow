@@ -205,13 +205,13 @@ export const FIRE_MAGE_TREE_V2: TalentNode[] = [
   {
     id: "fire_flamestrike",
     name: "Flamestrike",
-    desc: "Pass Turn ticks cooldowns once.",
+    desc: "Unlock Flamestrike — fire rains on ALL foes.",
     maxRank: 1,
     row: 6,
     col: 4,
     requires: "fire_mastery",
     requiresPoints: 38,
-    effect: { kind: "passive", hook: "pass_cd_tick", power: 1 },
+    effect: { kind: "grant_ability", abilityId: "flamestrike" },
   },
   {
     id: "fire_cap_pyroblast",

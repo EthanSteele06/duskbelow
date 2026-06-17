@@ -160,15 +160,13 @@ export const HAVOC_TREE_V2: TalentNode[] = [
   {
     id: "havoc_fel_barrage",
     name: "Fel Barrage",
-    desc: "Fel Rush +10% damage per rank.",
-    rankDescs: ["Fel Rush +10%.", "Fel Rush +20%.", "Fel Rush +30%."],
-    maxRank: 3,
+    desc: "Unlock Fel Barrage — fel bolts rake ALL foes.",
+    maxRank: 1,
     row: 5,
     col: 3,
     requires: "havoc_cycle_of_hatred",
     requiresPoints: 30,
-    scalePerRank: true,
-    effect: { kind: "ability", mod: { abilityId: "felrush", multDelta: 0.1 } },
+    effect: { kind: "grant_ability", abilityId: "fel_barrage" },
   },
   {
     id: "havoc_demonic",

@@ -1,4 +1,5 @@
 import type { Ability } from "@/game/data";
+import { TALENT_GRANTED_ABILITIES } from "@/game/data";
 import { TALENT_TREES, type TalentEffect, type TalentPassiveHook, type AbilityTalentMod, type TalentNode } from "@/game/talents";
 
 export type { TalentPassiveHook, AbilityTalentMod, TalentEffect } from "@/game/talents";
@@ -52,6 +53,9 @@ function effectForRank(node: TalentNode, rank: number): TalentEffect | null {
   }
   if (ef.kind === "ability") {
     return { kind: "ability", mod: scale ? scaleAbilityMod(ef.mod, rank) : ef.mod };
+  }
+  if (ef.kind === "grant_ability") {
+    return rank >= 1 ? ef : null;
   }
   return ef;
 }
@@ -148,8 +152,10 @@ export function resolveCombatAbilities(
   talentRanks: TalentRanks,
 ): Ability[] {
   const mods: AbilityTalentMod[] = [];
+  const grantedIds = new Set<string>();
   for (const ef of learnedEffects(specId, talentRanks)) {
     if (ef.kind === "ability") mods.push(ef.mod);
+    if (ef.kind === "grant_ability") grantedIds.add(ef.abilityId);
   }
 
   const resolveOne = (ab: Ability): Ability => {
@@ -162,6 +168,12 @@ export function resolveCombatAbilities(
 
   const resolved = base.map(resolveOne);
   if (specAbility) resolved.push(resolveOne(specAbility));
+  for (const id of grantedIds) {
+    const def = TALENT_GRANTED_ABILITIES[id];
+    if (def && !resolved.some((a) => a.id === def.id)) {
+      resolved.push(resolveOne(JSON.parse(JSON.stringify(def)) as Ability));
+    }
+  }
   return resolved;
 }
 

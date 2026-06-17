@@ -133,13 +133,77 @@ export interface StatusEffect {
 }
 
 export type AbilityEffect =
-  | { kind: "attack"; mult: number; useMag?: boolean; flavor: string; applyStatus?: { kind: StatusEffectKind; turns: number; power: number }; lifesteal?: number; bonusVsChill?: number }
+  | { kind: "attack"; mult: number; useMag?: boolean; flavor: string; applyStatus?: { kind: StatusEffectKind; turns: number; power: number }; lifesteal?: number; bonusVsChill?: number; /** "focus" = current target; "all" = every living foe. */ targets?: "focus" | "all"; /** Per-foe multiplier when targets === "all". Default 1. */ aoeMult?: number }
   | { kind: "heal"; amount: number; flavor: string; magMult?: number }
   | { kind: "hot"; healPerTurn: number; turns: number; flavor: string }
   | { kind: "flee"; flavor: string }
-  | { kind: "stun"; flavor: string }
+  | { kind: "stun"; flavor: string; /** When true, stuns every living foe (Frost Nova). */ stunAll?: boolean }
   | { kind: "shield"; reduce: number; flavor: string; healPct?: number }
   | { kind: "buff_next"; mult: number; flavor: string };
+
+/** Signature abilities unlocked via talent trees ({@link grant_ability}). */
+export const TALENT_GRANTED_ABILITIES: Record<string, Ability> = {
+  whirlwind: {
+    id: "talent_whirlwind", name: "Whirlwind", desc: "Spin through ALL foes. 0.85× ATK each. 25 Rage.",
+    cooldown: 3, cost: 25,
+    effect: { kind: "attack", mult: 0.85, targets: "all", flavor: "{p} becomes a whirlwind of steel" },
+  },
+  bladestorm: {
+    id: "talent_bladestorm", name: "Bladestorm", desc: "Fury storm. 0.9× ATK to ALL + Bleed. 35 Rage.",
+    cooldown: 4, cost: 35,
+    effect: { kind: "attack", mult: 0.9, targets: "all", applyStatus: { kind: "bleed", turns: 3, power: 4 }, flavor: "{p} erupts into bladestorm" },
+  },
+  fan_of_knives: {
+    id: "talent_fan", name: "Fan of Knives", desc: "Knives fly. 0.75× ATK to ALL + Bleed. 30 Energy.",
+    cooldown: 3, cost: 30,
+    effect: { kind: "attack", mult: 0.75, targets: "all", applyStatus: { kind: "bleed", turns: 3, power: 3 }, flavor: "{p} flings a fan of knives" },
+  },
+  frozen_orb: {
+    id: "talent_frozen_orb", name: "Frozen Orb", desc: "Orb pierces ALL foes. 0.7× MAG + Chill. 35 Mana.",
+    cooldown: 4, cost: 35,
+    effect: { kind: "attack", mult: 0.7, useMag: true, targets: "all", applyStatus: { kind: "chill", turns: 2, power: 1.25 }, flavor: "{p} launches a frozen orb" },
+  },
+  arcane_explosion: {
+    id: "talent_arcane_explosion", name: "Arcane Explosion", desc: "Blast ALL nearby. 0.8× MAG. 28 Mana.",
+    cooldown: 3, cost: 28,
+    effect: { kind: "attack", mult: 0.8, useMag: true, targets: "all", flavor: "{p} detonates arcane energy" },
+  },
+  flamestrike: {
+    id: "talent_flamestrike", name: "Flamestrike", desc: "Fire rains on ALL foes. 0.75× MAG + Burn. 32 Mana.",
+    cooldown: 4, cost: 32,
+    effect: { kind: "attack", mult: 0.75, useMag: true, targets: "all", applyStatus: { kind: "burn", turns: 3, power: 4 }, flavor: "{p} calls down flamestrike" },
+  },
+  mind_sear: {
+    id: "talent_mind_sear", name: "Mind Sear", desc: "Shadow beam hits ALL. 0.65× MAG. 30 Mana.",
+    cooldown: 3, cost: 30,
+    effect: { kind: "attack", mult: 0.65, useMag: true, targets: "all", flavor: "{p}'s mind sear tears through the pack" },
+  },
+  starfall: {
+    id: "talent_starfall", name: "Starfall", desc: "Stars crash on ALL foes. 0.7× MAG + Burn. 30 Mana.",
+    cooldown: 4, cost: 30,
+    effect: { kind: "attack", mult: 0.7, useMag: true, targets: "all", applyStatus: { kind: "burn", turns: 2, power: 3 }, flavor: "{p} calls starfall upon the enemy" },
+  },
+  death_and_decay: {
+    id: "talent_dnd", name: "Death and Decay", desc: "Unholy zone. 0.8× ATK to ALL + Bleed. 1 Rune.",
+    cooldown: 4, cost: 1,
+    effect: { kind: "attack", mult: 0.8, targets: "all", applyStatus: { kind: "bleed", turns: 4, power: 4 }, flavor: "{p} spreads death and decay" },
+  },
+  fel_barrage: {
+    id: "talent_fel_barrage", name: "Fel Barrage", desc: "Fel bolts rake ALL foes. 0.85× MAG. 40 Fury.",
+    cooldown: 4, cost: 40,
+    effect: { kind: "attack", mult: 0.85, useMag: true, targets: "all", flavor: "{p} unleashes a fel barrage" },
+  },
+  blade_dance_aoe: {
+    id: "talent_blade_dance", name: "Blade Dance", desc: "Glaives dance through ALL. 0.9× ATK. 35 Fury.",
+    cooldown: 3, cost: 35,
+    effect: { kind: "attack", mult: 0.9, targets: "all", flavor: "{p} blade-dances through the pack" },
+  },
+  thrash: {
+    id: "talent_thrash", name: "Thrash", desc: "Savage swipe hits ALL. 0.8× ATK + Bleed. 22 Mana.",
+    cooldown: 3, cost: 22,
+    effect: { kind: "attack", mult: 0.8, targets: "all", applyStatus: { kind: "bleed", turns: 3, power: 4 }, flavor: "{p} thrashes every foe in reach" },
+  },
+};
 
 export interface Ability {
   id: string;
@@ -165,7 +229,7 @@ export const CLASS_ABILITIES: Record<ClassId, Ability[]> = {
   mage: [
     { id: "frostbolt", name: "Frostbolt",  desc: "1.0× MAG + Chill (foe takes +30% dmg, 2t).",      cooldown: 0, effect: { kind: "attack", mult: 1.0, useMag: true, flavor: "{p} hurls a frostbolt", applyStatus: { kind: "chill", turns: 2, power: 1.3 } } },
     { id: "fireball",  name: "Fireball",   desc: "1.5× MAG + Burn (3t). 30 Mana.",                           cooldown: 2, cost: 30, effect: { kind: "attack", mult: 1.5, useMag: true, flavor: "{p} casts a roaring fireball", applyStatus: { kind: "burn", turns: 3, power: 5 } } },
-    { id: "nova",      name: "Frost Nova", desc: "Freeze the foe. Skip its turn. 25 Mana.",                  cooldown: 3, cost: 25, effect: { kind: "stun", flavor: "{p} unleashes a frost nova" } },
+    { id: "nova",      name: "Frost Nova", desc: "Freeze foes. Skip their turns. 25 Mana.",                  cooldown: 3, cost: 25, effect: { kind: "stun", stunAll: true, flavor: "{p} unleashes a frost nova" } },
   ],
   priest: [
     { id: "smite", name: "Smite",             desc: "Holy MAG damage.",                              cooldown: 0, effect: { kind: "attack", mult: 1.0, useMag: true, flavor: "{p} smites with holy light" } },

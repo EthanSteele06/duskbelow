@@ -201,14 +201,14 @@ export const FERAL_TREE_V2: TalentNode[] = [
   },
   {
     id: "feral_ashamane",
-    name: "Ashamane's Guidance",
-    desc: "Pass Turn ticks cooldowns once.",
+    name: "Thrash",
+    desc: "Unlock Thrash — savage swipe hits ALL foes.",
     maxRank: 1,
     row: 6,
     col: 4,
     requires: "feral_brutal_slash",
     requiresPoints: 38,
-    effect: { kind: "passive", hook: "pass_cd_tick", power: 1 },
+    effect: { kind: "grant_ability", abilityId: "thrash" },
   },
   {
     id: "feral_cap_ferocious_bite",

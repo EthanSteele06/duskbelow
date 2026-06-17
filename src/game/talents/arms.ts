@@ -160,16 +160,14 @@ export const ARMS_TREE_V2: TalentNode[] = [
   // ── Row 5 (30 points) ───────────────────────────────────────────────────
   {
     id: "arms_bladestorm",
-    name: "Bladestorm",
-    desc: "Cleave damage +10% per rank.",
-    rankDescs: ["Cleave +10%.", "Cleave +20%.", "Cleave +30%."],
-    maxRank: 3,
+    name: "Whirlwind",
+    desc: "Unlock Whirlwind — spin through ALL foes for 0.85× ATK each.",
+    maxRank: 1,
     row: 5,
     col: 1,
     requires: "arms_bloodletting",
     requiresPoints: 30,
-    scalePerRank: true,
-    effect: { kind: "ability", mod: { abilityId: "cleave", multDelta: 0.1 } },
+    effect: { kind: "grant_ability", abilityId: "whirlwind" },
   },
   {
     id: "arms_sudden_death",

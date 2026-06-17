@@ -63,7 +63,8 @@ export interface AbilityTalentMod {
 export type TalentEffect =
   | { kind: "stat"; atk?: number; mag?: number; maxHp?: number; crit?: number; dodge?: number }
   | { kind: "passive"; hook: TalentPassiveHook; power: number }
-  | { kind: "ability"; mod: AbilityTalentMod };
+  | { kind: "ability"; mod: AbilityTalentMod }
+  | { kind: "grant_ability"; abilityId: string };
 
 export interface TalentNode {
   id: string;
