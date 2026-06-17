@@ -723,6 +723,12 @@ export function DungeonScreen() {
       });
       addLog(`${e.enemy.name} ignites from the critical hit!`);
     }
+    if (crit && talentPassives.crit_dot_chill) {
+      nextEffects = nextEffects.filter((x) => x.kind !== "chill").concat({
+        kind: "chill", turns: 2, power: 1.2 + (talentPassives.crit_dot_chill - 2) * 0.1,
+      });
+      addLog(`${e.enemy.name} is chilled by the critical frost!`);
+    }
     return {
       ...e,
       enemyHp: Math.max(0, e.enemyHp - dmg),

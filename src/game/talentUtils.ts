@@ -10,6 +10,17 @@ export const V2_TALENT_SPECS = new Set([
   "blood_dk",
   "frost_dk",
   "unholy",
+  "havoc",
+  "vengeance",
+  "frost",
+  "fire",
+  "arcane",
+  "discipline",
+  "holy",
+  "shadow",
+  "balance",
+  "feral",
+  "restoration",
 ]);
 
 export function isV2TalentTree(specId: string | null): boolean {
@@ -79,13 +90,13 @@ export function canLearnTalent(
 
 export function treeLayout(specId: string): { rows: number; cols: number; nodes: TalentNode[] } {
   const nodes = TALENT_TREES[specId] ?? [];
-  let rows = 1;
-  let cols = 1;
+  let rows = 0;
+  let cols = 0;
   for (const n of nodes) {
-    if (n.row != null) rows = Math.max(rows, n.row + 1);
-    if (n.col != null) cols = Math.max(cols, n.col + 1);
+    if (n.row !== undefined) rows = Math.max(rows, n.row + 1);
+    if (n.col !== undefined) cols = Math.max(cols, n.col + 1);
   }
-  return { rows, cols, nodes };
+  return { rows: Math.max(rows, 1), cols: Math.max(cols, 1), nodes };
 }
 
 export function rankDescription(node: TalentNode, rank: number): string {
