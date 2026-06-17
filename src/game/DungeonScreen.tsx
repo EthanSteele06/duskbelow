@@ -496,7 +496,11 @@ export function DungeonScreen() {
   };
 
   const enemyTurn = (eIn: CombatEnc): CombatEnc => {
-    if (finishingKillRef.current || eIn.enemyHp <= 0) return eIn;
+    if (finishingKillRef.current || victoryBeatRef.current) return eIn;
+    if (eIn.enemyHp <= 0) {
+      finishKill(eIn);
+      return eIn;
+    }
     let e = bumpTurnEnrage(eIn);
     if (e.enemyParryActive) {
       addLog(`${e.enemy.name}'s parry stance fades.`);
@@ -692,11 +696,37 @@ export function DungeonScreen() {
     }
     return {
       ...e,
-      enemyHp: e.enemyHp - dmg,
+      enemyHp: Math.max(0, e.enemyHp - dmg),
       enemyEffects: nextEffects,
       enemyGuardPct: guardPct,
       enemyParryActive: parryActive,
     };
+  };
+
+  const clearDeadEnemy = (e: CombatEnc): CombatEnc => ({
+    ...e,
+    enemyHp: 0,
+    enemyEffects: [],
+    enemyGuardPct: 0,
+    enemyParryActive: false,
+    stunnedTurns: 0,
+  });
+
+  const scheduleVictoryTransition = (e: CombatEnc, loot: Loot) => {
+    const beat = { depth: e.depth, enemy: e.enemy, enemyMaxHp: e.enemyMaxHp, loot };
+    victoryBeatRef.current = beat;
+    setVictoryBeat(beat);
+    if (victoryTimerRef.current !== null) clearTimeout(victoryTimerRef.current);
+    victoryTimerRef.current = window.setTimeout(() => {
+      victoryBeatRef.current = null;
+      setVictoryBeat(null);
+      setEnc({ kind: "victory", depth: e.depth, loot });
+      setRoomTransition("in");
+      const inId = window.setTimeout(() => setRoomTransition("idle"), ROOM_FADE_IN_MS);
+      roomTimersRef.current.push(inId);
+      playSfx("loot");
+      victoryTimerRef.current = null;
+    }, VICTORY_BEAT_MS);
   };
 
   const beginEnemyPhase = (e: CombatEnc, usedAbilityId?: string, usedCooldown = 0) => {
@@ -728,7 +758,10 @@ export function DungeonScreen() {
         turnTimersRef.current.push(flashId);
       }
       const after = enemyTurn(stepped);
-      if (after.enemyHp <= 0 || finishingKillRef.current) return;
+      if (after.enemyHp <= 0 || finishingKillRef.current) {
+        if (after.enemyHp <= 0 && !finishingKillRef.current) finishKill(after);
+        return;
+      }
       setEnc(after);
       const idleId = window.setTimeout(() => {
         if (finishingKillRef.current || victoryBeatRef.current) return;
@@ -765,7 +798,12 @@ export function DungeonScreen() {
       case "attack": {
         playSfx("hit");
         const after = applyAttack(e, ab as Ability & { effect: Extract<Ability["effect"], { kind: "attack" }> });
-        if (after.enemyHp <= 0) { finishKill(after); return; }
+        setEnc(after);
+        if (after.enemyHp <= 0) {
+          advanceAbilityCooldowns(ab.id, ab.cooldown);
+          finishKill(after);
+          return;
+        }
         beginEnemyPhase(after, ab.id, ab.cooldown);
         return;
       }
@@ -849,11 +887,12 @@ export function DungeonScreen() {
   const finishKill = (e: CombatEnc) => {
     if (finishingKillRef.current) return;
     finishingKillRef.current = true;
-    try {
     clearTurnTimers();
     setTurnPhase("resolving");
     setArmedAbility(null);
-    // Fork bias: Left favors gold, Right favors XP & material drops.
+    // Lock the encounter immediately — loot rolling must not block death resolution.
+    setEnc(clearDeadEnemy(e));
+
     const goldMult = forkBias === "left" ? 1.25 : 1;
     const xpMult = forkBias === "right" ? 1.3 : 1;
     const gearChanceBonus = forkBias === "left" ? 0.1 : 0;
@@ -861,90 +900,78 @@ export function DungeonScreen() {
     const threatLoot = threatLootBonus(e.threatTier);
     const goldDrop = Math.round((4 + e.depth * 3) * goldMult * threatLoot.gold);
     const xpDrop = Math.round((6 + e.depth * 4) * xpMult * threatLoot.xp);
-    rewardGold(goldDrop); rewardXp(xpDrop);
-    addLog(`${e.enemy.name} falls. +${goldDrop}g +${xpDrop}xp`);
-    if (e.threatTier !== "none") {
-      addLog(`✦ ${THREAT_TIERS[e.threatTier].label} foe — richer spoils.`);
-    }
-    vibrate([20, 40, 60]);
-    playSfx("death");
     let questItem: string | undefined;
     let material: string | undefined;
     let gear: GearItem | undefined;
-    if (e.enemy.questItemId && Math.random() < 0.6) { addQuestItem(e.enemy.questItemId); questItem = e.enemy.questItemId; }
-    let matId = e.enemy.materialDrop?.id;
-    let matChance = (e.enemy.materialDrop?.chance ?? 0) * matChanceMult;
-    const zones = zoneContext(e.depth);
-    if (zones.boneHalls && e.depth >= 6 && e.depth <= 10 && ["skeleton", "ghoul", "stone_golem", "ogre"].includes(e.enemy.id)) {
-      matId = "bone_dust";
-      matChance = Math.max(matChance, 0.55);
-    }
-    if (matId && Math.random() < matChance) { addMaterial(matId); material = matId; }
-    const isFinalBoss = e.depth >= maxDepthForMode(player.dungeonMode);
-    const isBossEnemy = !!BOSS_MOMENTS[e.enemy.id];
-    const ownsLegendary =
-      Object.values(player.equipment).some((g) => g?.rarity === "legendary") ||
-      player.bag.some((g) => g.rarity === "legendary");
-    // Final-boss class legendary: 1% drop, only if the player owns none.
-    if (isFinalBoss && player.classId && !ownsLegendary && Math.random() < 0.01) {
-      const legend = rollClassLegendary(player.classId, e.depth);
-      if (addToBag(legend)) { gear = legend; addLog(`✦ A legendary stirs in the wreckage — ${legend.name}!`); }
-      else addLog("Bag full — a legendary was left behind!");
-    } else {
-      const source: "trash" | "chest" | "mini_boss" | "major_boss" | "final_boss" =
-        isFinalBoss ? "final_boss"
-        : isMajorBossFloor(e.depth, player.dungeonMode) ? "major_boss"
-        : isMiniBossFloor(e.depth, player.dungeonMode) ? "mini_boss"
-        : "trash";
-      const gearChance = isFinalBoss ? 1 : Math.min(1, 0.35 + e.depth * 0.04 + gearChanceBonus + threatLoot.gear);
-      if (Math.random() < gearChance) {
-        const rolled = rollGear(e.depth, { source });
-        if (addToBag(rolled)) gear = rolled;
-        else addLog("Bag full — gear left behind.");
+
+    try {
+      rewardGold(goldDrop);
+      rewardXp(xpDrop);
+      addLog(`${e.enemy.name} falls. +${goldDrop}g +${xpDrop}xp`);
+      if (e.threatTier !== "none") {
+        addLog(`✦ ${THREAT_TIERS[e.threatTier].label} foe — richer spoils.`);
       }
-    }
-    // Journal + shards. Major bosses guarantee their first-kill lore page.
-    const loreByEnemy: Record<string, string> = {
-      cultist: "lore_seals", wraith: "lore_wraith", ogre: "lore_ogre", dragon: "lore_dragon", skeleton: "lore_brigade",
-    };
-    const bossLore = BOSS_MOMENTS[e.enemy.id]?.firstKillLore;
-    recordKill(e.enemy.id, {
-      boss: isBossEnemy,
-      loreId: bossLore ?? (Math.random() < 0.4 ? loreByEnemy[e.enemy.id] : undefined),
-      itemDropId: gear?.baseId,
-    });
-    if (talentPassives.kill_frenzy) {
-      armNextAttack(1 + talentPassives.kill_frenzy / 100);
-      addLog(`Blood sings — next attack empowered!`);
-    }
-    const loot: Loot = { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material, gear };
-    const beat = { depth: e.depth, enemy: e.enemy, enemyMaxHp: e.enemyMaxHp, loot };
-    victoryBeatRef.current = beat;
-    setEnc({
-      ...e,
-      enemyHp: 0,
-      enemyEffects: [],
-      enemyGuardPct: 0,
-      enemyParryActive: false,
-      stunnedTurns: 0,
-    });
-    setVictoryBeat(beat);
-    if (victoryTimerRef.current !== null) clearTimeout(victoryTimerRef.current);
-    victoryTimerRef.current = window.setTimeout(() => {
-      victoryBeatRef.current = null;
-      setVictoryBeat(null);
-      setEnc({ kind: "victory", depth: e.depth, loot });
-      setRoomTransition("in");
-      const inId = window.setTimeout(() => setRoomTransition("idle"), ROOM_FADE_IN_MS);
-      roomTimersRef.current.push(inId);
-      playSfx("loot");
-      victoryTimerRef.current = null;
-    }, VICTORY_BEAT_MS);
+      vibrate([20, 40, 60]);
+      playSfx("death");
+      if (e.enemy.questItemId && Math.random() < 0.6) { addQuestItem(e.enemy.questItemId); questItem = e.enemy.questItemId; }
+      let matId = e.enemy.materialDrop?.id;
+      let matChance = (e.enemy.materialDrop?.chance ?? 0) * matChanceMult;
+      const zones = zoneContext(e.depth);
+      if (zones.boneHalls && e.depth >= 6 && e.depth <= 10 && ["skeleton", "ghoul", "stone_golem", "ogre"].includes(e.enemy.id)) {
+        matId = "bone_dust";
+        matChance = Math.max(matChance, 0.55);
+      }
+      if (matId && Math.random() < matChance) { addMaterial(matId); material = matId; }
+      const isFinalBoss = e.depth >= maxDepthForMode(player.dungeonMode);
+      const isBossEnemy = !!BOSS_MOMENTS[e.enemy.id];
+      const ownsLegendary =
+        Object.values(player.equipment).some((g) => g?.rarity === "legendary") ||
+        player.bag.some((g) => g.rarity === "legendary");
+      if (isFinalBoss && player.classId && !ownsLegendary && Math.random() < 0.01) {
+        const legend = rollClassLegendary(player.classId, e.depth);
+        if (addToBag(legend)) { gear = legend; addLog(`✦ A legendary stirs in the wreckage — ${legend.name}!`); }
+        else addLog("Bag full — a legendary was left behind!");
+      } else {
+        const source: "trash" | "chest" | "mini_boss" | "major_boss" | "final_boss" =
+          isFinalBoss ? "final_boss"
+          : isMajorBossFloor(e.depth, player.dungeonMode) ? "major_boss"
+          : isMiniBossFloor(e.depth, player.dungeonMode) ? "mini_boss"
+          : "trash";
+        const gearChance = isFinalBoss ? 1 : Math.min(1, 0.35 + e.depth * 0.04 + gearChanceBonus + threatLoot.gear);
+        if (Math.random() < gearChance) {
+          const rolled = rollGear(e.depth, { source });
+          if (addToBag(rolled)) gear = rolled;
+          else addLog("Bag full — gear left behind.");
+        }
+      }
+      const loreByEnemy: Record<string, string> = {
+        cultist: "lore_seals", wraith: "lore_wraith", ogre: "lore_ogre", dragon: "lore_dragon", skeleton: "lore_brigade",
+      };
+      const bossLore = BOSS_MOMENTS[e.enemy.id]?.firstKillLore;
+      recordKill(e.enemy.id, {
+        boss: isBossEnemy,
+        loreId: bossLore ?? (Math.random() < 0.4 ? loreByEnemy[e.enemy.id] : undefined),
+        itemDropId: gear?.baseId,
+      });
+      if (talentPassives.kill_frenzy) {
+        armNextAttack(1 + talentPassives.kill_frenzy / 100);
+        addLog(`Blood sings — next attack empowered!`);
+      }
     } catch (err) {
-      finishingKillRef.current = false;
-      throw err;
+      if (import.meta.env.DEV) console.error("[combat] finishKill loot error:", err);
     }
+
+    const loot: Loot = { enemy: e.enemy, gold: goldDrop, xp: xpDrop, questItem, material, gear };
+    scheduleVictoryTransition(e, loot);
   };
+
+  // Safety net: if HP hit zero but victory never fired, force resolution.
+  useEffect(() => {
+    if (enc.kind !== "combat") return;
+    if (enc.enemyHp > 0 || finishingKillRef.current || victoryBeatRef.current) return;
+    finishKill(enc);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only recover from HP hitting zero
+  }, [enc.kind, enc.kind === "combat" ? enc.enemyHp : 0]);
 
   const closeVictory = () => {
     if (enc.kind !== "victory") return;
