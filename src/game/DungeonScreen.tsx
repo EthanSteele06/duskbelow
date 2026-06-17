@@ -279,6 +279,25 @@ export function DungeonScreen() {
     turnTimersRef.current = [];
   };
 
+  const clearVictoryTimer = () => {
+    if (victoryTimerRef.current !== null) {
+      clearTimeout(victoryTimerRef.current);
+      victoryTimerRef.current = null;
+    }
+  };
+
+  /** Reset turn state when leaving combat or entering a new room. */
+  const resetCombatTurn = () => {
+    clearTurnTimers();
+    clearVictoryTimer();
+    setTurnPhase("idle");
+    setArmedAbility(null);
+    setArenaFlash(false);
+    finishingKillRef.current = false;
+    victoryBeatRef.current = null;
+    setVictoryBeat(null);
+  };
+
   useEffect(() => () => {
     clearTurnTimers();
     roomTimersRef.current.forEach((id) => clearTimeout(id));
@@ -291,6 +310,7 @@ export function DungeonScreen() {
   };
 
   const transitionToEnc = (next: Encounter, afterIn?: () => void) => {
+    resetCombatTurn();
     const applyEnc = () => {
       setEnc(next);
       if (next.kind === "combat") armFirstHitCrit();
@@ -367,6 +387,7 @@ export function DungeonScreen() {
     }
     if (enc.kind === "victory") {
       finishingKillRef.current = false;
+      setTurnPhase("idle");
     }
   }, [enc.kind]);
 
@@ -720,6 +741,7 @@ export function DungeonScreen() {
     victoryTimerRef.current = window.setTimeout(() => {
       victoryBeatRef.current = null;
       setVictoryBeat(null);
+      setTurnPhase("idle");
       setEnc({ kind: "victory", depth: e.depth, loot });
       setRoomTransition("in");
       const inId = window.setTimeout(() => setRoomTransition("idle"), ROOM_FADE_IN_MS);
