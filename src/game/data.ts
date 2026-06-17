@@ -1246,91 +1246,42 @@ export function buildDescentFlavor(opts: {
 
 // ── Trainers & Skill Trees ───────────────────────────────────────────────────
 
-export type SkillEffect =
-  | { kind: "stat"; atk?: number; mag?: number; maxHp?: number }
-  | { kind: "starting_potion" };
-
-export interface SkillNode {
-  id: string;
-  name: string;
-  desc: string;
-  cost: number;
-  requires?: string;
-  effect: SkillEffect;
-}
-
 export interface TrainerDef {
   classId: ClassId;
   name: string;
   title: string;
   portrait: string;
   greeting: string;
-  skills: SkillNode[];
 }
 
 export const TRAINERS: Record<ClassId, TrainerDef> = {
   warrior: {
     classId: "warrior", name: "Captain Brask", title: "Warden of the Outer Wall", portrait: trainerWarriorImg,
-    greeting: "You survived to three. That's farther than most. Show me what you'd spend a hard-earned point on.",
-    skills: [
-      { id: "w_iron",   name: "Iron Skin",       desc: "+8 Max HP.",                cost: 1, effect: { kind: "stat", maxHp: 8 } },
-      { id: "w_edge",   name: "Whetted Edge",    desc: "+2 ATK.",                   cost: 1, effect: { kind: "stat", atk: 2 } },
-      { id: "w_legend", name: "Legend of the Wall", desc: "+12 Max HP, +1 ATK.",   cost: 2, requires: "w_iron", effect: { kind: "stat", maxHp: 12, atk: 1 } },
-    ],
+    greeting: "You survived to three. That's farther than most. Choose a spec and spend your talent points wisely.",
   },
   rogue: {
     classId: "rogue", name: "Vesh", title: "Of the Crooked Lantern", portrait: trainerRogueImg,
-    greeting: "You're still breathing. Surprising. Pick a knack — I won't show twice.",
-    skills: [
-      { id: "r_swift",  name: "Swift Hands",     desc: "+3 ATK.",                   cost: 1, effect: { kind: "stat", atk: 3 } },
-      { id: "r_wit",    name: "Sharp Wit",       desc: "+1 MAG.",                   cost: 1, effect: { kind: "stat", mag: 1 } },
-      { id: "r_silent", name: "Silent Step",     desc: "+5 Max HP, +2 ATK.",        cost: 2, requires: "r_swift", effect: { kind: "stat", maxHp: 5, atk: 2 } },
-    ],
+    greeting: "You're still breathing. Surprising. Pick a path — every rank counts.",
   },
   mage: {
     classId: "mage", name: "Archivist Hael", title: "Last of the Glass Tower", portrait: trainerMageImg,
-    greeting: "The page turns. You've earned a sigil. Choose carefully — ink is finite.",
-    skills: [
-      { id: "m_focus",  name: "Arcane Focus",    desc: "+3 MAG.",                   cost: 1, effect: { kind: "stat", mag: 3 } },
-      { id: "m_wards",  name: "Lesser Wards",    desc: "+6 Max HP.",                cost: 1, effect: { kind: "stat", maxHp: 6 } },
-      { id: "m_storm",  name: "Storm Etching",   desc: "+4 MAG, +1 ATK.",           cost: 2, requires: "m_focus", effect: { kind: "stat", mag: 4, atk: 1 } },
-    ],
+    greeting: "The page turns. You've earned sigils in the tree. Choose carefully — ink is finite.",
   },
   priest: {
     classId: "priest", name: "Sister Vola", title: "Keeper of the Quiet Light", portrait: trainerPriestImg,
-    greeting: "Light kept you walking. Choose what you'll carry of it.",
-    skills: [
-      { id: "p_grace",  name: "Grace",           desc: "+2 MAG.",                   cost: 1, effect: { kind: "stat", mag: 2 } },
-      { id: "p_vigor",  name: "Vigor",           desc: "+6 Max HP, +1 ATK.",        cost: 1, effect: { kind: "stat", maxHp: 6, atk: 1 } },
-      { id: "p_radiant",name: "Radiant Conduit", desc: "+3 MAG, +6 Max HP.",        cost: 2, requires: "p_grace", effect: { kind: "stat", mag: 3, maxHp: 6 } },
-    ],
+    greeting: "Light kept you walking. Choose your calling and let the talents guide your hand.",
   },
   druid: {
     classId: "druid", name: "Elder Thorn", title: "Speaker of the Mossfather", portrait: trainerDruidImg,
     greeting: "The grove watched you climb back out. It would like a word — and a tithe of focus.",
-    skills: [
-      { id: "d_bark",   name: "Barkskin",        desc: "+8 Max HP.",                cost: 1, effect: { kind: "stat", maxHp: 8 } },
-      { id: "d_bloom",  name: "Wild Bloom",      desc: "+3 MAG.",                   cost: 1, effect: { kind: "stat", mag: 3 } },
-      { id: "d_root",   name: "Deep Roots",      desc: "+4 MAG, +6 Max HP.",        cost: 2, requires: "d_bloom", effect: { kind: "stat", mag: 4, maxHp: 6 } },
-    ],
   },
   deathknight: {
     classId: "deathknight", name: "Lich-Marshal Korr", title: "Crown of the Frozen Keep", portrait: trainerDeathKnightImg,
-    greeting: "You died well. Few do. Choose a rune — the blade gets hungrier with each.",
-    skills: [
-      { id: "dk_rune",  name: "Rune of Iron",    desc: "+2 ATK.",                   cost: 1, effect: { kind: "stat", atk: 2 } },
-      { id: "dk_chill", name: "Chill of the Grave", desc: "+8 Max HP.",             cost: 1, effect: { kind: "stat", maxHp: 8 } },
-      { id: "dk_unholy",name: "Unholy Vigor",    desc: "+3 ATK, +6 Max HP.",        cost: 2, requires: "dk_rune", effect: { kind: "stat", atk: 3, maxHp: 6 } },
-    ],
+    greeting: "You died well. Few do. Choose a rune-path — the blade gets hungrier with each rank.",
   },
   demonhunter: {
     classId: "demonhunter", name: "Kael'thar the Unblind", title: "First of the Bound", portrait: trainerDemonHunterImg,
     greeting: "You smell of fel-smoke and unfinished oaths. Good. Pick something to sharpen.",
-    skills: [
-      { id: "dh_fury",  name: "Fury Within",    desc: "+2 ATK, +1 MAG.",            cost: 1, effect: { kind: "stat", atk: 2, mag: 1 } },
-      { id: "dh_hide",  name: "Demonhide",      desc: "+8 Max HP.",                 cost: 1, effect: { kind: "stat", maxHp: 8 } },
-      { id: "dh_sight", name: "Spectral Sight", desc: "+3 MAG, +6 Max HP.",         cost: 2, requires: "dh_fury", effect: { kind: "stat", mag: 3, maxHp: 6 } },
-    ],
   },
 };
 

@@ -12,6 +12,7 @@ function scaleAbilityMod(mod: AbilityTalentMod, rank: number): AbilityTalentMod 
   if (mod.multDelta) out.multDelta = mod.multDelta * rank;
   if (mod.multMult) out.multMult = 1 + (mod.multMult - 1) * rank;
   if (mod.cooldownDelta) out.cooldownDelta = mod.cooldownDelta * rank;
+  if (mod.costDelta) out.costDelta = mod.costDelta * rank;
   if (mod.lifestealDelta) out.lifestealDelta = mod.lifestealDelta * rank;
   if (mod.bonusVsChillDelta) out.bonusVsChillDelta = mod.bonusVsChillDelta * rank;
   if (mod.bonusVsBleedMult) out.bonusVsBleedMult = 1 + (mod.bonusVsBleedMult - 1) * rank;
@@ -106,6 +107,7 @@ function applyModToAbility(ab: Ability, mod: AbilityTalentMod): Ability {
   if (mod.rename) clone.name = mod.rename;
   if (mod.descOverride) clone.desc = mod.descOverride;
   if (mod.cooldownDelta) clone.cooldown = Math.max(0, clone.cooldown + mod.cooldownDelta);
+  if (mod.costDelta) clone.cost = Math.max(0, (clone.cost ?? 0) + mod.costDelta);
 
   const ef = clone.effect;
   if (ef.kind === "attack") {

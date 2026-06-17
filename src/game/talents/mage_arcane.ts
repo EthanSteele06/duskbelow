@@ -41,7 +41,7 @@ export const ARCANE_MAGE_TREE_V2: TalentNode[] = [
   {
     id: "arcane_missiles",
     name: "Arcane Missiles",
-    desc: "Fireball CD −1 per rank (min 0).",
+    desc: "Fireball CD −1 and cost −2 Mana per rank.",
     rankDescs: ["Fireball CD −1.", "Fireball CD −2.", "Fireball CD −3."],
     maxRank: 3,
     row: 2,
@@ -49,7 +49,7 @@ export const ARCANE_MAGE_TREE_V2: TalentNode[] = [
     requires: "arcane_nether_precision",
     requiresPoints: 8,
     scalePerRank: true,
-    effect: { kind: "ability", mod: { abilityId: "fireball", cooldownDelta: -1 } },
+    effect: { kind: "ability", mod: { abilityId: "fireball", cooldownDelta: -1, costDelta: -2 } },
   },
   {
     id: "arcane_mana_adept",

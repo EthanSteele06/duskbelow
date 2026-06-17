@@ -43,6 +43,7 @@ export interface AbilityTalentMod {
   multDelta?: number;
   multMult?: number;
   cooldownDelta?: number;
+  costDelta?: number;
   lifestealDelta?: number;
   bonusVsChillDelta?: number;
   bonusVsBleedMult?: number;

@@ -103,3 +103,17 @@ export function rankDescription(node: TalentNode, rank: number): string {
   if (node.rankDescs && node.rankDescs[rank - 1]) return node.rankDescs[rank - 1];
   return node.desc;
 }
+
+/** Left-rail label for a v2 tree row's point gate. */
+export function rowGateLabel(requiresPoints: number): string {
+  if (requiresPoints <= 0) return "Start";
+  return `${requiresPoints} pts`;
+}
+
+/** Unique row indices in a v2 tree, sorted ascending. */
+export function treeRows(specId: string): number[] {
+  const nodes = TALENT_TREES[specId] ?? [];
+  const set = new Set<number>();
+  for (const n of nodes) set.add(n.row ?? 0);
+  return [...set].sort((a, b) => a - b);
+}
