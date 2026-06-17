@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "tanstack-start-ts",
+  "name": "duskbelow",
   "compatibility_date": "2026-06-17",
   "compatibility_flags": ["nodejs_compat"],
   "main": "src/server.ts",
