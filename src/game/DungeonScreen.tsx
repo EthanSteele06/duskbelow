@@ -16,7 +16,7 @@ import { resolveCombatAbilities, getTalentPassives,
   abilityBonusCrit, abilityIgnoresGuard, abilityBonusVsBleed, stunBonusHealPct,
 } from "@/game/talentCombat";
 import {
-  abilityCost, resourceCostLabel, resourceDef, spendsResource,
+  effectiveAbilityCost, resourceCostLabel, resourceDef, spendsResource,
 } from "@/game/resources";
 import { ResourceBar } from "@/game/ResourceBar";
 import { playMusic, playSfx } from "@/game/audio";
@@ -228,6 +228,7 @@ export function DungeonScreen() {
   const consumeMult = useGame((s) => s.consumeNextAttackMult);
   const equip = useGame((s) => s.equip);
   const spendResource = useGame((s) => s.spendResource);
+  const gainResource = useGame((s) => s.gainResource);
   const gainResourceFromDamageDealt = useGame((s) => s.gainResourceFromDamageDealt);
   const tickResourceRegenTurn = useGame((s) => s.tickResourceRegenTurn);
 
@@ -238,6 +239,8 @@ export function DungeonScreen() {
     ? resolveCombatAbilities(CLASS_ABILITIES[player.classId], specAbility, player.specId, player.talentRanks)
     : [];
   const talentPassives = getTalentPassives(player.specId, player.talentRanks);
+  const costReduction = player.abilityCostReduction ?? 0;
+  const abilityResourceCost = (ab: Ability) => effectiveAbilityCost(ab, costReduction);
   const dotAmp = { bleed: talentPassives.dot_amp_bleed, burn: talentPassives.dot_amp_burn };
   const inv = player.inventory;
   const faction = player.faction ? FACTIONS.find((f) => f.id === player.faction)! : null;
@@ -723,6 +726,12 @@ export function DungeonScreen() {
       });
       addLog(`${e.enemy.name} ignites from the critical hit!`);
     }
+    if (crit && talentPassives.crit_dot_chill) {
+      nextEffects = nextEffects.filter((x) => x.kind !== "chill").concat({
+        kind: "chill", turns: 2, power: 1.2 + (talentPassives.crit_dot_chill - 2) * 0.1,
+      });
+      addLog(`${e.enemy.name} is chilled by the critical frost!`);
+    }
     return {
       ...e,
       enemyHp: Math.max(0, e.enemyHp - dmg),
@@ -815,7 +824,7 @@ export function DungeonScreen() {
     if (enc.kind !== "combat" || turnPhase !== "idle") return;
     if (victoryBeatRef.current || finishingKillRef.current || enc.enemyHp <= 0) return;
     if ((player.abilityCooldowns?.[ab.id] ?? 0) > 0) return;
-    const cost = abilityCost(ab);
+    const cost = abilityResourceCost(ab);
     if (cost > 0 && player.resource < cost) {
       addLog(`Not enough ${classResource?.label ?? "resource"}.`);
       return;
@@ -1301,6 +1310,11 @@ export function DungeonScreen() {
                   } else if (enc.shrine === "heal") {
                     const amt = Math.max(10, Math.floor(player.maxHp * 0.5));
                     heal(amt); addFloater("heal", amt); addLog(`The shrine restores ${amt} HP.`); playSfx("ui-confirm");
+                    if (classResource?.kind === "mana") {
+                      const manaAmt = Math.max(8, Math.floor(player.maxResource * 0.35));
+                      gainResource(manaAmt);
+                      addLog(`Cool water steadies your mind. +${manaAmt} ${classResource.label}.`);
+                    }
                   } else {
                     rewardXp(20 + enc.depth * 6); addLog("The shrine fills you with insight."); playSfx("ui-confirm");
                   }
@@ -1404,11 +1418,11 @@ export function DungeonScreen() {
             <div className={`grid gap-2 ${abilities.length >= 4 ? "grid-cols-2" : "grid-cols-3"}`}>
               {abilities.map((ab) => {
                 const cd = player.abilityCooldowns?.[ab.id] ?? 0;
-                const cost = abilityCost(ab);
+                const cost = abilityResourceCost(ab);
                 const lacksResource = cost > 0 && player.resource < cost;
                 const armed = armedAbility === ab.id;
                 const pulsing = readyPulse.has(ab.id) && cd === 0;
-                const costLabel = resourceCostLabel(ab, classResource);
+                const costLabel = resourceCostLabel(ab, classResource, costReduction);
                 return (
                   <button
                     key={ab.id}

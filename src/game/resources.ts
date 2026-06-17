@@ -57,6 +57,11 @@ export function abilityCost(ab: Ability): number {
   return ab.cost ?? 0;
 }
 
+/** Mana/rune/fury cost after gear reductions (talent costDelta is baked into resolved abilities). */
+export function effectiveAbilityCost(ab: Ability, costReduction = 0): number {
+  return Math.max(0, abilityCost(ab) - costReduction);
+}
+
 export function spendsResource(ab: Ability): boolean {
   return abilityCost(ab) > 0;
 }
@@ -101,8 +106,8 @@ export function resourceBarPct(current: number, max: number): number {
   return Math.max(0, Math.min(100, (current / max) * 100));
 }
 
-export function resourceCostLabel(ab: Ability, def: ClassResourceDef | null): string | null {
-  const cost = abilityCost(ab);
+export function resourceCostLabel(ab: Ability, def: ClassResourceDef | null, costReduction = 0): string | null {
+  const cost = effectiveAbilityCost(ab, costReduction);
   if (cost <= 0 || !def) return null;
   if (def.kind === "runes") return `${cost} Rune${cost === 1 ? "" : "s"}`;
   return `${cost} ${def.label}`;

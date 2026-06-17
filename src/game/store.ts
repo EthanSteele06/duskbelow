@@ -27,6 +27,7 @@ import {
   CHARACTER_LEVEL_CAP,
   levelUpBaseStats,
   talentPointsOnLevelUp,
+  TALENT_UNLOCK_LEVEL,
   xpForLevel,
 } from "./progression";
 import { canLearnTalent, pointsSpentInTree } from "./talentUtils";
@@ -64,6 +65,8 @@ interface PlayerState {
   hpRegen: number;
   manaRegen: number;
   xpGainPct: number;
+  /** Flat reduction to ability mana/rune costs from gear (SPI). */
+  abilityCostReduction: number;
   armor: number;
   weaponMin: number;
   weaponMax: number;
@@ -79,12 +82,11 @@ interface PlayerState {
   inventory: string[];
   questItems: Record<string, number>;
   dungeonDepth: number;
-  skillPoints: number;
-  learnedSkills: string[];
   talentPoints: number;
   /** Talent id → rank learned in current spec tree. */
   talentRanks: TalentRanks;
-  earnedSkillForLevel: number;
+  /** Last level that granted a talent point (prevents double-award on recompute). */
+  earnedTalentLevel: number;
   equipment: Partial<Record<GearSlot, GearItem>>;
   bag: GearItem[];
   profession: ProfessionId | null;
@@ -190,7 +192,6 @@ interface GameState {
   pickSpec: (specId: string) => void;
   respec: () => boolean;
   learnTalent: (node: TalentNode) => boolean;
-  learnSkill: (node: { id: string; cost: number; requires?: string; effect: { kind: string; atk?: number; mag?: number; maxHp?: number } & Record<string, unknown> }) => boolean;
   addToBag: (item: GearItem) => boolean;
   equip: (itemId: string) => void;
   unequip: (slot: GearSlot) => void;
@@ -252,11 +253,11 @@ interface GameState {
 const emptyPlayer = (): PlayerState => ({
   name: "Wanderer", faction: null, classId: null, specId: null,
   level: 1, xp: 0, hp: 30, maxHp: 30, atk: 5, mag: 1, crit: 0, dodge: 0, block: 0,
-  hpRegen: 0, manaRegen: 0, xpGainPct: 0, armor: 0, weaponMin: 0, weaponMax: 0, attackSpeed: 0,
+  hpRegen: 0, manaRegen: 0, xpGainPct: 0, abilityCostReduction: 0, armor: 0, weaponMin: 0, weaponMax: 0, attackSpeed: 0,
   resource: 0, maxResource: 0,
   baseMaxHp: 30, baseAtk: 5, baseMag: 1,
   gold: 50, gems: 0, inventory: [], questItems: {}, dungeonDepth: 0,
-  skillPoints: 0, learnedSkills: [], talentPoints: 0, talentRanks: {}, earnedSkillForLevel: 0,
+  talentPoints: 0, talentRanks: {}, earnedTalentLevel: 0,
   equipment: {}, bag: [],
   profession: null, profLevel: 1, profXp: 0, materials: {}, knownRecipes: [], profIdleSince: 0,
   isChampion: false, ownedCosmetics: [], equippedCosmetics: {},
@@ -334,6 +335,7 @@ function recompute(p: PlayerState, meta?: MetaState): PlayerState {
     hpRegen: gear.hpRegen,
     manaRegen: gear.manaRegen,
     xpGainPct: gear.xpGainPct,
+    abilityCostReduction: gear.abilityCostReduction,
     armor: Math.floor(gear.armor),
     weaponMin: gear.weaponMin,
     weaponMax: gear.weaponMax,
@@ -410,6 +412,14 @@ function buildFreshPlayer(
   const levelBonusHp = (startLevel - 1) * 6;
   const levelBonusAtk = startLevel - 1;
   const levelBonusMag = startLevel - 1;
+  let talentPoints = 0;
+  let earnedTalentLevel = 0;
+  for (let lv = TALENT_UNLOCK_LEVEL; lv <= startLevel; lv++) {
+    if (talentPointsOnLevelUp(lv) > 0) {
+      talentPoints += talentPointsOnLevelUp(lv);
+      earnedTalentLevel = lv;
+    }
+  }
 
   const base: PlayerState = {
     ...emptyPlayer(),
@@ -432,6 +442,8 @@ function buildFreshPlayer(
     ownedCosmetics: prev?.ownedCosmetics ?? [],
     equippedCosmetics: prev?.equippedCosmetics ?? {},
     racialMax: racialChargesForLevel(meta.account.level),
+    talentPoints,
+    earnedTalentLevel,
     equipment, bag,
   };
   return recompute(base, meta);
@@ -578,7 +590,7 @@ export const useGame = create<GameState>((set, get) => ({
     let baseAtk = p.baseAtk;
     let baseMag = p.baseMag;
     let talentPoints = p.talentPoints;
-    let earnedSkillForLevel = p.earnedSkillForLevel;
+    let earnedTalentLevel = p.earnedTalentLevel;
     let lastGrowth = levelUpBaseStats();
     while (xp >= xpForLevel(level) && level < CHARACTER_LEVEL_CAP) {
       xp -= xpForLevel(level);
@@ -588,14 +600,14 @@ export const useGame = create<GameState>((set, get) => ({
       baseAtk += lastGrowth.baseAtk;
       baseMag += lastGrowth.baseMag;
       get().pushLog(`★ Level up! Now level ${level}.`);
-      if (talentPointsOnLevelUp(level) > 0 && level > earnedSkillForLevel) {
+      if (talentPointsOnLevelUp(level) > 0 && level > earnedTalentLevel) {
         talentPoints += talentPointsOnLevelUp(level);
-        earnedSkillForLevel = level;
+        earnedTalentLevel = level;
         get().pushLog(`✦ Talent point earned — visit your trainer.`);
       }
     }
     const next = recompute({
-      ...p, xp, level, baseMaxHp, baseAtk, baseMag, talentPoints, earnedSkillForLevel,
+      ...p, xp, level, baseMaxHp, baseAtk, baseMag, talentPoints, earnedTalentLevel,
       hp: Math.min(p.hp + Math.max(1, lastGrowth.baseMaxHp), baseMaxHp),
       runXp: p.runXp + total,
     }, meta);
@@ -947,27 +959,6 @@ export const useGame = create<GameState>((set, get) => ({
         ? `Learned ${node.name} (${rank}/${maxRank}).`
         : `Learned talent: ${node.name}.`,
     );
-    return true;
-  },
-
-  learnSkill: (node) => {
-    const p = get().player;
-    if (p.learnedSkills.includes(node.id)) return false;
-    if (node.requires && !p.learnedSkills.includes(node.requires)) return false;
-    if (p.skillPoints < node.cost) return false;
-    let { baseMaxHp, baseAtk, baseMag } = p;
-    if (node.effect.kind === "stat") {
-      baseMaxHp += (node.effect.maxHp as number) ?? 0;
-      baseAtk += (node.effect.atk as number) ?? 0;
-      baseMag += (node.effect.mag as number) ?? 0;
-    }
-    const next = recompute({
-      ...p, skillPoints: p.skillPoints - node.cost,
-      learnedSkills: [...p.learnedSkills, node.id], baseMaxHp, baseAtk, baseMag,
-    }, get().meta);
-    set({ player: next });
-    const trainer = p.classId ? TRAINERS[p.classId] : null;
-    get().pushLog(`Learned ${(node as { name?: string }).name ?? "skill"}${trainer ? ` from ${trainer.name}` : ""}.`);
     return true;
   },
 

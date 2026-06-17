@@ -42,6 +42,8 @@ export interface GearCombatBonuses {
   hpRegen: number;
   manaRegen: number;
   xpGainPct: number;
+  /** Flat reduction to ability resource costs (from SPI on gear). */
+  abilityCostReduction: number;
   armor: number;
   weaponMin: number;
   weaponMax: number;
@@ -60,6 +62,7 @@ const EMPTY_BONUSES: GearCombatBonuses = {
   hpRegen: 0,
   manaRegen: 0,
   xpGainPct: 0,
+  abilityCostReduction: 0,
   armor: 0,
   weaponMin: 0,
   weaponMax: 0,
@@ -165,7 +168,7 @@ function legacyItemBonuses(item: GearStatItem): GearCombatBonuses {
 
 function deriveFromPrimary(primary: PrimaryStats, weapon?: GearStatItem): Pick<
   GearCombatBonuses,
-  "atk" | "mag" | "maxHp" | "crit" | "dodge" | "block" | "maxMana" | "hpRegen" | "manaRegen" | "xpGainPct"
+  "atk" | "mag" | "maxHp" | "crit" | "dodge" | "block" | "maxMana" | "hpRegen" | "manaRegen" | "xpGainPct" | "abilityCostReduction"
 > {
   const str = primary.str ?? 0;
   const agi = primary.agi ?? 0;
@@ -196,6 +199,7 @@ function deriveFromPrimary(primary: PrimaryStats, weapon?: GearStatItem): Pick<
     hpRegen: spi * 0.5,
     manaRegen: spi * 0.3,
     xpGainPct: intel * 1,
+    abilityCostReduction: Math.floor(spi / 12),
   };
 }
 
@@ -216,6 +220,7 @@ export function bonusesForItem(item: GearStatItem): GearCombatBonuses {
     hpRegen: fromAttrs.hpRegen,
     manaRegen: fromAttrs.manaRegen,
     xpGainPct: fromAttrs.xpGainPct,
+    abilityCostReduction: fromAttrs.abilityCostReduction,
     armor: item.armor ?? 0,
     weaponMin: item.weaponMin ?? 0,
     weaponMax: item.weaponMax ?? 0,
@@ -245,6 +250,7 @@ export function sumEquipmentBonuses(
         hpRegen: acc.hpRegen + b.hpRegen,
         manaRegen: acc.manaRegen + b.manaRegen,
         xpGainPct: acc.xpGainPct + b.xpGainPct,
+        abilityCostReduction: acc.abilityCostReduction + b.abilityCostReduction,
         armor: acc.armor + b.armor,
         weaponMin: Math.max(acc.weaponMin, b.weaponMin),
         weaponMax: Math.max(acc.weaponMax, b.weaponMax),

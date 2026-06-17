@@ -1,10 +1,9 @@
 import { useGame } from "@/game/store";
-import { SPECS, SPEC_ABILITIES, TALENT_TREES, TRAINERS, QUESTS, RESPEC_GOLD_COST } from "@/game/data";
+import { SPECS, SPEC_ABILITIES, TRAINERS, QUESTS, RESPEC_GOLD_COST } from "@/game/data";
 import { StatBar } from "./StatBar";
 import { TalentTreeCanvas } from "./TalentTreeCanvas";
 import { TALENT_UNLOCK_LEVEL } from "./progression";
-import { isV2TalentTree, canLearnTalent, normalizeRequires, pointsSpentInTree } from "./talentUtils";
-import type { TalentNode } from "./talents";
+import { pointsSpentInTree } from "./talentUtils";
 
 export function TalentTreeScreen() {
   const setScreen = useGame((s) => s.setScreen);
@@ -21,13 +20,7 @@ export function TalentTreeScreen() {
   const classSpecs = SPECS.filter((s) => s.classId === player.classId);
   const classQuests = QUESTS.filter((q) => q.classId === player.classId);
   const locked = player.level < TALENT_UNLOCK_LEVEL;
-  const tree = player.specId ? TALENT_TREES[player.specId] : null;
-  const v2 = isV2TalentTree(player.specId);
-  const tiers: (1 | 2 | 3 | 4 | 5)[] = [1, 2, 3, 4, 5];
   const spent = pointsSpentInTree(player.talentRanks);
-
-  const reqMet = (node: TalentNode) =>
-    normalizeRequires(node.requires).every((id) => (player.talentRanks[id] ?? 0) >= 1);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -85,9 +78,7 @@ export function TalentTreeScreen() {
                 <p className="pixel text-[10px] text-gold">{SPECS.find((s) => s.id === player.specId)?.name} Tree</p>
                 <p className="font-body text-sm text-muted-foreground">
                   Talent points: <span className="text-gold">{player.talentPoints}</span>
-                  {v2 && (
-                    <span className="text-muted-foreground"> · Spent {spent}</span>
-                  )}
+                  <span className="text-muted-foreground"> · Spent {spent}</span>
                 </p>
               </div>
               <button
@@ -99,71 +90,12 @@ export function TalentTreeScreen() {
               </button>
             </div>
 
-            {v2 && player.specId ? (
-              <TalentTreeCanvas
-                specId={player.specId}
-                talentRanks={player.talentRanks}
-                talentPoints={player.talentPoints}
-                onLearn={learnTalent}
-              />
-            ) : (
-              <div className="space-y-2">
-                {tiers.map((tier) => {
-                  const nodes = tree!.filter((n) => n.tier === tier);
-                  const isCapstoneTier = nodes.every((n) => n.capstone);
-                  const capstoneTaken =
-                    isCapstoneTier && nodes.some((n) => (player.talentRanks[n.id] ?? 0) > 0);
-                  return (
-                    <div
-                      key={tier}
-                      className={`border-2 ${isCapstoneTier ? "border-gold" : "border-black"} bg-card/60 p-2`}
-                    >
-                      <p className="pixel text-[8px] text-muted-foreground mb-2">
-                        TIER {tier}{isCapstoneTier ? " · CAPSTONE (pick 1)" : ""}
-                      </p>
-                      <div
-                        className={`grid gap-2 ${
-                          nodes.length === 1 ? "grid-cols-1" : nodes.length === 3 ? "grid-cols-1" : "grid-cols-2"
-                        }`}
-                      >
-                        {nodes.map((node) => {
-                          const rank = player.talentRanks[node.id] ?? 0;
-                          const maxRank = node.maxRank ?? 1;
-                          const learned = rank > 0;
-                          const lockedByCapstone = isCapstoneTier && capstoneTaken && !learned;
-                          const check = canLearnTalent(node, player.specId, player.talentRanks, player.talentPoints);
-                          const canBuy = check.ok && !lockedByCapstone;
-                          return (
-                            <button
-                              key={node.id}
-                              onClick={() => learnTalent(node)}
-                              disabled={!canBuy}
-                              className={`pixel-btn !p-2 disabled:opacity-40 ${learned ? "rarity-frame-uncommon" : ""} ${node.capstone && !learned ? "pixel-btn-gold" : ""}`}
-                            >
-                              <span className="block pixel text-[8px] text-gold">
-                                {node.capstone ? "★ " : ""}
-                                {node.name}
-                                {maxRank > 1 ? ` (${rank}/${maxRank})` : ""}
-                              </span>
-                              <span className="block font-body text-xs opacity-80 mt-1 leading-tight">{node.desc}</span>
-                              {learned && rank >= maxRank && (
-                                <span className="block pixel text-[7px] text-divine mt-1">✓ LEARNED</span>
-                              )}
-                              {!learned && !reqMet(node) && (
-                                <span className="block pixel text-[7px] text-blood mt-1">LOCKED</span>
-                              )}
-                              {lockedByCapstone && (
-                                <span className="block pixel text-[7px] text-blood mt-1">CAPSTONE TAKEN</span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <TalentTreeCanvas
+              specId={player.specId}
+              talentRanks={player.talentRanks}
+              talentPoints={player.talentPoints}
+              onLearn={learnTalent}
+            />
 
             <h3 className="pixel text-[10px] text-gold mt-2">✦ Trainer Quests</h3>
             <div className="space-y-2">
