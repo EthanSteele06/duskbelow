@@ -169,6 +169,83 @@
     to { opacity: 1; transform: translateY(0); }
   }
 
+  .screen-page {
+    min-height: 100%;
+    isolation: isolate;
+  }
+  .screen-transition-in {
+    animation: screenPageIn 0.34s cubic-bezier(0.2, 0.85, 0.18, 1) both;
+  }
+  @keyframes screenPageIn {
+    0% { opacity: 0; transform: translateY(10px) scale(0.985); filter: brightness(0.82); }
+    70% { opacity: 1; filter: brightness(1.08); }
+    100% { opacity: 1; transform: translateY(0) scale(1); filter: brightness(1); }
+  }
+
+  .screen-load-overlay {
+    position: fixed;
+    inset: 0 auto 0 50%;
+    z-index: 55;
+    width: 100%;
+    max-width: 28rem;
+    min-height: 100dvh;
+    transform: translateX(-50%);
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 50% 36%, color-mix(in oklab, var(--screen-load-tint, var(--color-gold)) 28%, transparent) 0 18%, transparent 45%),
+      linear-gradient(180deg, rgba(10,8,7,0.96), rgba(0,0,0,0.98));
+    border-inline: 2px solid rgba(0,0,0,0.8);
+    animation: screenLoadReveal 0.18s ease-out both;
+  }
+  .screen-load-city { --screen-load-tint: var(--color-gold); }
+  .screen-load-deep { --screen-load-tint: var(--color-arcane); }
+  .screen-load-boot { --screen-load-tint: var(--color-ember); }
+  .screen-load-result { --screen-load-tint: var(--color-divine); }
+  .screen-load-grid {
+    position: absolute;
+    inset: 0;
+    opacity: 0.18;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.12) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.12) 1px, transparent 1px);
+    background-size: 24px 24px;
+    animation: screenLoadGrid 1.25s linear infinite;
+    mask-image: radial-gradient(circle at center, black, transparent 72%);
+  }
+  .screen-load-orb {
+    display: grid;
+    height: 4.25rem;
+    width: 4.25rem;
+    place-items: center;
+    border: 2px solid #000;
+    background: color-mix(in oklab, var(--screen-load-tint, var(--color-gold)) 22%, var(--color-card));
+    box-shadow:
+      inset -4px -4px 0 rgba(0,0,0,0.48),
+      inset 4px 4px 0 rgba(255,255,255,0.08),
+      0 0 24px color-mix(in oklab, var(--screen-load-tint, var(--color-gold)) 48%, transparent);
+    animation: screenLoadPulse 0.72s ease-in-out infinite alternate;
+  }
+  .screen-load-orb span {
+    font-family: var(--font-pixel);
+    color: var(--color-gold);
+    text-shadow: 2px 2px 0 #000;
+  }
+  .screen-load-copy {
+    animation: descentFadeIn 0.28s ease-out both;
+  }
+  @keyframes screenLoadReveal {
+    from { opacity: 0; transform: translateX(-50%) scale(1.02); }
+    to { opacity: 1; transform: translateX(-50%) scale(1); }
+  }
+  @keyframes screenLoadGrid {
+    from { background-position: 0 0, 0 0; }
+    to { background-position: 0 24px, 24px 0; }
+  }
+  @keyframes screenLoadPulse {
+    from { transform: translateY(0) scale(1); filter: brightness(0.95); }
+    to { transform: translateY(-3px) scale(1.04); filter: brightness(1.18); }
+  }
+
   .pet-idle { display: inline-block; animation: petBob 1.6s ease-in-out infinite; }
   @keyframes petBob {
     0%, 100% { transform: translateY(0) rotate(-3deg); }
@@ -360,5 +437,15 @@
   @keyframes bossIntroEnter {
     from { opacity: 0; transform: scale(0.96) translateY(12px); }
     to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .screen-transition-in,
+    .screen-load-overlay,
+    .screen-load-grid,
+    .screen-load-orb,
+    .screen-load-copy {
+      animation: none;
+    }
   }
 }
