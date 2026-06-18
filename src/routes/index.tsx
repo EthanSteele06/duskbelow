@@ -25,8 +25,14 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Dusk Below — Mobile Dungeon Crawler" },
-      { name: "description", content: "A dark gothic pixel dungeon crawler. Choose a faction, pick a class, descend." },
-      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" },
+      {
+        name: "description",
+        content: "A dark gothic pixel dungeon crawler. Choose a faction, pick a class, descend.",
+      },
+      {
+        name: "viewport",
+        content: "width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1",
+      },
       { property: "og:title", content: "Dusk Below" },
       { property: "og:description", content: "Dark gothic pixel dungeon crawler for mobile." },
     ],
@@ -43,11 +49,18 @@ function Game() {
   const hydrateMeta = useGame((s) => s.hydrateMeta);
   const mainRef = useRef<HTMLElement>(null);
   // Load persisted meta after mount to avoid SSR/client hydration mismatch.
-  useEffect(() => { hydrateMeta(); }, [hydrateMeta]);
-  useEffect(() => { mainRef.current?.scrollTo({ top: 0 }); }, [screen]);
+  useEffect(() => {
+    hydrateMeta();
+  }, [hydrateMeta]);
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 });
+  }, [screen]);
 
   return (
-    <main ref={mainRef} className="relative mx-auto h-dvh max-w-md overflow-y-auto bg-background text-foreground">
+    <main
+      ref={mainRef}
+      className="relative mx-auto h-dvh max-w-md overflow-y-auto bg-background text-foreground"
+    >
       {!HEADERLESS.has(screen) && <CharacterHeader />}
       <div key={screen} className="screen-page screen-transition-in">
         {renderScreen(screen)}
