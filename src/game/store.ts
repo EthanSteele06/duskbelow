@@ -40,6 +40,18 @@ export type Screen =
   | "run_summary" | "echo" | "journal"
   | "wanderer" | "chronicle" | "daily";
 
+export type ScreenLoadTone = "boot" | "city" | "deep" | "result";
+
+export interface ScreenLoadState {
+  id: number;
+  target: Screen;
+  label: string;
+  status: string;
+  lines: string[];
+  durationMs: number;
+  tone: ScreenLoadTone;
+}
+
 export interface QuestState {
   id: string;
   progress: number;
@@ -155,6 +167,7 @@ export interface RunSummary {
 
 interface GameState {
   screen: Screen;
+  screenLoad: ScreenLoadState | null;
   player: PlayerState;
   log: string[];
   quests: QuestState[];
@@ -165,6 +178,7 @@ interface GameState {
   chronicleStoryId: string | null;
 
   setScreen: (s: Screen) => void;
+  completeScreenLoad: (id: number) => void;
   openChronicle: (storyId: string) => void;
   startGame: (faction: FactionId, classId: ClassId, name: string) => void;
   pushLog: (msg: string) => void;
@@ -309,6 +323,111 @@ function resourceSnap(p: PlayerState): ResourceSnapshot {
     level: p.level,
     dungeonDepth: p.dungeonDepth,
   };
+}
+
+const SCREEN_LABELS: Record<Screen, string> = {
+  title: "Character Select",
+  intro: "Origin Chronicle",
+  city: "Duskfall City",
+  vendor: "Vendor Stalls",
+  auction: "Rotating Relics",
+  auction_house: "Auction House",
+  quests: "Quest Board",
+  trainer: "Trainer",
+  talents: "Talent Matrix",
+  profession: "Crafter's Row",
+  equipment: "Equipment",
+  shop: "Cobalt Vault",
+  champion: "Champion's Pass",
+  dungeon: "Dungeon Runtime",
+  run_summary: "Run Debrief",
+  echo: "Echo Tree",
+  journal: "Lore Journal",
+  wanderer: "The Wanderer",
+  chronicle: "Chronicle Link",
+  daily: "Contract Board",
+};
+
+const SCREEN_LOAD_COPY: Partial<Record<Screen, Pick<ScreenLoadState, "status" | "lines" | "durationMs" | "tone">>> = {
+  title: {
+    status: "Rebuilding character data",
+    lines: ["Clearing old embers", "Rolling a new fate", "Lighting the gate"],
+    durationMs: 620,
+    tone: "boot",
+  },
+  intro: {
+    status: "Authoring origin file",
+    lines: ["Binding oath to name", "Stamping house sigil", "Opening the first page"],
+    durationMs: 720,
+    tone: "boot",
+  },
+  city: {
+    status: "Synchronizing city hub",
+    lines: ["Counting coin pouches", "Updating notice boards", "Warming torchlight"],
+    durationMs: 520,
+    tone: "city",
+  },
+  run_summary: {
+    status: "Compiling run report",
+    lines: ["Tallying floors", "Cataloging loot", "Sealing the chronicle"],
+    durationMs: 780,
+    tone: "result",
+  },
+  chronicle: {
+    status: "Opening story channel",
+    lines: ["Finding the speaker", "Unsealing old ink", "Tuning the whispers"],
+    durationMs: 620,
+    tone: "deep",
+  },
+  journal: {
+    status: "Indexing discovered lore",
+    lines: ["Sorting fragments", "Dusting margins", "Pinning discoveries"],
+    durationMs: 540,
+    tone: "deep",
+  },
+  echo: {
+    status: "Tracing soul echoes",
+    lines: ["Counting shards", "Awakening old victories", "Mapping the roots"],
+    durationMs: 580,
+    tone: "deep",
+  },
+  wanderer: {
+    status: "Loading account ledger",
+    lines: ["Reading lifetime marks", "Checking unlocks", "Preparing records"],
+    durationMs: 560,
+    tone: "city",
+  },
+  shop: {
+    status: "Unlocking vault catalog",
+    lines: ["Polishing cobalt glass", "Checking gem seals", "Displaying rare stock"],
+    durationMs: 560,
+    tone: "city",
+  },
+};
+
+let nextScreenLoadId = 1;
+
+function screenLoadFor(from: Screen, target: Screen): ScreenLoadState | null {
+  if (from === target || target === "dungeon") return null;
+  const fallback: Pick<ScreenLoadState, "status" | "lines" | "durationMs" | "tone"> = {
+    status: "Running city module",
+    lines: ["Preparing interface", "Checking inventory state", "Rendering panels"],
+    durationMs: 460,
+    tone: "city",
+  };
+  const copy = SCREEN_LOAD_COPY[target] ?? fallback;
+  return {
+    id: nextScreenLoadId++,
+    target,
+    label: SCREEN_LABELS[target],
+    ...copy,
+  };
+}
+
+function playScreenNavSfx(from: Screen, target: Screen) {
+  if (from === target) return;
+  const majorTargets = new Set<Screen>(["title", "intro", "dungeon", "run_summary"]);
+  playSfx(majorTargets.has(target) ? "ui-confirm" : "ui-tap");
 }
 
 function recompute(p: PlayerState, meta?: MetaState): PlayerState {
@@ -457,6 +576,7 @@ function grantAccountXp(meta: MetaState, n: number): MetaState {
 // hydration mismatch; the real meta is loaded via hydrateMeta() in an effect.
 export const useGame = create<GameState>((set, get) => ({
   screen: "title",
+  screenLoad: null,
   player: emptyPlayer(),
   log: [],
   quests: [],
@@ -464,10 +584,23 @@ export const useGame = create<GameState>((set, get) => ({
   lastRun: null,
   chronicleStoryId: null,
 
-  setScreen: (screen) => set({ screen }),
-  openChronicle: (storyId) => set({ chronicleStoryId: storyId, screen: "chronicle" }),
+  setScreen: (screen) => {
+    const from = get().screen;
+    playScreenNavSfx(from, screen);
+    set({ screen, screenLoad: screenLoadFor(from, screen) });
+  },
+  completeScreenLoad: (id) => set((s) => (
+    s.screenLoad?.id === id ? { screenLoad: null } : {}
+  )),
+  openChronicle: (storyId) => {
+    const from = get().screen;
+    playScreenNavSfx(from, "chronicle");
+    set({ chronicleStoryId: storyId, screen: "chronicle", screenLoad: screenLoadFor(from, "chronicle") });
+  },
 
   startGame: (faction, classId, name) => {
+    const from = get().screen;
+    playScreenNavSfx(from, "intro");
     const meta = get().meta;
     // Mark class as "ever played" so it stays unlocked even before account level catches up.
     const unlocked = meta.unlockedClasses.includes(classId)
@@ -498,6 +631,7 @@ export const useGame = create<GameState>((set, get) => ({
     set({
       meta: nextMeta,
       screen: "intro",
+      screenLoad: screenLoadFor(from, "intro"),
       player,
       log: [`${player.name} arrives in the city. ${f.passiveLabel}`],
       quests: [],
@@ -580,9 +714,11 @@ export const useGame = create<GameState>((set, get) => ({
     let talentPoints = p.talentPoints;
     let earnedSkillForLevel = p.earnedSkillForLevel;
     let lastGrowth = levelUpBaseStats();
+    let didLevelUp = false;
     while (xp >= xpForLevel(level) && level < CHARACTER_LEVEL_CAP) {
       xp -= xpForLevel(level);
       level += 1;
+      didLevelUp = true;
       lastGrowth = levelUpBaseStats();
       baseMaxHp += lastGrowth.baseMaxHp;
       baseAtk += lastGrowth.baseAtk;
@@ -600,6 +736,7 @@ export const useGame = create<GameState>((set, get) => ({
       runXp: p.runXp + total,
     }, meta);
     set({ player: next });
+    if (didLevelUp) playSfx("levelup");
     // Account XP trickles in too
     const nextMeta = grantAccountXp(meta, Math.max(1, Math.floor(total * 0.25)));
     if (nextMeta !== meta) { persistMeta(nextMeta); set({ meta: nextMeta }); }
@@ -761,6 +898,7 @@ export const useGame = create<GameState>((set, get) => ({
     if (item.kind === "weapon" && item.atk) next.baseAtk = p.baseAtk + item.atk;
     set({ player: recompute(next, get().meta) });
     get().pushLog(`Bought ${item.name}.`);
+    playSfx("purchase");
     return true;
   },
 
@@ -775,6 +913,7 @@ export const useGame = create<GameState>((set, get) => ({
     }
     set({ player: { ...p, gems: p.gems - item.gemPrice, inventory: [...p.inventory, itemId] } });
     get().pushLog(`Acquired ${item.name}.`);
+    playSfx("purchase");
     return true;
   },
 
@@ -795,6 +934,8 @@ export const useGame = create<GameState>((set, get) => ({
   },
 
   enterDungeon: (mode = "normal", oaths = [], chronicleBoonId) => {
+    const from = get().screen;
+    playScreenNavSfx(from, "dungeon");
     set((s) => {
       const boonDef = chronicleBoonId
         ? CHRONICLE_BOONS.find((b) => b.id === chronicleBoonId)
@@ -840,7 +981,7 @@ export const useGame = create<GameState>((set, get) => ({
       if (!s.meta.hasCompletedFirstRun && !withDodge.inventory.includes("hearth")) {
         nextPlayer = { ...withDodge, inventory: [...withDodge.inventory, "hearth"] };
       }
-      return { screen: "dungeon", player: nextPlayer };
+      return { screen: "dungeon", screenLoad: screenLoadFor(from, "dungeon"), player: nextPlayer };
     });
     if (chronicleBoonId) {
       const boon = CHRONICLE_BOONS.find((b) => b.id === chronicleBoonId);
@@ -871,6 +1012,8 @@ export const useGame = create<GameState>((set, get) => ({
     return true;
   },
   exitDungeon: () => {
+    const from = get().screen;
+    playScreenNavSfx(from, "city");
     set((s) => {
       const buffs = s.player.activeBuffs ?? [];
       const bAtk = buffs.reduce((a, b) => a + (b.atk ?? 0), 0);
@@ -890,11 +1033,15 @@ export const useGame = create<GameState>((set, get) => ({
         abilityCooldowns: {},
         resource: 0,
       });
-      return { screen: "city", player: recompute(p, s.meta) };
+      return { screen: "city", screenLoad: screenLoadFor(from, "city"), player: recompute(p, s.meta) };
     });
     get().pushLog("You return to the city.");
   },
-  reset: () => set({ screen: "title", player: emptyPlayer(), log: [], quests: [], lastRun: null }),
+  reset: () => {
+    const from = get().screen;
+    playScreenNavSfx(from, "title");
+    set({ screen: "title", screenLoad: screenLoadFor(from, "title"), player: emptyPlayer(), log: [], quests: [], lastRun: null });
+  },
 
   pickSpec: (specId) => {
     const p = get().player;
@@ -1373,16 +1520,20 @@ export const useGame = create<GameState>((set, get) => ({
     // Called from RunSummaryScreen's Continue button.
     //   Victory → keep the character, return to the city. Bag/equipment persist.
     //   Defeat  → character is lost; clear and bounce back to character select (title).
+    const from = get().screen;
     const last = get().lastRun;
     if (last?.outcome === "victory") {
-      set({ screen: "city", lastRun: null });
+      playScreenNavSfx(from, "city");
+      set({ screen: "city", screenLoad: screenLoadFor(from, "city"), lastRun: null });
       get().pushLog("You return to the city, victorious.");
       return;
     }
     // Defeat path (or unknown): full reset.
+    playScreenNavSfx(from, "title");
     set({
       player: emptyPlayer(),
       screen: "title",
+      screenLoad: screenLoadFor(from, "title"),
       log: ["A new wanderer steps forward — the last did not return."],
       quests: [],
       lastRun: null,
@@ -1390,6 +1541,8 @@ export const useGame = create<GameState>((set, get) => ({
   },
 
   finishRun: (outcome) => {
+    const from = get().screen;
+    playScreenNavSfx(from, "run_summary");
     const p = get().player;
     const meta = get().meta;
     const echo = echoStart(meta);
@@ -1495,7 +1648,7 @@ export const useGame = create<GameState>((set, get) => ({
       dungeonBuffs: [],
       abilityCooldowns: {},
     }, meta);
-    set({ meta: nextMeta, lastRun: summary, screen: "run_summary", player: cleanedPlayer });
+    set({ meta: nextMeta, lastRun: summary, screen: "run_summary", screenLoad: screenLoadFor(from, "run_summary"), player: cleanedPlayer });
   },
 
   markSeenWipeIntro: () => {
@@ -1692,6 +1845,7 @@ export const useGame = create<GameState>((set, get) => ({
     persistMeta(nextMeta);
     set({ meta: nextMeta, player: { ...np, gold: np.gold - entry.price } });
     get().pushLog(`Acquired ${entry.listing.name} for ${entry.price}g.`);
+    playSfx("purchase");
     return true;
   },
 

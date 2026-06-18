@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useGame } from "@/game/store";
+import { useGame, type Screen } from "@/game/store";
 import { TitleScreen } from "@/game/TitleScreen";
 import { IntroScreen } from "@/game/IntroScreen";
 import { CityScreen } from "@/game/CityScreen";
@@ -19,6 +19,7 @@ import { JournalScreen } from "@/game/JournalScreen";
 import { ChronicleScreen } from "@/game/ChronicleScreen";
 import { WandererScreen } from "@/game/WandererScreen";
 import { DailyScreen } from "@/game/DailyScreen";
+import { ScreenLoadOverlay } from "@/game/ScreenLoadOverlay";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -37,31 +38,44 @@ const HEADERLESS = new Set(["title", "intro"]);
 
 function Game() {
   const screen = useGame((s) => s.screen);
+  const screenLoad = useGame((s) => s.screenLoad);
+  const completeScreenLoad = useGame((s) => s.completeScreenLoad);
   const hydrateMeta = useGame((s) => s.hydrateMeta);
+  const mainRef = useRef<HTMLElement>(null);
   // Load persisted meta after mount to avoid SSR/client hydration mismatch.
   useEffect(() => { hydrateMeta(); }, [hydrateMeta]);
+  useEffect(() => { mainRef.current?.scrollTo({ top: 0 }); }, [screen]);
+
   return (
-    <main className="mx-auto h-dvh max-w-md overflow-y-auto bg-background text-foreground">
+    <main ref={mainRef} className="relative mx-auto h-dvh max-w-md overflow-y-auto bg-background text-foreground">
       {!HEADERLESS.has(screen) && <CharacterHeader />}
-      {screen === "title" && <TitleScreen />}
-      {screen === "intro" && <IntroScreen />}
-      {screen === "city" && <CityScreen />}
-      {screen === "vendor" && <VendorScreen />}
-      {screen === "auction" && <AuctionScreen />}
-      {screen === "auction_house" && <AuctionHouseScreen />}
-      {screen === "quests" && <QuestsScreen />}
-      {(screen === "trainer" || screen === "talents") && <TalentTreeScreen />}
-      {screen === "profession" && <ProfessionScreen />}
-      {screen === "equipment" && <EquipmentScreen />}
-      {screen === "shop" && <ShopScreen />}
-      {screen === "champion" && <ChampionPassScreen />}
-      {screen === "dungeon" && <DungeonScreen />}
-      {screen === "run_summary" && <RunSummaryScreen />}
-      {screen === "echo" && <EchoTreeScreen />}
-      {screen === "journal" && <JournalScreen />}
-      {screen === "chronicle" && <ChronicleScreen />}
-      {screen === "wanderer" && <WandererScreen />}
-      {screen === "daily" && <DailyScreen />}
+      <div key={screen} className="screen-page screen-transition-in">
+        {renderScreen(screen)}
+      </div>
+      {screenLoad && <ScreenLoadOverlay load={screenLoad} onComplete={completeScreenLoad} />}
     </main>
   );
+}
+
+function renderScreen(screen: Screen) {
+  if (screen === "title") return <TitleScreen />;
+  if (screen === "intro") return <IntroScreen />;
+  if (screen === "city") return <CityScreen />;
+  if (screen === "vendor") return <VendorScreen />;
+  if (screen === "auction") return <AuctionScreen />;
+  if (screen === "auction_house") return <AuctionHouseScreen />;
+  if (screen === "quests") return <QuestsScreen />;
+  if (screen === "trainer" || screen === "talents") return <TalentTreeScreen />;
+  if (screen === "profession") return <ProfessionScreen />;
+  if (screen === "equipment") return <EquipmentScreen />;
+  if (screen === "shop") return <ShopScreen />;
+  if (screen === "champion") return <ChampionPassScreen />;
+  if (screen === "dungeon") return <DungeonScreen />;
+  if (screen === "run_summary") return <RunSummaryScreen />;
+  if (screen === "echo") return <EchoTreeScreen />;
+  if (screen === "journal") return <JournalScreen />;
+  if (screen === "chronicle") return <ChronicleScreen />;
+  if (screen === "wanderer") return <WandererScreen />;
+  if (screen === "daily") return <DailyScreen />;
+  return null;
 }
